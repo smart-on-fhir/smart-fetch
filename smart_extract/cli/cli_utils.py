@@ -3,6 +3,7 @@ import os
 import sys
 import tomllib
 
+import rich.progress
 from cumulus_etl import common, fhir, store
 
 from smart_extract import resources
@@ -128,3 +129,16 @@ def confirm_dir_is_empty(folder: str, allow: set[str] | None = None) -> None:
             f"The target folder '{folder}' already has contents. "
             "Please provide an empty folder.",
         )
+
+
+def make_progress_bar() -> rich.progress.Progress:
+    # The default columns use time remaining, which has felt inaccurate/less useful than a simple elapsed counter.
+    # - The estimation logic seems rough (often jumping time around).
+    # - For indeterminate bars, the estimate shows nothing.
+    columns = [
+        rich.progress.TextColumn("[progress.description]{task.description}"),
+        rich.progress.BarColumn(),
+        rich.progress.TaskProgressColumn(),
+        rich.progress.TimeElapsedColumn(),
+    ]
+    return rich.progress.Progress(*columns)
