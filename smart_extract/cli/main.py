@@ -1,0 +1,39 @@
+"""The main command line interface entry point"""
+
+import argparse
+import asyncio
+import logging
+import sys
+
+import rich.logging
+
+
+def define_parser() -> argparse.ArgumentParser:
+    """Fills out an argument parser with all the CLI options."""
+    parser = argparse.ArgumentParser()
+
+    subparsers = parser.add_subparsers()
+
+    return parser
+
+
+async def main(argv: list[str]) -> None:
+    # Use RichHandler for logging because it works better when interacting with other rich
+    # components (e.g. I've seen the default logger lose the last warning emitted when progress
+    # bars are also active). But also turn off all the complex bits - we just want the message.
+    logging.basicConfig(
+        format="%(message)s",
+        handlers=[rich.logging.RichHandler(show_time=False, show_level=False, show_path=False)],
+    )
+
+    parser = define_parser()
+    args = parser.parse_args(argv)
+    args.func(args)
+
+
+def main_cli():
+    asyncio.run(main(sys.argv[1:]))  # pragma: no cover
+
+
+if __name__ == "__main__":
+    main_cli()  # pragma: no cover

@@ -1,0 +1,75 @@
+[project]
+name = "smart-extract"
+requires-python = ">= 3.10"
+dependencies = [
+    "cumulus-fhir-support >= 1.2",
+    "httpx",
+    "jwcrypto",
+    "rich",
+]
+authors = [
+  { name="Michael Terry", email="michael.terry@childrens.harvard.edu" },
+]
+readme = "README.md"
+license = { text="Apache License 2.0" }
+classifiers = [
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dynamic = ["description", "version"]
+
+[project.optional-dependencies]
+tests = [
+    "ddt",
+    "pytest",
+    "pytest-cov",
+    "respx",
+]
+dev = [
+    "pre-commit",
+    # Ruff is using minor versions for breaking changes until their 1.0 release.
+    # See https://docs.astral.sh/ruff/versioning/
+    "ruff < 0.12",  # keep in rough sync with pre-commit-config.yaml
+]
+
+[project.urls]
+"Homepage" = "https://github.com/smart-on-fhir/smart-extract"
+
+[project.scripts]
+smart-extract = "smart_extract.cli.main:main_cli"
+
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core.buildapi"
+
+[tool.flit.sdist]
+include = [
+    "docs/",
+    "tests/",
+    "LICENSE",
+]
+exclude = [
+    "**/.pytest_cache",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+allowed-confusables = ["’"]  # allow proper apostrophes
+select = [
+    "A",  # prevent using keywords that clobber python builtins
+    "E",  # pycodestyle
+    "F",  # pyflakes
+    "I",  # isort
+    "PLE",  # pylint errors
+    "RUF",  # the ruff developer's own rules
+    "S",  # bandit security warnings
+    "UP",  # alert you when better syntax is available in your python version
+]
+
+[tool.ruff.lint.per-file-ignores]
+"**/__init__.py" = ["F401"]  # init files hold API, so not using imports is intentional
+"tests/**" = ["S"]  # tests do suspicious stuff that's fine, actually
