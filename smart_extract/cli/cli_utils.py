@@ -1,0 +1,130 @@
+import argparse
+import os
+import sys
+import tomllib
+
+from cumulus_etl import common, fhir, store
+
+from smart_extract import resources
+
+
+# RESOURCE SELECTION
+
+ALLOWED_TYPES = {
+    "all",
+    "help",
+    *resources.PATIENT_TYPES,
+}
+ALLOWED_CASE_MAP: dict[str, str] = {res_type.casefold(): res_type for res_type in ALLOWED_TYPES}
+
+
+def add_type_selection(parser: argparse.ArgumentParser) -> None:
+    group = parser.add_argument_group("resource selection")
+    group.add_argument(
+        "--type",
+        default="all",
+        help="only consider these resource types (comma separated, "
+        "default is all supported FHIR resources, "
+        "use '--type help' to see full list)",
+    )
+    group.add_argument(
+        "--type-filter",
+        metavar="FILTER",
+        action="append",
+        help="search filters to apply to the export (_typeFilter)",
+    )
+
+
+# TODO: don't hardcode any supported resources, just use whatever we have access to from scopes
+def parse_resource_selection(types: str) -> set[str]:
+    orig_types = set(types.split(","))
+    lower_types = {t.casefold() for t in orig_types}
+
+    def print_help():
+        print("These types are supported:")
+        print("  all")
+        for pat_type in resources.PATIENT_TYPES:
+            print(f"  {pat_type}")
+
+    # Check if any provided types are bogus
+    for orig_type in orig_types:
+        if orig_type.casefold() not in ALLOWED_CASE_MAP:
+            print(f"Unknown resource type provided: {orig_type}")
+            print()
+            print_help()
+            sys.exit(2)
+
+    if "help" in lower_types:
+        print_help()
+        sys.exit(0)
+
+    if "all" in lower_types:
+        return set(resources.PATIENT_TYPES)
+
+    return {ALLOWED_CASE_MAP[lower_type] for lower_type in lower_types}
+
+
+# AUTHENTICATION
+
+def add_auth(parser: argparse.ArgumentParser):
+    group = parser.add_argument_group("authentication")
+    group.add_argument("--smart-client-id", metavar="ID", help="client ID for SMART authentication")
+    group.add_argument(
+        "--smart-key", metavar="PATH", help="JWKS or PEM file for SMART authentication"
+    )
+    group.add_argument("--basic-user", metavar="USER", help="username for Basic authentication")
+    group.add_argument(
+        "--basic-passwd", metavar="PATH", help="password file for Basic authentication"
+    )
+    group.add_argument(
+        "--bearer-token", metavar="PATH", help="token file for Bearer authentication"
+    )
+    group.add_argument(
+        "--fhir-url",
+        metavar="URL",
+        help="FHIR server base URL",
+    )
+    group.add_argument(
+        "--token-url",
+        metavar="URL",
+        help="FHIR server token URL, only needed if server does not provide it",
+    )
+
+
+# GENERAL
+
+def load_config(args) -> None:
+    if args.config:
+        with open(args.config, "rb") as f:
+            data = tomllib.load(f)
+
+        for key in data:
+            prop = key.replace("-", "_")
+            if prop in args and getattr(args, prop) is None:
+                setattr(args, prop, data[key])
+
+
+def prepare(args):
+    load_config(args)
+
+    if not args.fhir_url:
+        print("--fhir-url is required")
+        sys.exit(2)
+
+    common.print_header()
+
+    return fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), ["*"])
+
+
+def confirm_dir_is_empty(folder: str, allow: set[str] | None = None) -> None:
+    """Errors out if the dir exists with contents"""
+    os.makedirs(folder, exist_ok=True)
+
+    files = {os.path.basename(p) for p in os.listdir(folder)}
+    if allow:
+        files -= allow
+    if files:
+        sys.exit(
+            f"The target folder '{folder}' already has contents. "
+            "Please provide an empty folder.",
+        )

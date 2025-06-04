@@ -7,12 +7,16 @@ import sys
 
 import rich.logging
 
+from smart_extract.cli import bulk, cure
+
 
 def define_parser() -> argparse.ArgumentParser:
     """Fills out an argument parser with all the CLI options."""
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers()
+    bulk.make_subparser(subparsers.add_parser("bulk", help="run a bulk export"))
+    cure.make_subparser(subparsers.add_parser("cure", help="fix up exported data"))
 
     return parser
 
@@ -28,7 +32,7 @@ async def main(argv: list[str]) -> None:
 
     parser = define_parser()
     args = parser.parse_args(argv)
-    args.func(args)
+    await args.func(args)
 
 
 def main_cli():

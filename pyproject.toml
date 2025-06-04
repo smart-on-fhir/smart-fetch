@@ -1,6 +1,6 @@
 [project]
 name = "smart-extract"
-requires-python = ">= 3.10"
+requires-python = ">= 3.11"
 dependencies = [
     "cumulus-fhir-support >= 1.2",
     "httpx",
