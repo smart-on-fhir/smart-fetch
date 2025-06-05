@@ -12,7 +12,7 @@ from smart_extract.cli import cli_utils
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("export_to", metavar="OUTPUT_DIR")
-    parser.add_argument("--config", metavar="PATH", help="config file")
+    cli_utils.add_general(parser)
     parser.add_argument(
         "--group", metavar="GROUP", help="which group to export (default is whole system)"
     )

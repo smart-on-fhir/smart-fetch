@@ -94,6 +94,10 @@ def add_auth(parser: argparse.ArgumentParser):
 
 # GENERAL
 
+def add_general(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--config", "-c", metavar="PATH", help="config file")
+
+
 def load_config(args) -> None:
     if args.config:
         with open(args.config, "rb") as f:

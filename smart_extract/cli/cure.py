@@ -15,7 +15,7 @@ from smart_extract import resources
 def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("folder", metavar="INPUT_DIR")
     parser.add_argument("fixes", metavar="FIX", nargs="*", default=["all"])
-    parser.add_argument("--config", metavar="PATH", help="config file")
+    cli_utils.add_general(parser)
     parser.add_argument(
         "--mimetypes", metavar="MIMES",
         help="mimetypes to inline, comma separated (default is text, HTML, and XHTML)"
