@@ -8,8 +8,7 @@ import rich
 import rich.table
 from cumulus_etl import common, fhir, inliner, store
 
-from smart_extract import resources
-from smart_extract.cli import cli_utils
+from smart_extract import cli_utils, resources
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:

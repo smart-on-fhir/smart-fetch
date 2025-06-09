@@ -5,8 +5,7 @@ import sys
 
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
-from smart_extract import bulk_utils
-from smart_extract.cli import cli_utils
+from smart_extract import bulk_utils, cli_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:

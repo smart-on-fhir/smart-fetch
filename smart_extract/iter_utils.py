@@ -6,8 +6,7 @@ from typing import TypeVar
 
 from cumulus_etl import common, errors, fhir
 
-from smart_extract import lifecycle
-from smart_extract.cli import cli_utils
+from smart_extract import cli_utils, lifecycle
 
 Item = TypeVar("Item")
 
