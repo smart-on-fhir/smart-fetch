@@ -6,7 +6,7 @@ from typing import TypeVar
 
 from cumulus_etl import common, errors, fhir
 
-import smart_extract
+from smart_extract import lifecycle
 from smart_extract.cli import cli_utils
 
 Item = TypeVar("Item")
@@ -101,34 +101,27 @@ class ResourceProcessor:
         if res_type in self._iterables:
             raise ValueError(f"Can't have two iterables for same resource type {res_type}")
 
-        if os.path.exists(self._done_file(res_type)):
-            iterable = None
-
         self._iterables[res_type] = iterable
         self._totals[res_type] = total
 
     async def run(self):
         with self._progress:
             for res_type, iterable in self._iterables.items():
-                if iterable is None:
-                    print(f"Skipping {res_type}, already done.")
-                    continue
-
-                self._progress_task = self._progress.add_task(
-                    f"{self._desc} {res_type}…", total=self._totals[res_type]
-                )
-
-                res_file = self._res_file(res_type, f"{res_type}.ndjson.gz")
-                os.makedirs(self._res_folder(res_type), exist_ok=True)
-
-                with common.NdjsonWriter(res_file, append=self._append, compressed=True) as writer:
-                    await peek_ahead_processor(
-                        iterable,
-                        partial(self._process_wrapper, writer),
-                        peek_at=fhir.FhirClient.MAX_CONNECTIONS * 2,
+                with lifecycle.skip_or_mark_done(self._res_folder(res_type), self._tag, res_type):
+                    self._progress_task = self._progress.add_task(
+                        f"{self._desc} {res_type}…", total=self._totals[res_type]
                     )
 
-                self._finish(res_type)
+                    res_file = self._res_file(res_type, f"{res_type}.ndjson.gz")
+                    os.makedirs(self._res_folder(res_type), exist_ok=True)
+
+                    writer = common.NdjsonWriter(res_file, append=self._append, compressed=True)
+                    with writer:
+                        await peek_ahead_processor(
+                            iterable,
+                            partial(self._process_wrapper, writer),
+                            peek_at=fhir.FhirClient.MAX_CONNECTIONS * 2,
+                        )
 
         # Reset iterables, so we can be run again
         self._iterables = {}
@@ -139,13 +132,6 @@ class ResourceProcessor:
     def _res_file(self, res_type: str, filename: str) -> str:
         return os.path.join(self._res_folder(res_type), filename)
 
-    def _done_file(self, res_type: str) -> str:
-        return self._res_file(res_type, f".{self._tag}.done")
-
     async def _process_wrapper(self, writer: common.NdjsonWriter, item: Item) -> None:
         await self._callback(writer, item)
         self._progress.update(self._progress_task, advance=1)
-
-    def _finish(self, res_type: str) -> None:
-        with open(self._done_file(res_type), "w", encoding="utf8") as f:
-            f.write(f"{smart_extract.__version__}\n")

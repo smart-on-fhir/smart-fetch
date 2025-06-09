@@ -11,8 +11,7 @@ import cumulus_fhir_support as cfs
 from cumulus_etl import common
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
-import smart_extract
-from smart_extract import bulk_utils, iter_utils, resources
+from smart_extract import bulk_utils, iter_utils, lifecycle, resources
 from smart_extract.cli import cli_utils
 
 
@@ -92,19 +91,16 @@ async def gather_patients(client, processor, args, filters) -> None:
         patient_folder = os.path.join(args.folder, resources.PATIENT)
         os.makedirs(patient_folder, exist_ok=True)
 
-        # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
-        exporter = BulkExporter(
-            client,
-            {resources.PATIENT},
-            bulk_utils.export_url(args.fhir_url, args.group),
-            patient_folder,
-            type_filter=filters.get(resources.PATIENT),
-        )
-        await exporter.export()
-
-        # TODO: centralize this
-        with open(f"{patient_folder}/.crawl.done", "w", encoding="utf8") as f:
-            f.write(f"{smart_extract.__version__}\n")
+        with lifecycle.skip_or_mark_done(patient_folder, "crawl", resources.PATIENT):
+            # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
+            exporter = BulkExporter(
+                client,
+                {resources.PATIENT},
+                bulk_utils.export_url(args.fhir_url, args.group),
+                patient_folder,
+                type_filter=filters.get(resources.PATIENT),
+            )
+            await exporter.export()
 
     else:
         sys.exit("Provide either --group or --mrn-system and --mrn-file, to define the cohort")
