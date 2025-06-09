@@ -69,3 +69,38 @@ class FixMedsTests(utils.TestCase):
                 },
             }
         )
+
+    async def test_resuming(self):
+        """Test that we can pick up where we left off"""
+        self.write_res(
+            resources.MEDICATION_REQUEST,
+            [
+                {"medicationReference": {"reference": "Medication/1"}},
+                {"medicationReference": {"reference": "Medication/2"}},
+            ],
+        )
+        self.write_res(
+            resources.MEDICATION, [{"id": "1"}], folder_res_type=resources.MEDICATION_REQUEST
+        )
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            if res_id == "2":
+                return self.basic_resource(request, res_type, res_id)
+            else:
+                assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+        await self.cli("fix", self.folder, "meds")
+
+        self.assert_folder(
+            {
+                resources.MEDICATION_REQUEST: {
+                    f"{resources.MEDICATION}.ndjson.gz": [
+                        {"resourceType": resources.MEDICATION, "id": "1"},
+                        {"resourceType": resources.MEDICATION, "id": "2"},
+                    ],
+                    ".fix.done": None,
+                    f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
+                },
+            }
+        )

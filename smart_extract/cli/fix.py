@@ -5,7 +5,6 @@ import os
 
 import cumulus_fhir_support as cfs
 import rich
-import rich.table
 from cumulus_etl import common, errors, fhir, inliner, store
 
 from smart_extract import cli_utils, fix_stats, lifecycle, resources
@@ -101,7 +100,8 @@ async def meds(client, args):
                     except errors.TemporaryNetworkError:
                         stats.retry_errors += 1
 
-                    if med and med["resourceType"] != resources.MEDICATION:  # sanity check type
+                    if med and med["resourceType"] != resources.MEDICATION:
+                        # Hmm, wrong type. Could be OperationOutcome? Mark as fatal.
                         stats.fatal_errors += 1
                     elif med:
                         stats.newly_done += 1

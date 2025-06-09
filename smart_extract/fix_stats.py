@@ -24,5 +24,5 @@ class FixStats:
         if self.fatal_errors:
             table.add_row("Fatal errors", f"{self.fatal_errors:,}")
         if self.retry_errors:
-            table.add_row("Retried but gave up", f"{self.retry_errors:,}",)
+            table.add_row("Retried but gave up", f"{self.retry_errors:,}")
         rich.get_console().print(table)

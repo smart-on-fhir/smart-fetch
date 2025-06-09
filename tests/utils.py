@@ -54,8 +54,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         with self.server:
             await main.main([str(arg) for arg in args] + default_args)
 
-    def write_res(self, res_type: str, resources: list[dict]) -> None:
-        subfolder = self.folder / res_type
+    def write_res(
+        self, res_type: str, resources: list[dict], folder_res_type: str | None = None
+    ) -> None:
+        folder_res_type = folder_res_type or res_type
+        subfolder = self.folder / folder_res_type
         subfolder.mkdir(exist_ok=True)
         output_path = subfolder / f"{res_type}.ndjson.gz"
         with gzip.open(output_path, "wt", encoding="utf8") as f:
