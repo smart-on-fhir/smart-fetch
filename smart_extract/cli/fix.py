@@ -8,7 +8,7 @@ import rich
 import rich.table
 from cumulus_etl import common, fhir, inliner, store
 
-from smart_extract import cli_utils, resources
+from smart_extract import cli_utils, lifecycle, resources
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -32,11 +32,20 @@ async def fix_main(args: argparse.Namespace) -> None:
 
     async with client:
         if "doc-inline" in fixes or "all" in fixes:
-            await doc_inline(client, args)
+            with lifecycle.skip_or_mark_done_for_fix(
+                os.path.join(args.folder, resources.DOCUMENT_REFERENCE), "doc-inline"
+            ):
+                await doc_inline(client, args)
         if "dxr-inline" in fixes or "all" in fixes:
-            await dxr_inline(client, args)
+            with lifecycle.skip_or_mark_done_for_fix(
+                os.path.join(args.folder, resources.DIAGNOSTIC_REPORT), "dxr-inline"
+            ):
+                await dxr_inline(client, args)
         if "meds" in fixes or "all" in fixes:
-            await meds(client, args)
+            with lifecycle.skip_or_mark_done_for_fix(
+                os.path.join(args.folder, resources.MEDICATION_REQUEST), "meds"
+            ):
+                await meds(client, args)
 
 
 def parse_mimetypes(mimetypes: str | None) -> set[str]:
@@ -60,26 +69,30 @@ async def dxr_inline(client, args):
 
 async def meds(client, args):
     with cli_utils.make_progress_bar() as progress:
+        med_req_folder = os.path.join(args.folder, resources.MEDICATION_REQUEST)
+
         # Calculate total progress needed
-        found_files = cfs.list_multiline_json_in_dir(args.folder, "MedicationRequest")
+        found_files = cfs.list_multiline_json_in_dir(med_req_folder, resources.MEDICATION_REQUEST)
         total_lines = sum(common.read_local_line_count(path) for path in found_files)
         progress_task = progress.add_task("Downloading Meds", total=total_lines)
 
         # See what is already downloaded
         downloaded_ids = set()
-        for med in cfs.read_multiline_json_from_dir(args.folder, "Medication"):
-            downloaded_ids.add(f"Medication/{med['id']}")
+
+        for med in cfs.read_multiline_json_from_dir(med_req_folder, resources.MEDICATION):
+            downloaded_ids.add(f"{resources.MEDICATION}/{med['id']}")
 
         # Get new meds
         newly_downloaded = 0
         not_linked = 0
-        output = os.path.join(args.folder, "Medication.ndjson.gz")
+        output = os.path.join(med_req_folder, f"{resources.MEDICATION}.ndjson.gz")
         with common.NdjsonWriter(output, append=True, compressed=True) as writer:
-            for med_req in cfs.read_multiline_json_from_dir(args.folder, "MedicationRequest"):
+            reader = cfs.read_multiline_json_from_dir(med_req_folder, resources.MEDICATION_REQUEST)
+            for med_req in reader:
                 med_id = med_req.get("medicationReference", {}).get("reference")
                 if med_id not in downloaded_ids:
                     med = await fhir.download_reference(client, med_id)
-                    if med:
+                    if med and med["resourceType"] == resources.MEDICATION:  # sanity check type
                         newly_downloaded += 1
                         writer.write(med)
                     else:

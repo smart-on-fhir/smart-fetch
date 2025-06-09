@@ -26,6 +26,7 @@ tests = [
     "pytest",
     "pytest-cov",
     "respx",
+    "time-machine",
 ]
 dev = [
     "pre-commit",
