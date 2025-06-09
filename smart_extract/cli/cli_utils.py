@@ -5,6 +5,7 @@ import tomllib
 
 import rich.progress
 from cumulus_etl import common, fhir, store
+from cumulus_etl.fhir.fhir_client import ServerType
 
 from smart_extract import resources
 
@@ -32,12 +33,12 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
         "--type-filter",
         metavar="FILTER",
         action="append",
-        help="search filters to apply to the export (_typeFilter)",
+        help="search filter to apply to the export (_typeFilter), can be specified multiple times",
     )
 
 
 # TODO: don't hardcode any supported resources, just use whatever we have access to from scopes
-def parse_resource_selection(types: str) -> set[str]:
+def parse_resource_selection(types: str) -> list[str]:
     orig_types = set(types.split(","))
     lower_types = {t.casefold() for t in orig_types}
 
@@ -60,9 +61,38 @@ def parse_resource_selection(types: str) -> set[str]:
         sys.exit(0)
 
     if "all" in lower_types:
-        return set(resources.PATIENT_TYPES)
+        return resources.PATIENT_TYPES
 
-    return {ALLOWED_CASE_MAP[lower_type] for lower_type in lower_types}
+    # Keep our internal preferred order by iterating on PATIENT_TYPES, not lower_types
+    return [
+        pat_type for pat_type in resources.PATIENT_TYPES
+        if pat_type.casefold() in lower_types
+    ]
+
+
+def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[str]]:
+    # First, break out what the user provided on the CLI
+    filters = {}
+    for type_filter in type_filters or []:
+        res_type, params = type_filter.split("?", 1)
+        filters.setdefault(res_type, set()).add(params)
+
+    if resources.OBSERVATION not in filters:
+        # Add some basic default filters for Observation, because the volume of Observations gets
+        # overwhelming quickly. So we limit to the nine basic US Core categories.
+        categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
+        if client._server_type != ServerType.EPIC:
+            # As of June 2025, Epic does not support these types and will error out
+            categories += ",procedure,therapy,activity"
+
+        filters[resources.OBSERVATION] = {categories}
+
+        # Cerner doesn't seem to provide a category for Smoking Status observations, so we search
+        # on the US Core required loinc code to pick those up.
+        if client._server_type == ServerType.CERNER:
+            filters[resources.OBSERVATION].add("code=http://loinc.org|72166-2")
+
+    return filters
 
 
 # AUTHENTICATION

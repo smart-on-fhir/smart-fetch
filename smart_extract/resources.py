@@ -14,18 +14,19 @@ PATIENT = "Patient"
 PROCEDURE = "Procedure"
 SERVICE_REQUEST = "ServiceRequest"
 
-# All resources that are linked to patients
+# All resources that are linked to patients, in the order we usually like to process them.
+# Patient first, Encounter, then the rest.
 PATIENT_TYPES = [
+    PATIENT,
+    ENCOUNTER,
     ALLERGY_INTOLERANCE,
     CONDITION,
     DEVICE,
     DIAGNOSTIC_REPORT,
     DOCUMENT_REFERENCE,
-    ENCOUNTER,
     IMMUNIZATION,
     MEDICATION_REQUEST,
     OBSERVATION,
-    PATIENT,
     PROCEDURE,
     SERVICE_REQUEST,
 ]

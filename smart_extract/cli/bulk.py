@@ -4,9 +4,9 @@ import argparse
 import os
 import sys
 
-from cumulus_etl import common, fhir, store
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
+from smart_extract import bulk_utils
 from smart_extract.cli import cli_utils
 
 
@@ -35,18 +35,13 @@ async def export_main(args: argparse.Namespace) -> None:
     resources = cli_utils.parse_resource_selection(args.type)
 
     async with client:
-        if args.group:
-            export_url = os.path.join(args.fhir_url, "Group", args.group)
-        else:
-            export_url = args.fhir_url
-
         exporter = BulkExporter(
             client,
-            resources,
-            export_url,
+            set(resources),
+            bulk_utils.export_url(args.fhir_url, args.group),
             args.export_to,
             since=args.since,
-            type_filter=[args.type_filter] if args.type_filter else [],
+            type_filter=args.type_filter,
             resume=args.resume,
         )
 
