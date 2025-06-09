@@ -35,17 +35,19 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
             assert_all_called=False, base_url="http://example.invalid/R4"
         )
         self.server.get("metadata").respond(200, json={})
-        self.set_basic_resource_route()
 
     @staticmethod
-    def _basic_resource(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+    def basic_resource(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
         return httpx.Response(200, request=request, json={"resourceType": res_type, "id": res_id})
 
     def set_basic_resource_route(self):
+        self.set_resource_route(self.basic_resource)
+
+    def set_resource_route(self, callback):
         route = self.server.get(
-            url__regex=r"http://example.invalid/R4/(?P<res_type>\w+)/(?P<res_id>\w+)"
+            url__regex=r"http://example.invalid/R4/(?P<res_type>[^/]+)/(?P<res_id>[^/]+)"
         )
-        route.side_effect = self._basic_resource
+        route.side_effect = callback
 
     async def cli(self, *args) -> None:
         default_args = ["--fhir-url=http://example.invalid/R4"]

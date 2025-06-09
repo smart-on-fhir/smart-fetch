@@ -6,9 +6,9 @@ import os
 import cumulus_fhir_support as cfs
 import rich
 import rich.table
-from cumulus_etl import common, fhir, inliner, store
+from cumulus_etl import common, errors, fhir, inliner, store
 
-from smart_extract import cli_utils, lifecycle, resources
+from smart_extract import cli_utils, fix_stats, lifecycle, resources
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -78,36 +78,35 @@ async def meds(client, args):
 
         # See what is already downloaded
         downloaded_ids = set()
-
         for med in cfs.read_multiline_json_from_dir(med_req_folder, resources.MEDICATION):
             downloaded_ids.add(f"{resources.MEDICATION}/{med['id']}")
 
         # Get new meds
-        newly_downloaded = 0
-        not_linked = 0
+        stats = fix_stats.FixStats()
         output = os.path.join(med_req_folder, f"{resources.MEDICATION}.ndjson.gz")
         with common.NdjsonWriter(output, append=True, compressed=True) as writer:
             reader = cfs.read_multiline_json_from_dir(med_req_folder, resources.MEDICATION_REQUEST)
             for med_req in reader:
+                stats.total += 1
+
                 med_id = med_req.get("medicationReference", {}).get("reference")
-                if med_id not in downloaded_ids:
-                    med = await fhir.download_reference(client, med_id)
-                    if med and med["resourceType"] == resources.MEDICATION:  # sanity check type
-                        newly_downloaded += 1
+                if med_id in downloaded_ids:
+                    stats.already_done += 1
+                elif med_id.startswith(f"{resources.MEDICATION}/"):
+                    med = None
+                    try:
+                        med = await fhir.download_reference(client, med_id)
+                    except errors.FatalNetworkError:
+                        stats.fatal_errors += 1
+                    except errors.TemporaryNetworkError:
+                        stats.retry_errors += 1
+
+                    if med and med["resourceType"] != resources.MEDICATION:  # sanity check type
+                        stats.fatal_errors += 1
+                    elif med:
+                        stats.newly_done += 1
                         writer.write(med)
-                    else:
-                        not_linked += 1
+
                 progress.update(progress_task, advance=1)
 
-    table = rich.table.Table(
-        "",
-        rich.table.Column(header="MedicationRequests", justify="right"),
-        box=None,
-    )
-    table.add_row("Total examined", f"{total_lines:,}")
-    if not_linked:
-        table.add_row("No linked Med", f"{not_linked:,}")
-    if len(downloaded_ids):
-        table.add_row("Already downloaded", f"{len(downloaded_ids):,}")
-    table.add_row("Newly downloaded", f"{newly_downloaded:,}")
-    rich.get_console().print(table)
+    stats.print("MedicationRequests", "downloaded")
