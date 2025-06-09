@@ -108,7 +108,10 @@ async def gather_patients(client, processor, args, filters) -> None:
 
 def read_patient_ids(folder: str) -> set[str]:
     patient_folder = os.path.join(folder, resources.PATIENT)
-    return {patient["id"] for patient in cfs.read_multiline_json_from_dir(patient_folder, resources.PATIENT)}
+    return {
+        patient["id"]
+        for patient in cfs.read_multiline_json_from_dir(patient_folder, resources.PATIENT)
+    }
 
 
 async def patient_urls(mrn_system, mrns, filters) -> AsyncIterable[str]:
@@ -147,7 +150,9 @@ async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
             break
 
 
-async def process(client, id_pool: dict[str, set[str]], writer: common.NdjsonWriter, url: str) -> None:
+async def process(
+    client, id_pool: dict[str, set[str]], writer: common.NdjsonWriter, url: str
+) -> None:
     async for resource in crawl_bundle_chain(client, url):
         if resource["resourceType"] == "OperationOutcome":
             continue

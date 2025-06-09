@@ -18,7 +18,10 @@ def skip_or_mark_done(folder: str, tag: str, desc: str):
     yield
 
     with open(done_file, "w", encoding="utf8") as f:
-        json.dump({
-            "timestamp": datetime.datetime.now(datetime.UTC).astimezone().isoformat(),
-            "version": smart_extract.__version__,
-        }, f)
+        json.dump(
+            {
+                "timestamp": datetime.datetime.now(datetime.UTC).astimezone().isoformat(),
+                "version": smart_extract.__version__,
+            },
+            f,
+        )

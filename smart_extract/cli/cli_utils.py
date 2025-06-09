@@ -9,7 +9,6 @@ from cumulus_etl.fhir.fhir_client import ServerType
 
 from smart_extract import resources
 
-
 # RESOURCE SELECTION
 
 ALLOWED_TYPES = {
@@ -64,10 +63,7 @@ def parse_resource_selection(types: str) -> list[str]:
         return resources.PATIENT_TYPES
 
     # Keep our internal preferred order by iterating on PATIENT_TYPES, not lower_types
-    return [
-        pat_type for pat_type in resources.PATIENT_TYPES
-        if pat_type.casefold() in lower_types
-    ]
+    return [pat_type for pat_type in resources.PATIENT_TYPES if pat_type.casefold() in lower_types]
 
 
 def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[str]]:
@@ -97,6 +93,7 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
 
 # AUTHENTICATION
 
+
 def add_auth(parser: argparse.ArgumentParser):
     group = parser.add_argument_group("authentication")
     group.add_argument("--smart-client-id", metavar="ID", help="client ID for SMART authentication")
@@ -123,6 +120,7 @@ def add_auth(parser: argparse.ArgumentParser):
 
 
 # GENERAL
+
 
 def add_general(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--config", "-c", metavar="PATH", help="config file")
@@ -160,13 +158,13 @@ def confirm_dir_is_empty(folder: str, allow: set[str] | None = None) -> None:
         files -= allow
     if files:
         sys.exit(
-            f"The target folder '{folder}' already has contents. "
-            "Please provide an empty folder.",
+            f"The target folder '{folder}' already has contents. Please provide an empty folder.",
         )
 
 
 def make_progress_bar() -> rich.progress.Progress:
-    # The default columns use time remaining, which has felt inaccurate/less useful than a simple elapsed counter.
+    # The default columns use time remaining, which has felt inaccurate/less useful than a simple
+    # elapsed counter.
     # - The estimation logic seems rough (often jumping time around).
     # - For indeterminate bars, the estimate shows nothing.
     columns = [

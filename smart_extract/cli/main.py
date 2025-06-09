@@ -16,7 +16,9 @@ def define_parser() -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers()
     bulk.make_subparser(subparsers.add_parser("bulk", help="run a bulk export"))
-    crawl.make_subparser(subparsers.add_parser("crawl", help="run a crawl (REST alternative to bulk export)"))
+    crawl.make_subparser(
+        subparsers.add_parser("crawl", help="run a crawl (REST alternative to bulk export)")
+    )
     fix.make_subparser(subparsers.add_parser("fix", help="fix up exported data"))
 
     return parser

@@ -1,7 +1,6 @@
 """Do a standalone bulk export from an EHR"""
 
 import argparse
-import os
 import sys
 
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
@@ -47,9 +46,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
         if args.cancel:
             if not args.resume:
-                sys.exit(
-                    "You provided --cancel without a --resume URL, but you must provide both."
-                )
+                sys.exit("You provided --cancel without a --resume URL, but you must provide both.")
             if not await exporter.cancel():
                 sys.exit(1)
             print("Export cancelled.")

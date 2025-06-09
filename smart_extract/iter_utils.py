@@ -39,7 +39,9 @@ async def _worker(
                 _drain_queue(queue)
 
 
-async def _reader(queue: asyncio.Queue, shutdown: asyncio.Event, iterable: AsyncIterable[Item]) -> None:
+async def _reader(
+    queue: asyncio.Queue, shutdown: asyncio.Event, iterable: AsyncIterable[Item]
+) -> None:
     async for item in iterable:
         await queue.put(item)
         if shutdown.is_set():

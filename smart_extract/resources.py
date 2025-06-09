@@ -1,4 +1,3 @@
-
 ALLERGY_INTOLERANCE = "AllergyIntolerance"
 BINARY = "Binary"
 CONDITION = "Condition"

@@ -8,8 +8,8 @@ import rich
 import rich.table
 from cumulus_etl import common, fhir, inliner, store
 
-from smart_extract.cli import cli_utils
 from smart_extract import resources
+from smart_extract.cli import cli_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -17,8 +17,9 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("fixes", metavar="FIX", nargs="*", default=["all"])
     cli_utils.add_general(parser)
     parser.add_argument(
-        "--mimetypes", metavar="MIMES",
-        help="mimetypes to inline, comma separated (default is text, HTML, and XHTML)"
+        "--mimetypes",
+        metavar="MIMES",
+        help="mimetypes to inline, comma separated (default is text, HTML, and XHTML)",
     )
 
     cli_utils.add_auth(parser)
@@ -48,14 +49,14 @@ def parse_mimetypes(mimetypes: str | None) -> set[str]:
 
 async def doc_inline(client, args):
     mimetypes = parse_mimetypes(args.mimetypes)
-    await inliner.inliner(client, store.Root(args.folder), {resources.DOCUMENT_REFERENCE},
-                          mimetypes)
+    await inliner.inliner(
+        client, store.Root(args.folder), {resources.DOCUMENT_REFERENCE}, mimetypes
+    )
 
 
 async def dxr_inline(client, args):
     mimetypes = parse_mimetypes(args.mimetypes)
-    await inliner.inliner(client, store.Root(args.folder), {resources.DIAGNOSTIC_REPORT},
-                          mimetypes)
+    await inliner.inliner(client, store.Root(args.folder), {resources.DIAGNOSTIC_REPORT}, mimetypes)
 
 
 async def meds(client, args):
@@ -63,7 +64,7 @@ async def meds(client, args):
         # Calculate total progress needed
         found_files = cfs.list_multiline_json_in_dir(args.folder, "MedicationRequest")
         total_lines = sum(common.read_local_line_count(path) for path in found_files)
-        progress_task = progress.add_task("Downloading Meds…", total=total_lines)
+        progress_task = progress.add_task("Downloading Meds", total=total_lines)
 
         # See what is already downloaded
         downloaded_ids = set()
