@@ -22,10 +22,10 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     )
 
     cli_utils.add_auth(parser)
-    parser.set_defaults(func=cure_main)
+    parser.set_defaults(func=fix_main)
 
 
-async def cure_main(args: argparse.Namespace) -> None:
+async def fix_main(args: argparse.Namespace) -> None:
     """Fixes up data."""
     client = cli_utils.prepare(args)
     fixes = set(args.fixes)
