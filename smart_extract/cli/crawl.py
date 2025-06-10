@@ -38,11 +38,11 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def crawl_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
-    client = cli_utils.prepare(args)
+    rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 
-    async with client:
-        filters = cli_utils.parse_type_filters(client, args.type_filter)
+    async with rest_client:
+        filters = cli_utils.parse_type_filters(rest_client, args.type_filter)
 
         # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
         # avoid writing out duplicates, in the situations where we have multiple search streams
@@ -54,13 +54,13 @@ async def crawl_main(args: argparse.Namespace) -> None:
                 id_pool[res_type] = set()
 
         processor = iter_utils.ResourceProcessor(
-            args.folder, "crawl", "Crawling", partial(process, client, id_pool), append=False
+            args.folder, "crawl", "Crawling", partial(process, rest_client, id_pool), append=False
         )
 
         # Before crawling, we have to decide if we need to do anything special with patients,
         # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
         if resources.PATIENT in res_types:
-            await gather_patients(client, processor, args, filters)
+            await gather_patients(bulk_client, processor, args, filters)
             res_types.remove(resources.PATIENT)
         patient_ids = read_patient_ids(args.folder)
 
@@ -69,7 +69,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
         await processor.run()
 
 
-async def gather_patients(client, processor, args, filters) -> None:
+async def gather_patients(bulk_client, processor, args, filters) -> None:
     if args.mrn_file and args.mrn_system:
         with open(args.mrn_file, encoding="utf8", newline="") as f:
             if args.mrn_file.casefold().endswith(".csv"):
@@ -94,16 +94,17 @@ async def gather_patients(client, processor, args, filters) -> None:
             print(f"Skipping {resources.PATIENT}, already done.")
             return
 
-        with lifecycle.mark_done(patient_folder, "crawl"):
-            # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
-            exporter = BulkExporter(
-                client,
-                {resources.PATIENT},
-                bulk_utils.export_url(args.fhir_url, args.group),
-                patient_folder,
-                type_filter=filters.get(resources.PATIENT),
-            )
-            await exporter.export()
+        async with bulk_client:
+            with lifecycle.mark_done(patient_folder, "crawl"):
+                # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
+                exporter = BulkExporter(
+                    bulk_client,
+                    {resources.PATIENT},
+                    bulk_utils.export_url(args.fhir_url, args.group),
+                    patient_folder,
+                    type_filter=filters.get(resources.PATIENT),
+                )
+                await exporter.export()
 
     else:
         sys.exit("Provide either --group or --mrn-system and --mrn-file, to define the cohort")

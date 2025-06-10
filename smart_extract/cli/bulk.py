@@ -29,12 +29,12 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def export_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
-    client = cli_utils.prepare(args)
+    _rest_client, bulk_client = cli_utils.prepare(args)
     resources = cli_utils.parse_resource_selection(args.type)
 
-    async with client:
+    async with bulk_client:
         exporter = BulkExporter(
-            client,
+            bulk_client,
             set(resources),
             bulk_utils.export_url(args.fhir_url, args.group),
             args.export_to,

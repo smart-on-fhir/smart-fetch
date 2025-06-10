@@ -29,7 +29,7 @@ def print_help():
 
 async def fix_main(args: argparse.Namespace) -> None:
     """Fixes up data."""
-    client = cli_utils.prepare(args)
+    client, _bulk_client = cli_utils.prepare(args)
     cli_fixes = set(args.fixes)
 
     if "help" in cli_fixes:

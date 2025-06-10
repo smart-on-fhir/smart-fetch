@@ -40,7 +40,6 @@ def mark_done(folder: str, tag: str):
     # Do the action!
     yield
 
-    print("MIKE: normal mark done")
     done_file = f"{folder}/.{tag}.done"
     _atomic_write(done_file, _basic_metadata())
 

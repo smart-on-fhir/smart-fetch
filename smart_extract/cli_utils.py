@@ -100,6 +100,18 @@ def add_auth(parser: argparse.ArgumentParser):
     group.add_argument(
         "--smart-key", metavar="PATH", help="JWKS or PEM file for SMART authentication"
     )
+    group.add_argument(
+        "--bulk-smart-client-id",
+        metavar="ID",
+        help="client ID for bulk export SMART authentication, "
+        "only needed if your EHR uses separate bulk credentials",
+    )
+    group.add_argument(
+        "--bulk-smart-key",
+        metavar="ID",
+        help="JWKS or PEM file for bulk export SMART authentication, "
+        "only needed if your EHR uses separate bulk credentials",
+    )
     group.add_argument("--basic-user", metavar="USER", help="username for Basic authentication")
     group.add_argument(
         "--basic-passwd", metavar="PATH", help="password file for Basic authentication"
@@ -137,7 +149,8 @@ def load_config(args) -> None:
                 setattr(args, prop, data[key])
 
 
-def prepare(args):
+def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
+    """Returns (REST client, bulk client), which may be same client"""
     load_config(args)
 
     if not args.fhir_url:
@@ -146,7 +159,25 @@ def prepare(args):
 
     common.print_header()
 
-    return fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), ["*"])
+    orig_smart_id = args.smart_client_id
+    orig_smart_key = args.smart_key
+
+    if args.bulk_smart_client_id:
+        args.smart_client_id = args.bulk_smart_client_id
+        args.smart_key = args.bulk_smart_key
+        bulk_client = fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), resources.SCOPE_TYPES)
+    else:
+        bulk_client = None
+
+    if orig_smart_id and orig_smart_key:
+        args.smart_client_id = orig_smart_id
+        args.smart_key = orig_smart_key
+
+    rest_client = fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), resources.SCOPE_TYPES)
+    if not bulk_client:
+        bulk_client = rest_client
+
+    return rest_client, bulk_client
 
 
 def confirm_dir_is_empty(folder: str, allow: set[str] | None = None) -> None:
