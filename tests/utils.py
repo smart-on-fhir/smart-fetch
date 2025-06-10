@@ -23,6 +23,8 @@ version = smart_extract.__version__
 
 class TestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.maxDiff = None
+
         tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(tempdir.cleanup)
         self.folder = pathlib.Path(tempdir.name)
@@ -37,8 +39,12 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.server.get("metadata").respond(200, json={})
 
     @staticmethod
-    def basic_resource(request: httpx.Request, res_type: str, res_id: str, **kwargs) -> httpx.Response:
-        return httpx.Response(200, request=request, json={"resourceType": res_type, "id": res_id, **kwargs})
+    def basic_resource(
+        request: httpx.Request, res_type: str, res_id: str, **kwargs
+    ) -> httpx.Response:
+        return httpx.Response(
+            200, request=request, json={"resourceType": res_type, "id": res_id, **kwargs}
+        )
 
     def set_basic_resource_route(self):
         self.set_resource_route(self.basic_resource)
@@ -70,12 +76,12 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
 
     def assert_folder(self, expected: dict[str, dict]) -> None:
         found_res_types = set(os.listdir(self.folder))
-        assert found_res_types == set(expected.keys()), found_res_types
+        self.assertEqual(found_res_types, set(expected.keys()))
 
         for res_type, expected_files in expected.items():
             res_folder = self.folder / res_type
             found_files = set(os.listdir(res_folder))
-            assert found_files == set(expected_files.keys()), found_files
+            self.assertEqual(found_files, set(expected_files.keys()))
 
             for name, val in expected_files.items():
                 if val is None:
@@ -89,8 +95,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 with open_func(self.folder / res_type / name, "rt", encoding="utf8") as f:
                     if isinstance(val, list):
                         for index, row in enumerate(f):
-                            assert val[index] == json.loads(row), row
+                            self.assertEqual(val[index], json.loads(row))
                         assert len(val) == index + 1
                     else:
                         loaded = json.load(f)
-                        assert loaded == val, (loaded, val)
+                        self.assertEqual(loaded, val)

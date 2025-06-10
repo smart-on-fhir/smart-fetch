@@ -110,5 +110,7 @@ class FixMedsTests(utils.TestCase):
     # This is a general "fix plumbing" test that is using MedReqs as an example
     async def test_no_med_reqs(self):
         """Test that we complain about missing MedReqs"""
-        with self.assertRaisesRegex(SystemExit, "Cannot run the meds fix, no MedicationRequest resources found."):
+        with self.assertRaisesRegex(
+            SystemExit, "Cannot run the meds fix, no MedicationRequest resources found."
+        ):
             await self.cli("fix", self.folder, "meds")

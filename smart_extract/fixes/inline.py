@@ -16,7 +16,6 @@ def parse_mimetypes(mimetypes: str | None) -> set[str]:
 
 async def fix_doc_inline(client, args):
     mimetypes = parse_mimetypes(args.mimetypes)
-    print("Before process")
     stats = await fix_utils.process(
         client=client,
         folder=args.folder,
@@ -43,7 +42,9 @@ async def fix_dxr_inline(client, args):
     stats.print("inlined", f"{resources.DIAGNOSTIC_REPORT}s", "Attachments")
 
 
-async def _inline_resource(mimetypes: set[str], client, resource: dict, id_pool: set[str]) -> fix_utils.Result:
+async def _inline_resource(
+    mimetypes: set[str], client, resource: dict, id_pool: set[str]
+) -> fix_utils.Result:
     match resource.get("resourceType"):
         case "DiagnosticReport":
             attachments = resource.get("presentedForm", [])
@@ -57,7 +58,7 @@ async def _inline_resource(mimetypes: set[str], client, resource: dict, id_pool:
             attachments = []  # don't do anything, but we will leave the resource line in place
 
     if not attachments:
-        return [resource, fix_utils.FixResultReason.IGNORED]
+        return [(resource, fix_utils.FixResultReason.IGNORED)]
 
     result = [
         [None, await _inline_attachment(client, attachment, mimetypes=mimetypes)]

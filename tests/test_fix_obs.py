@@ -41,14 +41,18 @@ class FixObsMemberTests(utils.TestCase):
             match res_id:
                 case "a":
                     return self.basic_resource(
-                        request, res_type, res_id, hasMember=[
-                            {"reference": "Observation/b"}, {"reference": "Observation/c"}
-                        ]
+                        request,
+                        res_type,
+                        res_id,
+                        hasMember=[{"reference": "Observation/b"}, {"reference": "Observation/c"}],
                     )
                 case "b":
                     return self.basic_resource(
                         # Recursive - confirm this doesn't mess us up
-                        request, res_type, res_id, hasMember=[{"reference": "Observation/a"}]
+                        request,
+                        res_type,
+                        res_id,
+                        hasMember=[{"reference": "Observation/a"}],
                     )
                 case "c":
                     return self.basic_resource(
