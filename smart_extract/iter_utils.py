@@ -89,6 +89,7 @@ class ResourceProcessor:
         append: bool = True,
     ):
         self._iterables: dict[str, AsyncIterable | None] = {}
+        self._folders: dict[str, str] = {}
         self._totals: dict[str, int] = {}
         self._progress = cli_utils.make_progress_bar()
         self._progress_task = None
@@ -98,25 +99,38 @@ class ResourceProcessor:
         self._callback = process
         self._append = append
 
-    def add(self, res_type: str, iterable: AsyncIterable[Item], total: int):
+    def add(
+        self,
+        res_type: str,
+        iterable: AsyncIterable[Item],
+        total: int,
+        res_folder: str | None = None,
+    ):
         if res_type in self._iterables:
             raise ValueError(f"Can't have two iterables for same resource type {res_type}")
 
         self._iterables[res_type] = iterable
+        self._folders[res_type] = os.path.join(self._folder, res_folder or res_type)
         self._totals[res_type] = total
 
     async def run(self):
         with self._progress:
             for res_type, iterable in self._iterables.items():
-                with lifecycle.skip_or_mark_done(self._res_folder(res_type), self._tag, res_type):
+                if lifecycle.should_skip(self._folders[res_type], self._tag):
+                    print(f"Skipping {res_type}, already done.")
+                    continue
+                with lifecycle.mark_done(self._folders[res_type], self._tag):
                     self._progress_task = self._progress.add_task(
-                        f"{self._desc} {res_type}…", total=self._totals[res_type]
+                        f"{self._desc} {res_type}s…", total=self._totals[res_type]
                     )
 
-                    res_file = self._res_file(res_type, f"{res_type}.ndjson.gz")
-                    os.makedirs(self._res_folder(res_type), exist_ok=True)
+                    os.makedirs(self._folders[res_type], exist_ok=True)
+                    final_file = os.path.join(self._folders[res_type], f"{res_type}.ndjson.gz")
+                    output_file = final_file
+                    if not self._append:
+                        output_file += ".tmp"
 
-                    writer = common.NdjsonWriter(res_file, append=self._append, compressed=True)
+                    writer = common.NdjsonWriter(output_file, append=self._append, compressed=True)
                     with writer:
                         await peek_ahead_processor(
                             iterable,
@@ -124,14 +138,11 @@ class ResourceProcessor:
                             peek_at=fhir.FhirClient.MAX_CONNECTIONS * 2,
                         )
 
+                    if output_file != final_file:
+                        os.replace(output_file, final_file)
+
         # Reset iterables, so we can be run again
         self._iterables = {}
-
-    def _res_folder(self, res_type: str) -> str:
-        return os.path.join(self._folder, res_type)
-
-    def _res_file(self, res_type: str, filename: str) -> str:
-        return os.path.join(self._res_folder(res_type), filename)
 
     async def _process_wrapper(self, writer: common.NdjsonWriter, item: Item) -> None:
         await self._callback(writer, item)

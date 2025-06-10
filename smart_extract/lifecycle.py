@@ -6,6 +6,15 @@ import os
 import smart_extract
 
 
+def _atomic_write(path: str, contents: dict) -> None:
+    tmp_path = f"{path}.tmp"
+    with open(tmp_path, "w", encoding="utf8") as f:
+        json.dump(contents, f, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(tmp_path, path)
+
+
 def _basic_metadata() -> dict:
     return {
         "timestamp": datetime.datetime.now(datetime.UTC).astimezone().isoformat(),
@@ -13,41 +22,51 @@ def _basic_metadata() -> dict:
     }
 
 
-@contextlib.contextmanager
-def skip_or_mark_done(folder: str, tag: str, desc: str):
-    """Marks a task as done (or skips it if already done)"""
+def should_skip(folder: str, tag: str) -> bool:
+    if tag.startswith("fix:"):
+        return should_skip_fix(folder, tag.split(":", 1)[1])
     done_file = f"{folder}/.{tag}.done"
-    if os.path.exists(done_file):
-        print(f"Skipping {desc}, already done.")
-        return
-
-    # Do the action!
-    yield
-
-    with open(done_file, "w", encoding="utf8") as f:
-        json.dump(_basic_metadata, f, indent=2)
+    return os.path.exists(done_file)
 
 
 @contextlib.contextmanager
-def skip_or_mark_done_for_fix(folder: str, fix: str):
-    """Marks a task as done (or skips it if already done)"""
-    done_file = f"{folder}/.fix.done"
-    done = {}
-    try:
-        with open(done_file, encoding="utf8") as f:
-            done = json.load(f)
-            if fix not in done.get("fixes", []):
-                raise FileNotFoundError
-        print(f"Skipping fix {fix}, already done.")
+def mark_done(folder: str, tag: str):
+    """Marks a task as done"""
+    if tag.startswith("fix:"):
+        with mark_fix_done(folder, tag.split(":", 1)[1]):
+            yield
         return
-    except FileNotFoundError:
-        pass  # expected path - we have not yet done this fix
 
     # Do the action!
     yield
 
+    print("MIKE: normal mark done")
+    done_file = f"{folder}/.{tag}.done"
+    _atomic_write(done_file, _basic_metadata())
+
+
+def _load_done(filename: str) -> dict:
+    try:
+        with open(filename, encoding="utf8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return {}
+
+
+def should_skip_fix(folder: str, fix: str) -> bool:
+    done_file = f"{folder}/.fix.done"
+    done = _load_done(done_file)
+    return fix in done.get("fixes", [])
+
+
+@contextlib.contextmanager
+def mark_fix_done(folder: str, fix: str):
+    """Marks a fix task as done"""
+    yield
+
+    done_file = f"{folder}/.fix.done"
+    done = _load_done(done_file)
     done.update(_basic_metadata())
     done.setdefault("fixes", []).append(fix)
 
-    with open(done_file, "w", encoding="utf8") as f:
-        json.dump(done, f, indent=2)
+    _atomic_write(done_file, done)

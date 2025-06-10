@@ -37,8 +37,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.server.get("metadata").respond(200, json={})
 
     @staticmethod
-    def basic_resource(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
-        return httpx.Response(200, request=request, json={"resourceType": res_type, "id": res_id})
+    def basic_resource(request: httpx.Request, res_type: str, res_id: str, **kwargs) -> httpx.Response:
+        return httpx.Response(200, request=request, json={"resourceType": res_type, "id": res_id, **kwargs})
 
     def set_basic_resource_route(self):
         self.set_resource_route(self.basic_resource)
@@ -89,7 +89,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 with open_func(self.folder / res_type / name, "rt", encoding="utf8") as f:
                     if isinstance(val, list):
                         for index, row in enumerate(f):
-                            assert val[index] == json.loads(row)
+                            assert val[index] == json.loads(row), row
                         assert len(val) == index + 1
                     else:
                         loaded = json.load(f)

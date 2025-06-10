@@ -32,6 +32,7 @@ class FixMedsTests(utils.TestCase):
             }
         )
 
+    # This is a general "fix plumbing" test that is using MedReqs as an example
     async def test_edge_cases(self):
         """Odd ball issues"""
         self.write_res(
@@ -70,6 +71,7 @@ class FixMedsTests(utils.TestCase):
             }
         )
 
+    # This is a general "fix plumbing" test that is using MedReqs as an example
     async def test_resuming(self):
         """Test that we can pick up where we left off"""
         self.write_res(
@@ -104,3 +106,9 @@ class FixMedsTests(utils.TestCase):
                 },
             }
         )
+
+    # This is a general "fix plumbing" test that is using MedReqs as an example
+    async def test_no_med_reqs(self):
+        """Test that we complain about missing MedReqs"""
+        with self.assertRaisesRegex(SystemExit, "Cannot run the meds fix, no MedicationRequest resources found."):
+            await self.cli("fix", self.folder, "meds")

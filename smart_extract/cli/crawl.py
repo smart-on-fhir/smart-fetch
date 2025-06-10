@@ -90,7 +90,11 @@ async def gather_patients(client, processor, args, filters) -> None:
         patient_folder = os.path.join(args.folder, resources.PATIENT)
         os.makedirs(patient_folder, exist_ok=True)
 
-        with lifecycle.skip_or_mark_done(patient_folder, "crawl", resources.PATIENT):
+        if lifecycle.should_skip(patient_folder, "crawl"):
+            print(f"Skipping {resources.PATIENT}, already done.")
+            return
+
+        with lifecycle.mark_done(patient_folder, "crawl"):
             # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
             exporter = BulkExporter(
                 client,
