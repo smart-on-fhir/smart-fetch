@@ -103,8 +103,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 if isinstance(val, list):
                     rows = [json.loads(row) for row in f]
                     # Allow any order, since we deal with so much async code
-                    self.assertEqual(len(rows), len(val))
-                    self.assertTrue(all(row in val for row in rows))
+                    self.assertEqual(len(rows), len(val), rows)
+                    self.assertTrue(all(row in val for row in rows), (val, rows))
                 else:
                     loaded = json.load(f)
                     self.assertEqual(loaded, val)
@@ -123,19 +123,18 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         error = error or []
         deleted = deleted or []
 
-        def make_download_refs(resources: list[dict]) -> list[dict]:
+        def make_download_refs(mode: str, resources: list[dict]) -> list[dict]:
             # Download each resource separately, to test how we handle multiples
+            refs = []
             for index, resource in enumerate(resources):
-                self.server.get(f"{self.url}/downloads/{index}").respond(200, json=resource)
+                url = f"{self.url}/downloads/{mode}/{index}"
+                self.server.get(url).respond(200, json=resource)
+                refs.append({"type": resource["resourceType"], "url": url})
+            return refs
 
-            return [
-                {"type": resource["resourceType"], "url": f"{self.url}/downloads/{index}"}
-                for index, resource in enumerate(resources)
-            ]
-
-        output_refs = make_download_refs(output)
-        error_refs = make_download_refs(error)
-        deleted_refs = make_download_refs(deleted)
+        output_refs = make_download_refs("output", output)
+        error_refs = make_download_refs("error", error)
+        deleted_refs = make_download_refs("deleted", deleted)
 
         self.server.get(f"{self.url}/Group/{group}/$export").respond(
             202, headers={"Content-Location": f"{self.url}/exports/1"}
