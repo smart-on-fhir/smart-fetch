@@ -113,9 +113,12 @@ async def _write(
     client,
     id_pool: set[str],
     stats: FixStats,
+    res_type: str,
     writer: common.NdjsonWriter,
     resource: dict,
 ) -> None:
+    del res_type
+
     results = await callback(client, resource, id_pool)
 
     for result in results:

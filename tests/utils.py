@@ -11,6 +11,7 @@ import respx
 import time_machine
 
 import smart_extract
+from smart_extract import timing
 from smart_extract.cli import main
 
 FROZEN_DATETIME = datetime.datetime(
@@ -33,10 +34,15 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.addCleanup(traveller.stop)
         self.time_machine = traveller.start()
 
-        self.server = respx.MockRouter(
-            assert_all_called=False, base_url="http://example.invalid/R4"
-        )
+        self.url = "http://example.invalid/R4"
+
+        self.server = respx.MockRouter(assert_all_called=False, base_url=self.url)
         self.server.get("metadata").respond(200, json={})
+
+    def tmp_file(self, **kwargs):
+        tmp = tempfile.NamedTemporaryFile("wt", delete=False, **kwargs)
+        self.addCleanup(os.unlink, tmp.name)
+        return tmp
 
     @staticmethod
     def basic_resource(
@@ -50,13 +56,15 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.set_resource_route(self.basic_resource)
 
     def set_resource_route(self, callback):
-        route = self.server.get(
-            url__regex=r"http://example.invalid/R4/(?P<res_type>[^/]+)/(?P<res_id>[^/]+)"
-        )
+        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)")
+        route.side_effect = callback
+
+    def set_resource_search_route(self, callback):
+        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)")
         route.side_effect = callback
 
     async def cli(self, *args) -> None:
-        default_args = ["--fhir-url=http://example.invalid/R4"]
+        default_args = ["--fhir-url", self.url]
         with self.server:
             await main.main([str(arg) for arg in args] + default_args)
 
@@ -74,29 +82,71 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 json.dump(resource, f)
                 f.write("\n")
 
-    def assert_folder(self, expected: dict[str, dict]) -> None:
-        found_res_types = set(os.listdir(self.folder))
-        self.assertEqual(found_res_types, set(expected.keys()))
+    def _assert_folder(self, root: pathlib.Path, expected: dict) -> None:
+        found_files = set(os.listdir(root))
+        self.assertEqual(found_files, set(expected.keys()))
 
-        for res_type, expected_files in expected.items():
-            res_folder = self.folder / res_type
-            found_files = set(os.listdir(res_folder))
-            self.assertEqual(found_files, set(expected_files.keys()))
+        for name, val in expected.items():
+            if val is None:
+                continue
 
-            for name, val in expected_files.items():
-                if val is None:
-                    continue
+            if isinstance(val, dict) and os.path.isdir(root / name):
+                self._assert_folder(root / name, val)
+                continue
 
-                if name.endswith(".gz"):
-                    open_func = gzip.open
+            if name.endswith(".gz"):
+                open_func = gzip.open
+            else:
+                open_func = open
+
+            with open_func(root / name, "rt", encoding="utf8") as f:
+                if isinstance(val, list):
+                    rows = [json.loads(row) for row in f]
+                    # Allow any order, since we deal with so much async code
+                    self.assertEqual(len(rows), len(val))
+                    self.assertTrue(all(row in val for row in rows))
                 else:
-                    open_func = open
+                    loaded = json.load(f)
+                    self.assertEqual(loaded, val)
 
-                with open_func(self.folder / res_type / name, "rt", encoding="utf8") as f:
-                    if isinstance(val, list):
-                        for index, row in enumerate(f):
-                            self.assertEqual(val[index], json.loads(row))
-                        assert len(val) == index + 1
-                    else:
-                        loaded = json.load(f)
-                        self.assertEqual(loaded, val)
+    def assert_folder(self, expected: dict[str, dict]) -> None:
+        self._assert_folder(self.folder, expected)
+
+    def mock_bulk(
+        self,
+        group: str,
+        output: list[dict] | None = None,
+        error: list[dict] | None = None,
+        deleted: list[dict] | None = None,
+    ) -> None:
+        output = output or []
+        error = error or []
+        deleted = deleted or []
+
+        def make_download_refs(resources: list[dict]) -> list[dict]:
+            # Download each resource separately, to test how we handle multiples
+            for index, resource in enumerate(resources):
+                self.server.get(f"{self.url}/downloads/{index}").respond(200, json=resource)
+
+            return [
+                {"type": resource["resourceType"], "url": f"{self.url}/downloads/{index}"}
+                for index, resource in enumerate(resources)
+            ]
+
+        output_refs = make_download_refs(output)
+        error_refs = make_download_refs(error)
+        deleted_refs = make_download_refs(deleted)
+
+        self.server.get(f"{self.url}/Group/{group}/$export").respond(
+            202, headers={"Content-Location": f"{self.url}/exports/1"}
+        )
+        self.server.get(f"{self.url}/exports/1").respond(
+            200,
+            json={
+                "transactionTime": timing.now().isoformat(),
+                "output": output_refs,
+                "error": error_refs,
+                "deleted": deleted_refs,
+            },
+        )
+        self.server.delete(f"{self.url}/exports/1").respond(202)

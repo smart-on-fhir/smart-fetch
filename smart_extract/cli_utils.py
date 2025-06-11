@@ -70,6 +70,8 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
     # First, break out what the user provided on the CLI
     filters = {}
     for type_filter in type_filters or []:
+        if "?" not in type_filter:
+            sys.exit("Type filter arguments must be in the format 'Resource?params'.")
         res_type, params = type_filter.split("?", 1)
         filters.setdefault(res_type, set()).add(params)
 
@@ -83,9 +85,9 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
 
         filters[resources.OBSERVATION] = {categories}
 
-        # Cerner doesn't seem to provide a category for Smoking Status observations, so we search
+        # Oracle doesn't seem to provide a category for Smoking Status observations, so we search
         # on the US Core required loinc code to pick those up.
-        if client._server_type == ServerType.CERNER:
+        if client._server_type == ServerType.ORACLE:
             filters[resources.OBSERVATION].add("code=http://loinc.org|72166-2")
 
     return filters
@@ -165,7 +167,9 @@ def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
     if args.bulk_smart_client_id:
         args.smart_client_id = args.bulk_smart_client_id
         args.smart_key = args.bulk_smart_key
-        bulk_client = fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), resources.SCOPE_TYPES)
+        bulk_client = fhir.create_fhir_client_for_cli(
+            args, store.Root(args.fhir_url), resources.SCOPE_TYPES
+        )
     else:
         bulk_client = None
 
@@ -173,7 +177,9 @@ def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
         args.smart_client_id = orig_smart_id
         args.smart_key = orig_smart_key
 
-    rest_client = fhir.create_fhir_client_for_cli(args, store.Root(args.fhir_url), resources.SCOPE_TYPES)
+    rest_client = fhir.create_fhir_client_for_cli(
+        args, store.Root(args.fhir_url), resources.SCOPE_TYPES
+    )
     if not bulk_client:
         bulk_client = rest_client
 

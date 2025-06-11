@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 import os
 from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
@@ -85,18 +86,20 @@ class ResourceProcessor:
         folder: str,
         tag: str,
         desc: str,
-        process: Callable[[common.NdjsonWriter, Item], Awaitable[None]],
+        callback: Callable[[str, common.NdjsonWriter, Item], Awaitable[None]],
+        finish_callback: Callable[[str, datetime.datetime], Awaitable[None]] | None = None,
         append: bool = True,
     ):
         self._iterables: dict[str, AsyncIterable | None] = {}
         self._folders: dict[str, str] = {}
         self._totals: dict[str, int] = {}
+        self._callback = callback
+        self._finish_callback = finish_callback
         self._progress = cli_utils.make_progress_bar()
         self._progress_task = None
         self._folder = folder
         self._desc = desc
         self._tag = tag
-        self._callback = process
         self._append = append
 
     def add(
@@ -104,6 +107,7 @@ class ResourceProcessor:
         res_type: str,
         iterable: AsyncIterable[Item],
         total: int,
+        *,
         res_folder: str | None = None,
     ):
         if res_type in self._iterables:
@@ -119,7 +123,7 @@ class ResourceProcessor:
                 if lifecycle.should_skip(self._folders[res_type], self._tag):
                     print(f"Skipping {res_type}, already done.")
                     continue
-                with lifecycle.mark_done(self._folders[res_type], self._tag):
+                with lifecycle.mark_done(self._folders[res_type], self._tag) as start_time:
                     self._progress_task = self._progress.add_task(
                         f"{self._desc} {res_type}s…", total=self._totals[res_type]
                     )
@@ -134,16 +138,21 @@ class ResourceProcessor:
                     with writer:
                         await peek_ahead_processor(
                             iterable,
-                            partial(self._process_wrapper, writer),
+                            partial(self._process_wrapper, writer, res_type),
                             peek_at=fhir.FhirClient.MAX_CONNECTIONS * 2,
                         )
 
-                    if output_file != final_file:
+                    if output_file != final_file and os.path.exists(output_file):
                         os.replace(output_file, final_file)
+
+                    if self._finish_callback:
+                        await self._finish_callback(res_type, start_time)
 
         # Reset iterables, so we can be run again
         self._iterables = {}
 
-    async def _process_wrapper(self, writer: common.NdjsonWriter, item: Item) -> None:
-        await self._callback(writer, item)
+    async def _process_wrapper(
+        self, writer: common.NdjsonWriter, res_type: str, item: Item
+    ) -> None:
+        await self._callback(res_type, writer, item)
         self._progress.update(self._progress_task, advance=1)

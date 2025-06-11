@@ -4,6 +4,7 @@ import json
 import os
 
 import smart_extract
+from smart_extract import timing
 
 
 def _atomic_write(path: str, contents: dict) -> None:
@@ -17,7 +18,7 @@ def _atomic_write(path: str, contents: dict) -> None:
 
 def _basic_metadata() -> dict:
     return {
-        "timestamp": datetime.datetime.now(datetime.UTC).astimezone().isoformat(),
+        "timestamp": timing.now().isoformat(),
         "version": smart_extract.__version__,
     }
 
@@ -32,16 +33,22 @@ def should_skip(folder: str, tag: str) -> bool:
 @contextlib.contextmanager
 def mark_done(folder: str, tag: str):
     """Marks a task as done"""
+    started = timing.now()
+
     if tag.startswith("fix:"):
         with mark_fix_done(folder, tag.split(":", 1)[1]):
-            yield
+            yield started
         return
 
     # Do the action!
-    yield
+    yield started
+
+    delta = started - timing.now()
 
     done_file = f"{folder}/.{tag}.done"
-    _atomic_write(done_file, _basic_metadata())
+    metadata = _basic_metadata()
+    metadata["duration"] = delta.total_seconds()
+    _atomic_write(done_file, metadata)
 
 
 def _load_done(filename: str) -> dict:

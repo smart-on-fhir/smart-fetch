@@ -1,5 +1,6 @@
 ALLERGY_INTOLERANCE = "AllergyIntolerance"
 BINARY = "Binary"
+BUNDLE = "Bundle"
 CONDITION = "Condition"
 DEVICE = "Device"
 DIAGNOSTIC_REPORT = "DiagnosticReport"

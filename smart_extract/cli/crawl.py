@@ -2,6 +2,7 @@
 
 import argparse
 import csv
+import datetime
 import os
 import sys
 from collections.abc import AsyncIterable
@@ -11,7 +12,7 @@ import cumulus_fhir_support as cfs
 from cumulus_etl import common
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
-from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, resources
+from smart_extract import bulk_utils, cli_utils, crawl_utils, iter_utils, lifecycle, resources
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -23,6 +24,11 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--group",
         metavar="GROUP",
         help="which group to export (bulk export for patients, crawl for the rest)",
+    )
+    group.add_argument(
+        "--group-nickname",
+        metavar="GROUP",
+        help="a human-friendly name for the cohort, used in log files and such",
     )
     group.add_argument("--mrn-system", metavar="SYSTEM", help="system identifier for MRNs")
     group.add_argument(
@@ -53,14 +59,28 @@ async def crawl_main(args: argparse.Namespace) -> None:
             if res_type in filters and len(filters[res_type]) > 1:
                 id_pool[res_type] = set()
 
+        if args.group_nickname:
+            group_name = args.group_nickname
+        elif args.group is not None:
+            group_name = args.group
+        elif args.mrn_file:
+            group_name = os.path.splitext(os.path.basename(args.mrn_file))[0]
+        else:
+            group_name = os.path.basename(args.folder)
+
         processor = iter_utils.ResourceProcessor(
-            args.folder, "crawl", "Crawling", partial(process, rest_client, id_pool), append=False
+            args.folder,
+            "export",
+            "Crawling",
+            callback=partial(process, rest_client, id_pool, args.folder),
+            append=False,
+            finish_callback=partial(fake_bulk_export, group_name, args.fhir_url, args.folder),
         )
 
         # Before crawling, we have to decide if we need to do anything special with patients,
         # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
         if resources.PATIENT in res_types:
-            await gather_patients(bulk_client, processor, args, filters)
+            await gather_patients(rest_client, bulk_client, processor, id_pool, args, filters)
             res_types.remove(resources.PATIENT)
         patient_ids = read_patient_ids(args.folder)
 
@@ -69,7 +89,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
         await processor.run()
 
 
-async def gather_patients(bulk_client, processor, args, filters) -> None:
+async def gather_patients(rest_client, bulk_client, processor, id_pool, args, filters) -> None:
     if args.mrn_file and args.mrn_system:
         with open(args.mrn_file, encoding="utf8", newline="") as f:
             if args.mrn_file.casefold().endswith(".csv"):
@@ -90,12 +110,12 @@ async def gather_patients(bulk_client, processor, args, filters) -> None:
         patient_folder = os.path.join(args.folder, resources.PATIENT)
         os.makedirs(patient_folder, exist_ok=True)
 
-        if lifecycle.should_skip(patient_folder, "crawl"):
+        if lifecycle.should_skip(patient_folder, "export"):
             print(f"Skipping {resources.PATIENT}, already done.")
             return
 
         async with bulk_client:
-            with lifecycle.mark_done(patient_folder, "crawl"):
+            with lifecycle.mark_done(patient_folder, "export"):
                 # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
                 exporter = BulkExporter(
                     bulk_client,
@@ -143,6 +163,9 @@ async def resource_urls(res_type, patients, filters) -> AsyncIterable[str]:
 async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
     response = await client.request("GET", url)
     bundle = response.json()
+    if bundle.get("resourceType") != resources.BUNDLE:
+        return
+
     for entry in bundle.get("entry", []):
         if resource := entry.get("resource"):
             yield resource
@@ -155,13 +178,36 @@ async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
 
 
 async def process(
-    client, id_pool: dict[str, set[str]], writer: common.NdjsonWriter, url: str
+    client,
+    id_pool: dict[str, set[str]],
+    folder: str,
+    res_type: str,
+    writer: common.NdjsonWriter,
+    url: str,
 ) -> None:
+    subfolder = os.path.join(folder, res_type)
+
     async for resource in crawl_bundle_chain(client, url):
         if resource["resourceType"] == "OperationOutcome":
+            # Make a fake "error" folder, just like we'd see in a bulk export
+            error_subfolder = os.path.join(subfolder, "error")
+            os.makedirs(error_subfolder, exist_ok=True)
+            error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
+            with common.NdjsonWriter(error_file, append=True, compressed=True) as error_writer:
+                error_writer.write(resource)
             continue
-        if res_pool := id_pool.get(resource["resourceType"]):
+
+        res_pool = id_pool.get(resource["resourceType"])
+        if res_pool is not None:
             if resource["id"] in res_pool:
-                return
+                continue
             res_pool.add(resource["id"])
+
         writer.write(resource)
+
+
+async def fake_bulk_export(
+    group: str, fhir_url: str, folder: str, res_type: str, start_time: datetime.datetime
+) -> None:
+    subfolder = os.path.join(folder, res_type)
+    crawl_utils.create_fake_log(subfolder, fhir_url, group, start_time)
