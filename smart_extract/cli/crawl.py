@@ -9,10 +9,17 @@ from collections.abc import AsyncIterable
 from functools import partial
 
 import cumulus_fhir_support as cfs
-from cumulus_etl import common
 from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, iter_utils, lifecycle, resources
+from smart_extract import (
+    bulk_utils,
+    cli_utils,
+    crawl_utils,
+    iter_utils,
+    lifecycle,
+    ndjson,
+    resources,
+)
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -182,7 +189,7 @@ async def process(
     id_pool: dict[str, set[str]],
     folder: str,
     res_type: str,
-    writer: common.NdjsonWriter,
+    writer: ndjson.NdjsonWriter,
     url: str,
 ) -> None:
     subfolder = os.path.join(folder, res_type)
@@ -193,7 +200,7 @@ async def process(
             error_subfolder = os.path.join(subfolder, "error")
             os.makedirs(error_subfolder, exist_ok=True)
             error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
-            with common.NdjsonWriter(error_file, append=True, compressed=True) as error_writer:
+            with ndjson.NdjsonWriter(error_file, append=True, compressed=True) as error_writer:
                 error_writer.write(resource)
             continue
 

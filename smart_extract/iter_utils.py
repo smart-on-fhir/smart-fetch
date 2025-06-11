@@ -5,9 +5,9 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
 from typing import TypeVar
 
-from cumulus_etl import common, errors, fhir
+from cumulus_etl import errors, fhir
 
-from smart_extract import cli_utils, lifecycle
+from smart_extract import cli_utils, lifecycle, ndjson
 
 Item = TypeVar("Item")
 
@@ -86,7 +86,7 @@ class ResourceProcessor:
         folder: str,
         tag: str,
         desc: str,
-        callback: Callable[[str, common.NdjsonWriter, Item], Awaitable[None]],
+        callback: Callable[[str, ndjson.NdjsonWriter, Item], Awaitable[None]],
         finish_callback: Callable[[str, datetime.datetime], Awaitable[None]] | None = None,
         append: bool = True,
     ):
@@ -134,7 +134,7 @@ class ResourceProcessor:
                     if not self._append:
                         output_file += ".tmp"
 
-                    writer = common.NdjsonWriter(output_file, append=self._append, compressed=True)
+                    writer = ndjson.NdjsonWriter(output_file, append=self._append, compressed=True)
                     with writer:
                         await peek_ahead_processor(
                             iterable,
@@ -152,7 +152,7 @@ class ResourceProcessor:
         self._iterables = {}
 
     async def _process_wrapper(
-        self, writer: common.NdjsonWriter, res_type: str, item: Item
+        self, writer: ndjson.NdjsonWriter, res_type: str, item: Item
     ) -> None:
         await self._callback(res_type, writer, item)
         self._progress.update(self._progress_task, advance=1)

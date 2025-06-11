@@ -7,9 +7,9 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import rich.table
-from cumulus_etl import common, errors, fhir
+from cumulus_etl import errors, fhir
 
-from smart_extract import iter_utils
+from smart_extract import iter_utils, ndjson
 
 
 class FixResultReason(enum.Enum):
@@ -114,7 +114,7 @@ async def _write(
     id_pool: set[str],
     stats: FixStats,
     res_type: str,
-    writer: common.NdjsonWriter,
+    writer: ndjson.NdjsonWriter,
     resource: dict,
 ) -> None:
     del res_type
@@ -153,7 +153,7 @@ async def process(
 
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(input_subfolder, input_type)
-    total_lines = sum(common.read_local_line_count(path) for path in found_files)
+    total_lines = sum(ndjson.read_local_line_count(path) for path in found_files)
 
     if not total_lines:
         sys.exit(f"Cannot run the {fix_name} fix, no {input_type} resources found.")

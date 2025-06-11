@@ -4,7 +4,7 @@ import sys
 import tomllib
 
 import rich.progress
-from cumulus_etl import common, fhir, store
+from cumulus_etl import fhir, store
 from cumulus_etl.fhir.fhir_client import ServerType
 
 from smart_extract import resources
@@ -159,7 +159,7 @@ def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
         print("--fhir-url is required")
         sys.exit(2)
 
-    common.print_header()
+    rich.get_console().rule()
 
     orig_smart_id = args.smart_client_id
     orig_smart_key = args.smart_key
