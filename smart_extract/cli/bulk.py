@@ -3,8 +3,6 @@
 import argparse
 import sys
 
-from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
-
 from smart_extract import bulk_utils, cli_utils
 
 
@@ -33,7 +31,7 @@ async def export_main(args: argparse.Namespace) -> None:
     resources = cli_utils.parse_resource_selection(args.type)
 
     async with bulk_client:
-        exporter = BulkExporter(
+        exporter = bulk_utils.BulkExporter(
             bulk_client,
             set(resources),
             bulk_utils.export_url(args.fhir_url, args.group),

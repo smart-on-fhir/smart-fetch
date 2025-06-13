@@ -9,7 +9,6 @@ from collections.abc import AsyncIterable
 from functools import partial
 
 import cumulus_fhir_support as cfs
-from cumulus_etl.loaders.fhir.bulk_export import BulkExporter
 
 from smart_extract import (
     bulk_utils,
@@ -124,7 +123,7 @@ async def gather_patients(rest_client, bulk_client, processor, id_pool, args, fi
         async with bulk_client:
             with lifecycle.mark_done(patient_folder, "export"):
                 # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
-                exporter = BulkExporter(
+                exporter = bulk_utils.BulkExporter(
                     bulk_client,
                     {resources.PATIENT},
                     bulk_utils.export_url(args.fhir_url, args.group),

@@ -104,7 +104,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                     rows = [json.loads(row) for row in f]
                     # Allow any order, since we deal with so much async code
                     self.assertEqual(len(rows), len(val), rows)
-                    self.assertTrue(all(row in val for row in rows), (val, rows))
+                    missing = [row for row in rows if row not in val]
+                    self.assertEqual(missing, [])
                 else:
                     loaded = json.load(f)
                     self.assertEqual(loaded, val)

@@ -217,3 +217,46 @@ def make_progress_bar() -> rich.progress.Progress:
         rich.progress.TimeElapsedColumn(),
     ]
     return rich.progress.Progress(*columns)
+
+
+def _pretty_float(num: float, precision: int = 1) -> str:
+    """
+    Returns a formatted float with trailing zeros chopped off.
+
+    Could not find a cleaner builtin solution.
+    Prior art: https://stackoverflow.com/questions/2440692/formatting-floats-without-trailing-zeros
+    """
+    return f"{num:.{precision}f}".rstrip("0").rstrip(".")
+
+
+def human_file_size(count: int) -> str:
+    """
+    Returns a human-readable version of a count of bytes.
+
+    I couldn't find a version of this that's sitting in a library we use. Very annoying.
+    """
+    for suffix in ("KB", "MB"):
+        count /= 1024
+        if count < 1024:
+            return f"{_pretty_float(count)}{suffix}"
+    return f"{_pretty_float(count / 1024)}GB"
+
+
+def human_time_offset(seconds: int) -> str:
+    """
+    Returns a (fuzzy) human-readable version of a count of seconds.
+
+    Examples:
+      49 => "49s"
+      90 => "1.5m"
+      18000 => "5h"
+    """
+    if seconds < 60:
+        return f"{seconds}s"
+
+    minutes = seconds / 60
+    if minutes < 60:
+        return f"{_pretty_float(minutes)}m"
+
+    hours = minutes / 60
+    return f"{_pretty_float(hours)}h"

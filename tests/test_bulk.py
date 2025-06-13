@@ -29,7 +29,7 @@ class BulkTests(utils.TestCase):
                             "exportId": f"{self.url}/exports/1",
                             "timestamp": timing.now().isoformat(),
                             "eventId": "kickoff",
-                            "_client": "cumulus-etl",
+                            "_client": "smart-extract",
                             "_clientVersion": "1!0.0.0",
                             "eventDetail": {
                                 "exportUrl": f"{self.url}/Group/group1/$export?"
