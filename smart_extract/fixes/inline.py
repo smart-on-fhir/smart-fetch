@@ -1,8 +1,9 @@
 import base64
+import email
 import hashlib
 from functools import partial
 
-from cumulus_etl import errors, fhir
+import cumulus_fhir_support as cfs
 
 from smart_extract import fix_utils, resources
 
@@ -12,6 +13,13 @@ def parse_mimetypes(mimetypes: str | None) -> set[str]:
         return {"text/plain", "text/html", "application/xhtml+xml"}
 
     return set(mimetypes.casefold().split(","))
+
+
+def parse_content_type(content_type: str) -> (str, str):
+    """Returns (mimetype, encoding)"""
+    msg = email.message.EmailMessage()
+    msg["content-type"] = content_type
+    return msg.get_content_type(), msg.get_content_charset("utf8")
 
 
 async def fix_doc_inline(client, args):
@@ -70,12 +78,12 @@ async def _inline_resource(
 
 
 async def _inline_attachment(
-    client: fhir.FhirClient, attachment: dict, *, mimetypes: set[str]
+    client: cfs.FhirClient, attachment: dict, *, mimetypes: set[str]
 ) -> fix_utils.FixResultReason:
     # First, check if we should even examine this attachment
     if "contentType" not in attachment:
         return fix_utils.FixResultReason.IGNORED
-    mimetype, _charset = fhir.parse_content_type(attachment["contentType"])
+    mimetype, _charset = parse_content_type(attachment["contentType"])
     if mimetype not in mimetypes:
         return fix_utils.FixResultReason.IGNORED
 
@@ -89,10 +97,16 @@ async def _inline_attachment(
         return fix_utils.FixResultReason.IGNORED
 
     try:
-        response = await fhir.request_attachment(client, attachment)
-    except errors.FatalNetworkError:
+        response = await client.request(
+            "GET",
+            attachment["url"],
+            # We need to pass Accept to get the raw data, not a Binary FHIR object.
+            # See https://www.hl7.org/fhir/binary.html
+            headers={"Accept": mimetype},
+        )
+    except cfs.FatalNetworkError:
         return fix_utils.FixResultReason.FATAL_ERROR
-    except errors.TemporaryNetworkError:
+    except cfs.TemporaryNetworkError:
         return fix_utils.FixResultReason.RETRY_ERROR
 
     attachment["data"] = base64.standard_b64encode(response.content).decode("ascii")

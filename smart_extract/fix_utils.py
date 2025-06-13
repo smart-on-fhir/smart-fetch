@@ -7,7 +7,6 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import rich.table
-from cumulus_etl import errors, fhir
 
 from smart_extract import iter_utils, ndjson
 
@@ -184,17 +183,18 @@ async def download_reference(
     elif reference in id_pool:
         return None, FixResultReason.ALREADY_DONE
 
-    try:
-        resource = await fhir.download_reference(client, reference)
-    except errors.FatalNetworkError:
-        return None, FixResultReason.FATAL_ERROR
-    except errors.TemporaryNetworkError:
-        return None, FixResultReason.RETRY_ERROR
-
-    if not resource:
+    if not reference or reference.startswith("#"):
         return None, FixResultReason.IGNORED
 
-    if resource["resourceType"] != expected_type:
+    try:
+        response = await client.request("GET", reference)
+        resource = response.json()
+    except cfs.FatalNetworkError:
+        return None, FixResultReason.FATAL_ERROR
+    except cfs.TemporaryNetworkError:
+        return None, FixResultReason.RETRY_ERROR
+
+    if resource.get("resourceType") != expected_type:
         # Hmm, wrong type. Could be OperationOutcome? Mark as fatal.
         return None, FixResultReason.FATAL_ERROR
 

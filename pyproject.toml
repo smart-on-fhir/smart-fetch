@@ -2,9 +2,7 @@
 name = "smart-extract"
 requires-python = ">= 3.11"
 dependencies = [
-    "cumulus-fhir-support >= 1.2",
-    "httpx",
-    "jwcrypto",
+    "cumulus-fhir-support >= 1.5",
     "rich",
 ]
 authors = [
@@ -23,6 +21,7 @@ dynamic = ["description", "version"]
 [project.optional-dependencies]
 tests = [
     "ddt",
+    "httpx",
     "pytest",
     "pytest-cov",
     "respx",

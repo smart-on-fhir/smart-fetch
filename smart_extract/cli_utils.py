@@ -3,9 +3,8 @@ import os
 import sys
 import tomllib
 
+import cumulus_fhir_support as cfs
 import rich.progress
-from cumulus_etl import fhir, store
-from cumulus_etl.fhir.fhir_client import ServerType
 
 from smart_extract import resources
 
@@ -79,7 +78,7 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
         # Add some basic default filters for Observation, because the volume of Observations gets
         # overwhelming quickly. So we limit to the nine basic US Core categories.
         categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
-        if client._server_type != ServerType.EPIC:
+        if client.server_type != cfs.ServerType.EPIC:
             # As of June 2025, Epic does not support these types and will error out
             categories += ",procedure,therapy,activity"
 
@@ -87,7 +86,7 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
 
         # Oracle doesn't seem to provide a category for Smoking Status observations, so we search
         # on the US Core required loinc code to pick those up.
-        if client._server_type == ServerType.ORACLE:
+        if client.server_type == cfs.ServerType.ORACLE:
             filters[resources.OBSERVATION].add("code=http://loinc.org|72166-2")
 
     return filters
@@ -151,7 +150,20 @@ def load_config(args) -> None:
                 setattr(args, prop, data[key])
 
 
-def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
+def create_client_for_cli(args, smart_client_id: str | None, smart_key: str | None) -> cfs.FhirClient:
+    return cfs.FhirClient.create_for_cli(
+        args.fhir_url,
+        resources.SCOPE_TYPES,
+        token_url=args.token_url,
+        smart_client_id=smart_client_id or args.smart_client_id,
+        smart_key=smart_key or args.smart_key,
+        basic_user=args.basic_user,
+        basic_password=args.basic_passwd,
+        bearer_token=args.bearer_token,
+    )
+
+
+def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     """Returns (REST client, bulk client), which may be same client"""
     load_config(args)
 
@@ -161,27 +173,21 @@ def prepare(args) -> tuple[fhir.FhirClient, fhir.FhirClient]:
 
     rich.get_console().rule()
 
-    orig_smart_id = args.smart_client_id
-    orig_smart_key = args.smart_key
+    rest_id = args.smart_client_id
+    rest_key = args.smart_key
+    bulk_id = args.bulk_smart_client_id
+    bulk_key = args.bulk_smart_key
 
-    if args.bulk_smart_client_id:
-        args.smart_client_id = args.bulk_smart_client_id
-        args.smart_key = args.bulk_smart_key
-        bulk_client = fhir.create_fhir_client_for_cli(
-            args, store.Root(args.fhir_url), resources.SCOPE_TYPES
-        )
-    else:
-        bulk_client = None
+    # Have rest and bulk keys fall back to the other one, if only one is provided.
+    if rest_id and rest_key and not bulk_id and not bulk_key:
+        bulk_id = rest_id
+        bulk_key = bulk_key
+    elif bulk_id and bulk_key and not rest_id and not rest_key:
+        bulk_id = rest_id
+        bulk_key = rest_key
 
-    if orig_smart_id and orig_smart_key:
-        args.smart_client_id = orig_smart_id
-        args.smart_key = orig_smart_key
-
-    rest_client = fhir.create_fhir_client_for_cli(
-        args, store.Root(args.fhir_url), resources.SCOPE_TYPES
-    )
-    if not bulk_client:
-        bulk_client = rest_client
+    rest_client = create_client_for_cli(args, smart_client_id=rest_id, smart_key=rest_key)
+    bulk_client = create_client_for_cli(args, smart_client_id=bulk_id, smart_key=bulk_key)
 
     return rest_client, bulk_client
 

@@ -1,11 +1,12 @@
 import asyncio
 import datetime
 import os
+import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
 from typing import TypeVar
 
-from cumulus_etl import errors, fhir
+import cumulus_fhir_support as cfs
 
 from smart_extract import cli_utils, lifecycle, ndjson
 
@@ -77,7 +78,7 @@ async def peek_ahead_processor(
         # Check for an early exit in the tasks
         for result in results:
             if result and not isinstance(result, asyncio.CancelledError):
-                errors.fatal(str(result), errors.INLINE_TASK_FAILED)
+                sys.exit(str(result))
 
 
 class ResourceProcessor:
@@ -139,7 +140,7 @@ class ResourceProcessor:
                         await peek_ahead_processor(
                             iterable,
                             partial(self._process_wrapper, writer, res_type),
-                            peek_at=fhir.FhirClient.MAX_CONNECTIONS * 2,
+                            peek_at=cfs.FhirClient.MAX_CONNECTIONS * 2,
                         )
 
                     if output_file != final_file and os.path.exists(output_file):
