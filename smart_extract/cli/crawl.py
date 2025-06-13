@@ -25,6 +25,14 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("folder", metavar="OUTPUT_DIR")
     cli_utils.add_general(parser)
 
+    parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
+    parser.add_argument(
+        "--since-mode",
+        choices=cli_utils.SinceMode,
+        help="how to interpret --since",
+        default=cli_utils.SinceMode.AUTO,
+    )
+
     group = parser.add_argument_group("cohort selection")
     group.add_argument(
         "--group",
@@ -54,7 +62,14 @@ async def crawl_main(args: argparse.Namespace) -> None:
     res_types = cli_utils.parse_resource_selection(args.type)
 
     async with rest_client:
-        filters = cli_utils.parse_type_filters(rest_client, args.type_filter)
+        filters = cli_utils.parse_type_filters(rest_client.server_type, args.type_filter)
+        cli_utils.add_since_filter(
+            filters,
+            args.since,
+            server_type=rest_client.server_type,
+            res_types=res_types,
+            since_mode=args.since_mode,
+        )
 
         # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
         # avoid writing out duplicates, in the situations where we have multiple search streams

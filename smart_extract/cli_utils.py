@@ -1,4 +1,5 @@
 import argparse
+import enum
 import os
 import sys
 import tomllib
@@ -16,6 +17,14 @@ ALLOWED_TYPES = {
     *resources.PATIENT_TYPES,
 }
 ALLOWED_CASE_MAP: dict[str, str] = {res_type.casefold(): res_type for res_type in ALLOWED_TYPES}
+
+Filters = dict[str, set[str]]
+
+
+class SinceMode(enum.StrEnum):
+    AUTO = enum.auto()
+    UPDATED = enum.auto()
+    CREATED = enum.auto()
 
 
 def add_type_selection(parser: argparse.ArgumentParser) -> None:
@@ -65,7 +74,7 @@ def parse_resource_selection(types: str) -> list[str]:
     return [pat_type for pat_type in resources.PATIENT_TYPES if pat_type.casefold() in lower_types]
 
 
-def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[str]]:
+def parse_type_filters(server_type: cfs.ServerType, type_filters: list[str] | None) -> Filters:
     # First, break out what the user provided on the CLI
     filters = {}
     for type_filter in type_filters or []:
@@ -78,7 +87,7 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
         # Add some basic default filters for Observation, because the volume of Observations gets
         # overwhelming quickly. So we limit to the nine basic US Core categories.
         categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
-        if client.server_type != cfs.ServerType.EPIC:
+        if server_type != cfs.ServerType.EPIC:
             # As of June 2025, Epic does not support these types and will error out
             categories += ",procedure,therapy,activity"
 
@@ -86,10 +95,57 @@ def parse_type_filters(client, type_filters: list[str] | None) -> dict[str, set[
 
         # Oracle doesn't seem to provide a category for Smoking Status observations, so we search
         # on the US Core required loinc code to pick those up.
-        if client.server_type == cfs.ServerType.ORACLE:
+        if server_type == cfs.ServerType.ORACLE:
             filters[resources.OBSERVATION].add("code=http://loinc.org|72166-2")
 
     return filters
+
+
+def add_since_filter(
+    filters: Filters,
+    since: str | None,
+    *,
+    since_mode: SinceMode,
+    server_type: cfs.ServerType,
+    res_types: list[str],
+) -> None:
+    if not since:
+        return
+
+    if since_mode == SinceMode.AUTO:
+        # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
+        # Otherwise, prefer to grab any resource updated since this time, to get all the latest
+        # and greatest edits.
+        since_mode = SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
+
+    def add_filter(res_type: str, field: str) -> None:
+        if res_type not in res_types:
+            return
+        new_param = f"{field}=gt{since}"
+        if res_type in filters:
+            filters[res_type] = {f"{params}&{new_param}" for params in filters[res_type]}
+        else:
+            filters[res_type] = {new_param}
+
+    if since_mode == SinceMode.UPDATED:
+        for res_type in res_types:
+            add_filter(res_type, "_lastUpdated")
+    elif since_mode == SinceMode.CREATED:
+        # There's no meta.created field, so we do the best we can for each resource.
+        add_filter(resources.ALLERGY_INTOLERANCE, "date")
+        add_filter(resources.CONDITION, "recorded-date")
+        # Skip DEVICE since it has no admin date to search on
+        add_filter(resources.DIAGNOSTIC_REPORT, "issued")
+        add_filter(resources.DOCUMENT_REFERENCE, "date")
+        add_filter(resources.ENCOUNTER, "date")  # clinical date, has no admin date
+        add_filter(resources.IMMUNIZATION, "date")  # clinical date, can't search on `recorded`
+        add_filter(resources.MEDICATION_REQUEST, "authoredon")
+        add_filter(resources.OBSERVATION, "date")  # clinical date, can't search on `issued`
+        # Skip PATIENT since it has no admin date to search on
+        add_filter(resources.PROCEDURE, "date")  # clinical date, has no admin date
+        add_filter(resources.SERVICE_REQUEST, "authored")
+    else:
+        raise ValueError(f"Unknown --since-mode parameter '{since_mode}'")
 
 
 # AUTHENTICATION
@@ -150,7 +206,9 @@ def load_config(args) -> None:
                 setattr(args, prop, data[key])
 
 
-def create_client_for_cli(args, smart_client_id: str | None, smart_key: str | None) -> cfs.FhirClient:
+def create_client_for_cli(
+    args, smart_client_id: str | None, smart_key: str | None
+) -> cfs.FhirClient:
     return cfs.FhirClient.create_for_cli(
         args.fhir_url,
         resources.SCOPE_TYPES,

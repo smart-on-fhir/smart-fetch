@@ -327,3 +327,97 @@ class CrawlTests(utils.TestCase):
                 },
             }
         )
+
+    async def test_since(self):
+        """Test default behavior of --since (uses _lastUpdated)"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.write_res(resources.PATIENT, [pat1])
+
+        params = {
+            resources.ENCOUNTER: [
+                httpx.QueryParams(patient="pat1", identifier="ENC1", _lastUpdated="gt2022-01-05"),
+                httpx.QueryParams(patient="pat1", type="ADMS", _lastUpdated="gt2022-01-05"),
+            ],
+            resources.IMMUNIZATION: [
+                httpx.QueryParams(patient="pat1", _lastUpdated="gt2022-01-05"),
+            ],
+        }
+
+        missing = self.set_resource_search_queries(params)
+
+        await self.cli(
+            "crawl",
+            self.folder,
+            "--group=my-group",
+            "--since=2022-01-05",
+            f"--type={resources.ENCOUNTER},{resources.IMMUNIZATION}",
+            "--type-filter=Encounter?identifier=ENC1",
+            "--type-filter=Encounter?type=ADMS",
+        )
+
+        self.assertEqual(missing, [])
+
+    async def test_since_created(self):
+        """Test --since-mode=created"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.write_res(resources.PATIENT, [pat1])
+        with open(f"{self.folder}/{resources.PATIENT}/.export.done", "w", encoding="utf8") as f:
+            f.write("{}")  # just an empty marker
+
+        params = {
+            resources.ALLERGY_INTOLERANCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.CONDITION: [
+                httpx.QueryParams(patient="pat1", **{"recorded-date": "gt2022-01-05"})
+            ],
+            resources.DEVICE: [httpx.QueryParams(patient="pat1")],  # no extra param
+            resources.DIAGNOSTIC_REPORT: [httpx.QueryParams(patient="pat1", issued="gt2022-01-05")],
+            resources.DOCUMENT_REFERENCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.ENCOUNTER: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.IMMUNIZATION: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.MEDICATION_REQUEST: [
+                httpx.QueryParams(patient="pat1", authoredon="gt2022-01-05")
+            ],
+            resources.OBSERVATION: [
+                httpx.QueryParams(
+                    patient="pat1",
+                    category="social-history,vital-signs,imaging,laboratory,survey,exam,"
+                    "procedure,therapy,activity",
+                    date="gt2022-01-05",
+                ),
+            ],
+            resources.PROCEDURE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.SERVICE_REQUEST: [httpx.QueryParams(patient="pat1", authored="gt2022-01-05")],
+        }
+
+        missing = self.set_resource_search_queries(params)
+
+        await self.cli(
+            "crawl",
+            self.folder,
+            "--group=my-group",
+            "--since=2022-01-05",
+            "--since-mode=created",
+        )
+
+        self.assertEqual(missing, [])
+
+    async def test_since_epic_uses_created(self):
+        """Confirm that Epic servers get the correct since mode by default"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.write_res(resources.PATIENT, [pat1])
+
+        # We'll end up seeing date= instead of _lastUpdated= because of Epic
+        params = {resources.ENCOUNTER: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")]}
+
+        missing = self.set_resource_search_queries(params)
+        self.server.get("metadata").respond(200, json={"software": {"name": "Epic"}})
+
+        await self.cli(
+            "crawl",
+            self.folder,
+            "--group=my-group",
+            "--since=2022-01-05",
+            f"--type={resources.ENCOUNTER}",
+        )
+
+        self.assertEqual(missing, [])

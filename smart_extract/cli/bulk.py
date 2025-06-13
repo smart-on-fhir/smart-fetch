@@ -12,9 +12,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--group", metavar="GROUP", help="which group to export (default is whole system)"
     )
-    parser.add_argument(
-        "--since", metavar="TIMESTAMP", help="start date for export from the FHIR server"
-    )
+    parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
     parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")
     parser.add_argument(
         "--cancel", action="store_true", help="cancel an interrupted export, use with --resume"

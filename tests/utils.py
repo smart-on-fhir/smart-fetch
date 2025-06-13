@@ -11,7 +11,7 @@ import respx
 import time_machine
 
 import smart_extract
-from smart_extract import timing
+from smart_extract import resources, timing
 from smart_extract.cli import main
 
 FROZEN_DATETIME = datetime.datetime(
@@ -58,6 +58,22 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
     def set_resource_route(self, callback):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)")
         route.side_effect = callback
+
+    def set_resource_search_queries(self, all_results: dict[str, list[httpx.QueryParams]]):
+        all_params = []
+        for params in all_results.values():
+            all_params.extend(params)
+
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            results_left = all_results.get(res_type, [])
+            if request.url.params in results_left:
+                all_params.remove(request.url.params)
+                return httpx.Response(200, json={"resourceType": resources.BUNDLE})
+            assert False, f"Invalid request: {request.url.params}"
+
+        self.set_resource_search_route(respond)
+
+        return all_params
 
     def set_resource_search_route(self, callback):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)")
