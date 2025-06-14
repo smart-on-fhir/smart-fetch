@@ -1,3 +1,4 @@
+import json
 import os
 
 import ddt
@@ -43,34 +44,30 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.DEVICE: {
-                    ".export.done": {
-                        "duration": 0,
+                ".metadata": {
+                    "timestamp": timing.now().isoformat(),
+                    "version": smart_extract.__version__,
+                    "done": [resources.DEVICE],
+                },
+                "log.ndjson": [
+                    {
+                        "exportId": "fake-log",
                         "timestamp": timing.now().isoformat(),
-                        "version": smart_extract.__version__,
+                        "eventId": "kickoff",
+                        "eventDetail": {
+                            "exportUrl": f"{self.url}/Group/{expected_group}/$export",
+                        },
                     },
-                    "log.ndjson": [
-                        {
-                            "exportId": "fake-log",
-                            "timestamp": timing.now().isoformat(),
-                            "eventId": "kickoff",
-                            "eventDetail": {
-                                "exportUrl": f"{self.url}/Group/{expected_group}/$export",
-                            },
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": timing.now().isoformat(),
+                        "eventId": "status_complete",
+                        "eventDetail": {
+                            "transactionTime": timing.now().astimezone().isoformat(),
                         },
-                        {
-                            "exportId": "fake-log",
-                            "timestamp": timing.now().isoformat(),
-                            "eventId": "status_complete",
-                            "eventDetail": {
-                                "transactionTime": timing.now().astimezone().isoformat(),
-                            },
-                        },
-                    ],
-                },
-                resources.PATIENT: {
-                    f"{resources.PATIENT}.ndjson.gz": [pat1],
-                },
+                    },
+                ],
+                f"{resources.PATIENT}.ndjson.gz": [pat1],
             }
         )
 
@@ -117,16 +114,10 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.CONDITION: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.CONDITION}.ndjson.gz": con1 + con2,
-                },
-                resources.PATIENT: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.PATIENT}.ndjson.gz": pat1 + pat2,
-                },
+                ".metadata": None,
+                "log.ndjson": None,
+                f"{resources.CONDITION}.ndjson.gz": con1 + con2,
+                f"{resources.PATIENT}.ndjson.gz": pat1 + pat2,
             }
         )
 
@@ -141,12 +132,10 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.PATIENT: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.PATIENT}.000.ndjson": [pat1],
-                    f"{resources.PATIENT}.001.ndjson": [pat2],
-                },
+                ".metadata": None,
+                "log.ndjson": None,
+                f"{resources.PATIENT}.000.ndjson": [pat1],
+                f"{resources.PATIENT}.001.ndjson": [pat2],
             }
         )
 
@@ -173,14 +162,10 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.PROCEDURE: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.PROCEDURE}.ndjson.gz": proc1 + proc2,
-                },
-                resources.PATIENT: {
-                    f"{resources.PATIENT}.ndjson.gz": None,
-                },
+                ".metadata": None,
+                "log.ndjson": None,
+                f"{resources.PATIENT}.ndjson.gz": None,
+                f"{resources.PROCEDURE}.ndjson.gz": proc1 + proc2,
             }
         )
 
@@ -251,14 +236,10 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.OBSERVATION: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.OBSERVATION}.ndjson.gz": obs1,
-                },
-                resources.PATIENT: {
-                    f"{resources.PATIENT}.ndjson.gz": None,
-                },
+                ".metadata": None,
+                "log.ndjson": None,
+                f"{resources.PATIENT}.ndjson.gz": None,
+                f"{resources.OBSERVATION}.ndjson.gz": obs1,
             }
         )
 
@@ -281,30 +262,22 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.ENCOUNTER: {
-                    ".export.done": None,
-                    "log.ndjson": None,
-                    f"{resources.ENCOUNTER}.ndjson.gz": [enc1],
-                    "error": {
-                        f"{resources.OPERATION_OUTCOME}.ndjson.gz": [outcome1],
-                    },
-                },
-                resources.PATIENT: {
-                    f"{resources.PATIENT}.ndjson.gz": None,
+                ".metadata": None,
+                "log.ndjson": None,
+                f"{resources.ENCOUNTER}.ndjson.gz": [enc1],
+                f"{resources.PATIENT}.ndjson.gz": None,
+                "error": {
+                    f"{resources.OPERATION_OUTCOME}.ndjson.gz": [outcome1],
                 },
             }
         )
 
     async def test_skip_done(self):
-        """Confirm we skip already done folders"""
+        """Confirm we skip already done resources"""
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
-        with open(f"{self.folder}/{resources.PATIENT}/.export.done", "w", encoding="utf8") as f:
-            f.write("{}")  # just an empty marker
-
-        os.makedirs(self.folder / resources.DEVICE)
-        with open(f"{self.folder}/{resources.DEVICE}/.export.done", "w", encoding="utf8") as f:
-            f.write("{}")  # just an empty marker
+        with open(f"{self.folder}/.metadata", "w", encoding="utf8") as f:
+            json.dump({"done": [resources.DEVICE, resources.PATIENT]}, f)
 
         await self.cli(
             "crawl",
@@ -318,13 +291,8 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.DEVICE: {
-                    ".export.done": {},
-                },
-                resources.PATIENT: {
-                    ".export.done": {},
-                    f"{resources.PATIENT}.ndjson.gz": [pat1],
-                },
+                ".metadata": {"done": [resources.DEVICE, resources.PATIENT]},
+                f"{resources.PATIENT}.ndjson.gz": None,
             }
         )
 
@@ -361,8 +329,8 @@ class CrawlTests(utils.TestCase):
         """Test --since-mode=created"""
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
-        with open(f"{self.folder}/{resources.PATIENT}/.export.done", "w", encoding="utf8") as f:
-            f.write("{}")  # just an empty marker
+        with open(f"{self.folder}/.metadata", "w", encoding="utf8") as f:
+            json.dump({"done": [resources.PATIENT]}, f)
 
         params = {
             resources.ALLERGY_INTOLERANCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],

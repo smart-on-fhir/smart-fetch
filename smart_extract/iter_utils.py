@@ -1,5 +1,5 @@
 import asyncio
-import datetime
+import dataclasses
 import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
@@ -81,76 +81,67 @@ async def peek_ahead_processor(
                 sys.exit(str(result))
 
 
+@dataclasses.dataclass
+class _SourceDetails:
+    iterable: AsyncIterable
+    total: int
+    output_file: str | None = None
+
+
 class ResourceProcessor:
     def __init__(
         self,
         folder: str,
-        tag: str,
         desc: str,
         callback: Callable[[str, ndjson.NdjsonWriter, Item], Awaitable[None]],
-        finish_callback: Callable[[str, datetime.datetime], Awaitable[None]] | None = None,
+        finish_callback: Callable[[str], Awaitable[None]] | None = None,
         append: bool = True,
     ):
-        self._iterables: dict[str, AsyncIterable | None] = {}
-        self._folders: dict[str, str] = {}
-        self._totals: dict[str, int] = {}
+        self.sources: dict[str, list[_SourceDetails]] = {}
         self._callback = callback
         self._finish_callback = finish_callback
         self._progress = cli_utils.make_progress_bar()
         self._progress_task = None
         self._folder = folder
         self._desc = desc
-        self._tag = tag
         self._append = append
 
-    def add(
+    def add_source(
         self,
         res_type: str,
         iterable: AsyncIterable[Item],
         total: int,
-        *,
-        res_folder: str | None = None,
+        output_file: str | None = None,
     ):
-        if res_type in self._iterables:
-            raise ValueError(f"Can't have two iterables for same resource type {res_type}")
-
-        self._iterables[res_type] = iterable
-        self._folders[res_type] = os.path.join(self._folder, res_folder or res_type)
-        self._totals[res_type] = total
+        if not output_file:
+            output_file = os.path.join(self._folder, f"{res_type}.ndjson.gz")
+        source = _SourceDetails(iterable, total, output_file)
+        self.sources.setdefault(res_type, []).append(source)
 
     async def run(self):
         with self._progress:
-            for res_type, iterable in self._iterables.items():
-                if lifecycle.should_skip(self._folders[res_type], self._tag):
-                    print(f"Skipping {res_type}, already done.")
-                    continue
-                with lifecycle.mark_done(self._folders[res_type], self._tag) as start_time:
-                    self._progress_task = self._progress.add_task(
-                        f"{self._desc} {res_type}s…", total=self._totals[res_type]
-                    )
+            for res_type, sources in self.sources.items():
+                res_total = sum(src.total for src in sources)
+                self._progress_task = self._progress.add_task(
+                    f"{self._desc} {res_type}s…", total=res_total
+                )
 
-                    os.makedirs(self._folders[res_type], exist_ok=True)
-                    final_file = os.path.join(self._folders[res_type], f"{res_type}.ndjson.gz")
-                    output_file = final_file
-                    if not self._append:
-                        output_file += ".tmp"
-
-                    writer = ndjson.NdjsonWriter(output_file, append=self._append, compressed=True)
+                for source in sources:
+                    writer = ndjson.NdjsonWriter(source.output_file, append=self._append)
                     with writer:
                         await peek_ahead_processor(
-                            iterable,
+                            source.iterable,
                             partial(self._process_wrapper, writer, res_type),
                             peek_at=cfs.FhirClient.MAX_CONNECTIONS * 2,
                         )
 
-                    if output_file != final_file and os.path.exists(output_file):
-                        os.replace(output_file, final_file)
+                if self._finish_callback:
+                    # Note: might fire more than once for same res_type, if there are multiple
+                    # sources. We can add some disambiguation in the future, if we need that.
+                    await self._finish_callback(res_type)
 
-                    if self._finish_callback:
-                        await self._finish_callback(res_type, start_time)
-
-        # Reset iterables, so we can be run again
-        self._iterables = {}
+        # Reset sources, so we can be run again
+        self.sources = {}
 
     async def _process_wrapper(
         self, writer: ndjson.NdjsonWriter, res_type: str, item: Item

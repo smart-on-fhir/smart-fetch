@@ -1,5 +1,7 @@
 import argparse
 import enum
+import glob
+import hashlib
 import os
 import sys
 import tomllib
@@ -74,16 +76,23 @@ def parse_resource_selection(types: str) -> list[str]:
     return [pat_type for pat_type in resources.PATIENT_TYPES if pat_type.casefold() in lower_types]
 
 
-def parse_type_filters(server_type: cfs.ServerType, type_filters: list[str] | None) -> Filters:
+def parse_type_filters(
+    server_type: cfs.ServerType, res_types: list[str], type_filters: list[str] | None
+) -> Filters:
     # First, break out what the user provided on the CLI
     filters = {}
+    for res_type in res_types:
+        filters[res_type] = set()
+
     for type_filter in type_filters or []:
         if "?" not in type_filter:
             sys.exit("Type filter arguments must be in the format 'Resource?params'.")
         res_type, params = type_filter.split("?", 1)
-        filters.setdefault(res_type, set()).add(params)
+        if res_type not in filters:
+            sys.exit(f"Type filter for {res_type} but that type is not included in --type.")
+        filters[res_type].add(params)
 
-    if resources.OBSERVATION not in filters:
+    if filters.get(resources.OBSERVATION) == set():
         # Add some basic default filters for Observation, because the volume of Observations gets
         # overwhelming quickly. So we limit to the nine basic US Core categories.
         categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
@@ -107,7 +116,6 @@ def add_since_filter(
     *,
     since_mode: SinceMode,
     server_type: cfs.ServerType,
-    res_types: list[str],
 ) -> None:
     if not since:
         return
@@ -119,16 +127,16 @@ def add_since_filter(
         since_mode = SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
 
     def add_filter(res_type: str, field: str) -> None:
-        if res_type not in res_types:
+        if res_type not in filters:
             return
         new_param = f"{field}=gt{since}"
-        if res_type in filters:
+        if filters[res_type]:
             filters[res_type] = {f"{params}&{new_param}" for params in filters[res_type]}
         else:
             filters[res_type] = {new_param}
 
     if since_mode == SinceMode.UPDATED:
-        for res_type in res_types:
+        for res_type in filters:
             add_filter(res_type, "_lastUpdated")
     elif since_mode == SinceMode.CREATED:
         # There's no meta.created field, so we do the best we can for each resource.
@@ -318,3 +326,22 @@ def human_time_offset(seconds: int) -> str:
 
     hours = minutes / 60
     return f"{_pretty_float(hours)}h"
+
+
+def calculate_workdir(filters: Filters) -> str:
+    raw = ""
+    for key in sorted(filters.keys()):
+        sorted_filters = sorted(filters[key])
+        if sorted_filters:
+            raw += "\n".join(f"{key}={res_filter}" for res_filter in sorted_filters) + "\n"
+        else:
+            raw += f"{key}=\n"
+
+    return hashlib.md5(raw.encode("utf8"), usedforsecurity=False).hexdigest()
+
+
+def make_links(workdir: str) -> None:
+    name = os.path.basename(workdir)
+    parent = os.path.dirname(workdir)
+    for child in glob.glob(workdir):
+        pass

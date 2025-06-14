@@ -9,12 +9,13 @@ async def _download_med(client, resource: dict, id_pool: set[str]) -> fix_utils.
 async def fix_meds(client, args):
     stats = await fix_utils.process(
         client=client,
-        folder=args.folder,
-        input_type=resources.MEDICATION_REQUEST,
         fix_name="meds",
         desc="Downloading Meds",
-        callback=_download_med,
-        output_folder=resources.MEDICATION_REQUEST,
+        workdir=args.folder,
+        source_dir=args.source_dir or args.folder,
+        input_type=resources.MEDICATION_REQUEST,
         output_type=resources.MEDICATION,
+        callback=_download_med,
     )
-    stats.print("downloaded", f"{resources.MEDICATION}s")
+    if stats:
+        stats.print("downloaded", f"{resources.MEDICATION}s")

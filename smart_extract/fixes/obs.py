@@ -17,13 +17,15 @@ async def _download_members(client, resource: dict, id_pool: set[str]) -> fix_ut
 async def fix_obs_members(client, args):
     stats = await fix_utils.process(
         client=client,
-        folder=args.folder,
         fix_name="obs-members",
         desc="Downloading",
+        workdir=args.folder,
+        source_dir=args.source_dir or args.folder,
         input_type=resources.OBSERVATION,
         callback=_download_members,
     )
-    stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
+    if stats:
+        stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
 
 
 async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> fix_utils.Result:
@@ -38,11 +40,13 @@ async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> fix
 async def fix_obs_dxr(client, args):
     stats = await fix_utils.process(
         client=client,
-        folder=args.folder,
         fix_name="obs-dxr",
         desc="Downloading",
+        workdir=args.folder,
+        source_dir=args.source_dir or args.folder,
         input_type=resources.DIAGNOSTIC_REPORT,
         output_type=resources.OBSERVATION,
         callback=_download_dxr_result,
     )
-    stats.print("downloaded", f"{resources.DIAGNOSTIC_REPORT}s", f"Result {resources.OBSERVATION}s")
+    if stats:
+        stats.print("downloaded", f"{resources.DIAGNOSTIC_REPORT}s", f"Result {resources.OBSERVATION}s")

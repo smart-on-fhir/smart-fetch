@@ -26,28 +26,30 @@ async def fix_doc_inline(client, args):
     mimetypes = parse_mimetypes(args.mimetypes)
     stats = await fix_utils.process(
         client=client,
-        folder=args.folder,
-        input_type=resources.DOCUMENT_REFERENCE,
         fix_name="doc-inline",
         desc="Inlining",
+        workdir=args.folder,
+        input_type=resources.DOCUMENT_REFERENCE,
         callback=partial(_inline_resource, mimetypes),
         append=False,
     )
-    stats.print("inlined", f"{resources.DOCUMENT_REFERENCE}s", "Attachments")
+    if stats:
+        stats.print("inlined", f"{resources.DOCUMENT_REFERENCE}s", "Attachments")
 
 
 async def fix_dxr_inline(client, args):
     mimetypes = parse_mimetypes(args.mimetypes)
     stats = await fix_utils.process(
         client=client,
-        folder=args.folder,
-        input_type=resources.DIAGNOSTIC_REPORT,
         fix_name="dxr-inline",
         desc="Inlining",
+        workdir=args.folder,
+        input_type=resources.DIAGNOSTIC_REPORT,
         callback=partial(_inline_resource, mimetypes),
         append=False,
     )
-    stats.print("inlined", f"{resources.DIAGNOSTIC_REPORT}s", "Attachments")
+    if stats:
+        stats.print("inlined", f"{resources.DIAGNOSTIC_REPORT}s", "Attachments")
 
 
 async def _inline_resource(

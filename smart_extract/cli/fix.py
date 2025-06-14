@@ -7,9 +7,14 @@ from smart_extract import cli_utils, fixes
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("folder", metavar="INPUT_DIR")
+    parser.add_argument("folder", metavar="OUTPUT_DIR")
     parser.add_argument("fixes", metavar="FIX", nargs="*", default=["all"])
     cli_utils.add_general(parser)
+    parser.add_argument(
+        "--source-dir",
+        metavar="DIR",
+        help="folder with your existing source resources (defaults to output folder)",
+    )
     parser.add_argument(
         "--mimetypes",
         metavar="MIMES",

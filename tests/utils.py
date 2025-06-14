@@ -84,13 +84,13 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         with self.server:
             await main.main([str(arg) for arg in args] + default_args)
 
-    def write_res(
-        self, res_type: str, resources: list[dict], folder_res_type: str | None = None
-    ) -> None:
-        folder_res_type = folder_res_type or res_type
-        subfolder = self.folder / folder_res_type
-        subfolder.mkdir(exist_ok=True)
-        output_path = subfolder / f"{res_type}.ndjson.gz"
+    def write_res(self, res_type: str, resources: list[dict], subfolder: str | None = None) -> None:
+        if subfolder:
+            subfolder = self.folder / subfolder
+            subfolder.mkdir(exist_ok=True)
+            output_path = subfolder / f"{res_type}.ndjson.gz"
+        else:
+            output_path = self.folder / f"{res_type}.ndjson.gz"
         with gzip.open(output_path, "wt", encoding="utf8") as f:
             for index, resource in enumerate(resources):
                 resource["resourceType"] = res_type
@@ -126,7 +126,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                     loaded = json.load(f)
                     self.assertEqual(loaded, val)
 
-    def assert_folder(self, expected: dict[str, dict]) -> None:
+    def assert_folder(self, expected: dict) -> None:
         self._assert_folder(self.folder, expected)
 
     def mock_bulk(

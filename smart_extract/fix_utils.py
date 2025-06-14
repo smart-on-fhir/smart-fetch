@@ -8,7 +8,7 @@ from functools import partial
 import cumulus_fhir_support as cfs
 import rich.table
 
-from smart_extract import iter_utils, ndjson
+from smart_extract import iter_utils, lifecycle, ndjson
 
 
 class FixResultReason(enum.Enum):
@@ -102,8 +102,8 @@ class FixStats:
         rich.get_console().print(table)
 
 
-async def _read(folder: dir, res_type: str) -> AsyncIterable[dict]:
-    for res in cfs.read_multiline_json_from_dir(folder, res_type):
+async def _read(res_file: str) -> AsyncIterable[dict]:
+    for res in cfs.read_multiline_json(res_file):
         yield res
 
 
@@ -133,58 +133,68 @@ async def _write(
 async def process(
     *,
     client,
-    folder: str,
-    input_type: str,
     fix_name: str,
     desc: str,
-    callback: Callable,
-    output_folder: str | None = None,
+    workdir: str | None,
+    input_type: str,
+    source_dir: str | None = None,
     output_type: str | None = None,
     append: bool = True,
-) -> FixStats:
+    callback: Callable,
+) -> FixStats | None:
     output_type = output_type or input_type
-    output_folder = output_folder or output_type
-    input_subfolder = os.path.join(folder, input_type)
-    output_subfolder = os.path.join(folder, output_folder)
+    source_dir = source_dir or workdir
 
     if not append and output_type != input_type:
-        raise ValueError("Must use same input and output type if re-writing the resources")
+        raise ValueError("Must use same input and output type when re-writing resources")
+    if not append:
+        # Cannot use a separate source dir when re-writing resources, so enforce that here
+        source_dir = workdir
+
+    metadata = lifecycle.Metadata(workdir)
+    if metadata.is_done(fix_name):
+        print(f"Skipping {fix_name}, already done.")
+        return None
 
     # Calculate total progress needed
-    found_files = cfs.list_multiline_json_in_dir(input_subfolder, input_type)
+    found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
     total_lines = sum(ndjson.read_local_line_count(path) for path in found_files)
 
     if not total_lines:
-        sys.exit(f"Cannot run the {fix_name} fix, no {input_type} resources found.")
+        print(f"Skipping {fix_name}, no {input_type} resources found.")
+        return None
 
     # See what is already present
     downloaded_ids = set()
     if append:
-        for resource in cfs.read_multiline_json_from_dir(output_subfolder, output_type):
+        for resource in cfs.read_multiline_json_from_dir(workdir, output_type):
             downloaded_ids.add(f"{output_type}/{resource['id']}")
 
     # Iterate through inputs
     stats = FixStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
-    processor = iter_utils.ResourceProcessor(folder, f"fix:{fix_name}", desc, writer, append=append)
-    processor.add(
-        output_type, _read(input_subfolder, input_type), total_lines, res_folder=output_folder
+    processor = iter_utils.ResourceProcessor(
+        workdir, desc, writer, append=append
     )
+    for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
+        output_file = None if append else res_file
+        processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
     await processor.run()
+
+    metadata.mark_done(fix_name)
 
     return stats
 
 
 async def download_reference(
-    client, id_pool: set[str], reference: str, expected_type: str
+    client, id_pool: set[str], reference: str | None, expected_type: str
 ) -> SingleResult:
-    if not reference.startswith(f"{expected_type}/"):
+    if not reference or reference.startswith("#"):
+        return None, FixResultReason.IGNORED
+    elif not reference.startswith(f"{expected_type}/"):
         return None, FixResultReason.IGNORED
     elif reference in id_pool:
         return None, FixResultReason.ALREADY_DONE
-
-    if not reference or reference.startswith("#"):
-        return None, FixResultReason.IGNORED
 
     try:
         response = await client.request("GET", reference)

@@ -1,3 +1,5 @@
+import os
+
 import httpx
 
 from smart_extract import resources
@@ -17,19 +19,17 @@ class FixObsMemberTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.OBSERVATION: {
-                    ".fix.done": {
-                        "timestamp": utils.FROZEN_TIMESTAMP,
-                        "version": utils.version,
-                        "fixes": ["obs-members"],
-                    },
-                    f"{resources.OBSERVATION}.ndjson.gz": [
-                        *obs,
-                        {"resourceType": resources.OBSERVATION, "id": "a1"},
-                        {"resourceType": resources.OBSERVATION, "id": "a2"},
-                        {"resourceType": resources.OBSERVATION, "id": "b"},
-                    ],
+                ".metadata": {
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": ["obs-members"],
                 },
+                f"{resources.OBSERVATION}.ndjson.gz": [
+                    *obs,
+                    {"resourceType": resources.OBSERVATION, "id": "a1"},
+                    {"resourceType": resources.OBSERVATION, "id": "a2"},
+                    {"resourceType": resources.OBSERVATION, "id": "b"},
+                ],
             }
         )
 
@@ -68,38 +68,36 @@ class FixObsMemberTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.OBSERVATION: {
-                    f"{resources.OBSERVATION}.ndjson.gz": [
-                        {
-                            "resourceType": resources.OBSERVATION,
-                            "id": "0",
-                            "hasMember": [{"reference": "Observation/a"}],
-                        },
-                        {
-                            "resourceType": resources.OBSERVATION,
-                            "id": "a",
-                            "hasMember": [
-                                {"reference": "Observation/b"},
-                                {"reference": "Observation/c"},
-                            ],
-                        },
-                        {
-                            "resourceType": resources.OBSERVATION,
-                            "id": "b",
-                            "hasMember": [{"reference": "Observation/a"}],
-                        },
-                        {
-                            "resourceType": resources.OBSERVATION,
-                            "id": "c",
-                            "hasMember": [{"reference": "Observation/d"}],
-                        },
-                        {
-                            "resourceType": resources.OBSERVATION,
-                            "id": "d",
-                        },
-                    ],
-                    ".fix.done": None,
-                },
+                f"{resources.OBSERVATION}.ndjson.gz": [
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "0",
+                        "hasMember": [{"reference": "Observation/a"}],
+                    },
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "a",
+                        "hasMember": [
+                            {"reference": "Observation/b"},
+                            {"reference": "Observation/c"},
+                        ],
+                    },
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "b",
+                        "hasMember": [{"reference": "Observation/a"}],
+                    },
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "c",
+                        "hasMember": [{"reference": "Observation/d"}],
+                    },
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "d",
+                    },
+                ],
+                ".metadata": None,
             }
         )
 
@@ -117,20 +115,39 @@ class FixObsDxrTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.DIAGNOSTIC_REPORT: {
+                ".metadata": {
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": ["obs-dxr"],
+                },
+                f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
+                f"{resources.OBSERVATION}.ndjson.gz": [
+                    {"resourceType": resources.OBSERVATION, "id": "a"},
+                    {"resourceType": resources.OBSERVATION, "id": "b"},
+                    {"resourceType": resources.OBSERVATION, "id": "c"},
+                ],
+            }
+        )
+
+    async def test_separate_dirs(self):
+        """Confirm we can read the DxReports from elsewhere"""
+        dxr = [
+            {"result": [{"reference": "Observation/a"}]},
+        ]
+        self.write_res(resources.DIAGNOSTIC_REPORT, dxr, subfolder="elsewhere")
+        self.set_basic_resource_route()
+        await self.cli(
+            "fix", self.folder, "obs-dxr", "--source-dir", os.path.join(self.folder, "elsewhere")
+        )
+
+        self.assert_folder(
+            {
+                "elsewhere": {
                     f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 },
-                resources.OBSERVATION: {
-                    ".fix.done": {
-                        "timestamp": utils.FROZEN_TIMESTAMP,
-                        "version": utils.version,
-                        "fixes": ["obs-dxr"],
-                    },
-                    f"{resources.OBSERVATION}.ndjson.gz": [
-                        {"resourceType": resources.OBSERVATION, "id": "a"},
-                        {"resourceType": resources.OBSERVATION, "id": "b"},
-                        {"resourceType": resources.OBSERVATION, "id": "c"},
-                    ],
-                },
+                ".metadata": None,
+                f"{resources.OBSERVATION}.ndjson.gz": [
+                    {"resourceType": resources.OBSERVATION, "id": "a"},
+                ],
             }
         )

@@ -1,3 +1,6 @@
+import json
+import os
+
 import httpx
 
 from smart_extract import resources
@@ -35,9 +38,21 @@ class FixDocInlineTests(utils.TestCase):
                     {"attachment": {"url": "Binary/c", "contentType": "text/custom"}},
                 ]
             },
-            {},  # No attachments
+            {},  # No attachments at all
         ]
         self.write_res(resources.DOCUMENT_REFERENCE, docrefs)
+
+        # Write a random uncompressed file out, to confirm we actually look at every source file
+        # and inline each of them
+        with open(os.path.join(self.folder, "extra.jsonl"), "w", encoding="utf8") as f:
+            json.dump(
+                {
+                    "resourceType": resources.DOCUMENT_REFERENCE,
+                    "id": "extra",
+                    "content": [{"attachment": {"url": "Binary/x", "contentType": "text/html"}}],
+                },
+                f,
+            )
 
         def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
             match res_id:
@@ -71,61 +86,76 @@ class FixDocInlineTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.DOCUMENT_REFERENCE: {
-                    ".fix.done": None,
-                    f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": [
-                        {
-                            "resourceType": resources.DOCUMENT_REFERENCE,
-                            "id": "0",
-                            "content": [
-                                {
-                                    "attachment": {
-                                        "url": "Binary/x",
-                                        "contentType": "text/html; charset=ascii",
-                                        "data": "PGJvZHk+aGk8L2JvZHk+",
-                                        "size": 15,
-                                        "hash": "TO1v+xI5ie/MceVDtUjyhQS8o0I=",
-                                    }
-                                },
-                                {
-                                    "attachment": {
-                                        "url": "Binary/a",
-                                        "data": "aaa",
-                                        "contentType": "text/plain",
-                                    }
-                                },
-                                {"attachment": {"contentType": "text/plain"}},
-                                {"attachment": {"url": "Binary/b"}},
-                                {
-                                    "attachment": {
-                                        "url": "Binary/y",
-                                        "contentType": "text/plain; charset=utf-8",
-                                        "data": "aGVsbG8=",
-                                        "size": 5,
-                                        "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
-                                    }
-                                },
-                                {
-                                    "attachment": {
-                                        "url": "Binary/z",
-                                        "contentType": "application/xhtml+xml; charset=utf8",
-                                        "data": "PGJvZHk+YnllPC9ib2R5Pg==",
-                                        "size": 16,
-                                        "hash": "ybLPOkRO4i3shB3X4HDeMpAK6U4=",
-                                    }
-                                },
-                                {
-                                    "attachment": {
-                                        "url": "Binary/error",
-                                        "contentType": "text/plain",
-                                    }
-                                },
-                                {"attachment": {"url": "Binary/c", "contentType": "text/custom"}},
-                            ],
-                        },
-                        {"resourceType": resources.DOCUMENT_REFERENCE, "id": "1"},
-                    ],
-                },
+                ".metadata": None,
+                "extra.jsonl": [
+                    {
+                        "resourceType": resources.DOCUMENT_REFERENCE,
+                        "id": "extra",
+                        "content": [
+                            {
+                                "attachment": {
+                                    "url": "Binary/x",
+                                    "contentType": "text/html; charset=ascii",
+                                    "data": "PGJvZHk+aGk8L2JvZHk+",
+                                    "size": 15,
+                                    "hash": "TO1v+xI5ie/MceVDtUjyhQS8o0I=",
+                                }
+                            },
+                        ],
+                    },
+                ],
+                f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": [
+                    {
+                        "resourceType": resources.DOCUMENT_REFERENCE,
+                        "id": "0",
+                        "content": [
+                            {
+                                "attachment": {
+                                    "url": "Binary/x",
+                                    "contentType": "text/html; charset=ascii",
+                                    "data": "PGJvZHk+aGk8L2JvZHk+",
+                                    "size": 15,
+                                    "hash": "TO1v+xI5ie/MceVDtUjyhQS8o0I=",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/a",
+                                    "data": "aaa",
+                                    "contentType": "text/plain",
+                                }
+                            },
+                            {"attachment": {"contentType": "text/plain"}},
+                            {"attachment": {"url": "Binary/b"}},
+                            {
+                                "attachment": {
+                                    "url": "Binary/y",
+                                    "contentType": "text/plain; charset=utf-8",
+                                    "data": "aGVsbG8=",
+                                    "size": 5,
+                                    "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/z",
+                                    "contentType": "application/xhtml+xml; charset=utf8",
+                                    "data": "PGJvZHk+YnllPC9ib2R5Pg==",
+                                    "size": 16,
+                                    "hash": "ybLPOkRO4i3shB3X4HDeMpAK6U4=",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/error",
+                                    "contentType": "text/plain",
+                                }
+                            },
+                            {"attachment": {"url": "Binary/c", "contentType": "text/custom"}},
+                        ],
+                    },
+                    {"resourceType": resources.DOCUMENT_REFERENCE, "id": "1"},
+                ],
             }
         )
 
@@ -148,23 +178,21 @@ class FixDxrInlineTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.DIAGNOSTIC_REPORT: {
-                    ".fix.done": None,
-                    f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": [
-                        {
-                            "resourceType": resources.DIAGNOSTIC_REPORT,
-                            "id": "0",
-                            "presentedForm": [
-                                {
-                                    "url": "Binary/x",
-                                    "contentType": "text/plain; charset=utf-8",
-                                    "data": "aGVsbG8=",
-                                    "size": 5,
-                                    "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
-                                },
-                            ],
-                        },
-                    ],
-                },
+                ".metadata": None,
+                f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": [
+                    {
+                        "resourceType": resources.DIAGNOSTIC_REPORT,
+                        "id": "0",
+                        "presentedForm": [
+                            {
+                                "url": "Binary/x",
+                                "contentType": "text/plain; charset=utf-8",
+                                "data": "aGVsbG8=",
+                                "size": 5,
+                                "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
+                            },
+                        ],
+                    },
+                ],
             }
         )

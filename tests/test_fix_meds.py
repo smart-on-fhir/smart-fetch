@@ -17,18 +17,16 @@ class FixMedsTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.MEDICATION_REQUEST: {
-                    ".fix.done": {
-                        "timestamp": utils.FROZEN_TIMESTAMP,
-                        "version": utils.version,
-                        "fixes": ["meds"],
-                    },
-                    f"{resources.MEDICATION}.ndjson.gz": [
-                        {"resourceType": resources.MEDICATION, "id": "1"},
-                        {"resourceType": resources.MEDICATION, "id": "2"},
-                    ],
-                    f"{resources.MEDICATION_REQUEST}.ndjson.gz": med_reqs,
+                ".metadata": {
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": ["meds"],
                 },
+                f"{resources.MEDICATION}.ndjson.gz": [
+                    {"resourceType": resources.MEDICATION, "id": "1"},
+                    {"resourceType": resources.MEDICATION, "id": "2"},
+                ],
+                f"{resources.MEDICATION_REQUEST}.ndjson.gz": med_reqs,
             }
         )
 
@@ -61,13 +59,11 @@ class FixMedsTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.MEDICATION_REQUEST: {
-                    f"{resources.MEDICATION}.ndjson.gz": [
-                        {"resourceType": resources.MEDICATION, "id": "good"},
-                    ],
-                    ".fix.done": None,
-                    f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
-                },
+                f"{resources.MEDICATION}.ndjson.gz": [
+                    {"resourceType": resources.MEDICATION, "id": "good"},
+                ],
+                ".metadata": None,
+                f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
             }
         )
 
@@ -81,9 +77,7 @@ class FixMedsTests(utils.TestCase):
                 {"medicationReference": {"reference": "Medication/2"}},
             ],
         )
-        self.write_res(
-            resources.MEDICATION, [{"id": "1"}], folder_res_type=resources.MEDICATION_REQUEST
-        )
+        self.write_res(resources.MEDICATION, [{"id": "1"}])
 
         def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
             if res_id == "2":
@@ -96,21 +90,17 @@ class FixMedsTests(utils.TestCase):
 
         self.assert_folder(
             {
-                resources.MEDICATION_REQUEST: {
-                    f"{resources.MEDICATION}.ndjson.gz": [
-                        {"resourceType": resources.MEDICATION, "id": "1"},
-                        {"resourceType": resources.MEDICATION, "id": "2"},
-                    ],
-                    ".fix.done": None,
-                    f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
-                },
+                f"{resources.MEDICATION}.ndjson.gz": [
+                    {"resourceType": resources.MEDICATION, "id": "1"},
+                    {"resourceType": resources.MEDICATION, "id": "2"},
+                ],
+                ".metadata": None,
+                f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
             }
         )
 
     # This is a general "fix plumbing" test that is using MedReqs as an example
     async def test_no_med_reqs(self):
-        """Test that we complain about missing MedReqs"""
-        with self.assertRaisesRegex(
-            SystemExit, "Cannot run the meds fix, no MedicationRequest resources found."
-        ):
-            await self.cli("fix", self.folder, "meds")
+        """Test that we gracefully skip the fix when missing MedReqs"""
+        await self.cli("fix", self.folder, "meds")
+        self.assert_folder({})

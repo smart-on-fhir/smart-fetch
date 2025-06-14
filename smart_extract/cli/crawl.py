@@ -18,6 +18,7 @@ from smart_extract import (
     lifecycle,
     ndjson,
     resources,
+    timing,
 )
 
 
@@ -50,6 +51,12 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         metavar="PATH",
         help="file with MRNs, one per line (or a .csv with an 'mrn' column)",
     )
+    group.add_argument(
+        "--source-dir",
+        metavar="DIR",
+        help="folder with existing Patient resources, to use as a cohort "
+        "(defaults to output folder)",
+    )
 
     cli_utils.add_auth(parser)
     cli_utils.add_type_selection(parser)
@@ -62,22 +69,24 @@ async def crawl_main(args: argparse.Namespace) -> None:
     res_types = cli_utils.parse_resource_selection(args.type)
 
     async with rest_client:
-        filters = cli_utils.parse_type_filters(rest_client.server_type, args.type_filter)
+        filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
         cli_utils.add_since_filter(
             filters,
             args.since,
             server_type=rest_client.server_type,
-            res_types=res_types,
             since_mode=args.since_mode,
         )
+        workdir = args.folder
+        source_dir = args.source_dir or workdir
+        os.makedirs(workdir, exist_ok=True)
 
         # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
         # avoid writing out duplicates, in the situations where we have multiple search streams
         # per resource (which can happen when we have multiple type filters OR'd together).
         # A pool is only defined if multiple filters exist for it, to save memory.
         id_pool = {}
-        for res_type in res_types:
-            if res_type in filters and len(filters[res_type]) > 1:
+        for res_type in filters:
+            if len(filters[res_type]) > 1:
                 id_pool[res_type] = set()
 
         if args.group_nickname:
@@ -87,30 +96,53 @@ async def crawl_main(args: argparse.Namespace) -> None:
         elif args.mrn_file:
             group_name = os.path.splitext(os.path.basename(args.mrn_file))[0]
         else:
-            group_name = os.path.basename(args.folder)
+            group_name = os.path.basename(source_dir)
+
+        metadata = lifecycle.Metadata(workdir)
 
         processor = iter_utils.ResourceProcessor(
-            args.folder,
-            "export",
+            workdir,
             "Crawling",
-            callback=partial(process, rest_client, id_pool, args.folder),
+            callback=partial(process, rest_client, id_pool, workdir),
+            finish_callback=partial(mark_done, metadata),
             append=False,
-            finish_callback=partial(fake_bulk_export, group_name, args.fhir_url, args.folder),
         )
+
+        transaction_time = timing.now()
 
         # Before crawling, we have to decide if we need to do anything special with patients,
         # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
         if resources.PATIENT in res_types:
-            await gather_patients(rest_client, bulk_client, processor, id_pool, args, filters)
+            if metadata.is_done(resources.PATIENT):
+                print(f"Skipping {resources.PATIENT}, already done.")
+            else:
+                await gather_patients(bulk_client, processor, args, filters, workdir)
+                metadata.mark_done(resources.PATIENT)
             res_types.remove(resources.PATIENT)
-        patient_ids = read_patient_ids(args.folder)
+            patient_ids = read_patient_ids(workdir)
+        else:
+            patient_ids = read_patient_ids(source_dir)
+        if not patient_ids:
+            sys.exit(
+                f"No cohort patients found in {source_dir}.\n"
+                f"You can provide a cohort from a previous export with --source-dir, "
+                "or export patients in this crawl too."
+            )
 
         for res_type in res_types:
-            processor.add(res_type, resource_urls(res_type, patient_ids, filters), len(patient_ids))
-        await processor.run()
+            if metadata.is_done(res_type):
+                print(f"Skipping {res_type}, already done.")
+                continue
+            processor.add_source(
+                res_type, resource_urls(res_type, patient_ids, filters), len(patient_ids)
+            )
+
+        if processor.sources:
+            await processor.run()
+            fake_bulk_export(group_name, args.fhir_url, workdir, transaction_time)
 
 
-async def gather_patients(rest_client, bulk_client, processor, id_pool, args, filters) -> None:
+async def gather_patients(bulk_client, processor, args, filters, workdir: str) -> None:
     if args.mrn_file and args.mrn_system:
         with open(args.mrn_file, encoding="utf8", newline="") as f:
             if args.mrn_file.casefold().endswith(".csv"):
@@ -123,39 +155,36 @@ async def gather_patients(rest_client, bulk_client, processor, id_pool, args, fi
                 mrns = {row.strip() for row in f}
         mrns = set(filter(None, mrns))  # ignore empty lines
 
-        processor.add(resources.PATIENT, patient_urls(args.mrn_system, mrns, filters), len(mrns))
+        processor.add_source(
+            resources.PATIENT, patient_urls(args.mrn_system, mrns, filters), len(mrns)
+        )
         await processor.run()
 
     elif args.group is not None:
         # OK we're doing a bulk export
-        patient_folder = os.path.join(args.folder, resources.PATIENT)
-        os.makedirs(patient_folder, exist_ok=True)
-
-        if lifecycle.should_skip(patient_folder, "export"):
-            print(f"Skipping {resources.PATIENT}, already done.")
-            return
-
         async with bulk_client:
-            with lifecycle.mark_done(patient_folder, "export"):
-                # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
-                exporter = bulk_utils.BulkExporter(
-                    bulk_client,
-                    {resources.PATIENT},
-                    bulk_utils.export_url(args.fhir_url, args.group),
-                    patient_folder,
-                    type_filter=filters.get(resources.PATIENT),
-                )
-                await exporter.export()
+            # TODO: Confirm it's empty? - and run in silent mode, using pulsing bar?
+            exporter = bulk_utils.BulkExporter(
+                bulk_client,
+                {resources.PATIENT},
+                bulk_utils.export_url(args.fhir_url, args.group),
+                workdir,
+                type_filter=filters.get(resources.PATIENT),
+            )
+            await exporter.export()
 
     else:
         sys.exit("Provide either --group or --mrn-system and --mrn-file, to define the cohort")
 
 
+async def mark_done(metadata: lifecycle.Metadata, res_type: str) -> None:
+    metadata.mark_done(res_type)
+
+
 def read_patient_ids(folder: str) -> set[str]:
-    patient_folder = os.path.join(folder, resources.PATIENT)
     return {
         patient["id"]
-        for patient in cfs.read_multiline_json_from_dir(patient_folder, resources.PATIENT)
+        for patient in cfs.read_multiline_json_from_dir(folder, resources.PATIENT)
     }
 
 
@@ -206,15 +235,13 @@ async def process(
     writer: ndjson.NdjsonWriter,
     url: str,
 ) -> None:
-    subfolder = os.path.join(folder, res_type)
-
     async for resource in crawl_bundle_chain(client, url):
         if resource["resourceType"] == "OperationOutcome":
             # Make a fake "error" folder, just like we'd see in a bulk export
-            error_subfolder = os.path.join(subfolder, "error")
+            error_subfolder = os.path.join(folder, "error")
             os.makedirs(error_subfolder, exist_ok=True)
             error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
-            with ndjson.NdjsonWriter(error_file, append=True, compressed=True) as error_writer:
+            with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
                 error_writer.write(resource)
             continue
 
@@ -227,8 +254,5 @@ async def process(
         writer.write(resource)
 
 
-async def fake_bulk_export(
-    group: str, fhir_url: str, folder: str, res_type: str, start_time: datetime.datetime
-) -> None:
-    subfolder = os.path.join(folder, res_type)
-    crawl_utils.create_fake_log(subfolder, fhir_url, group, start_time)
+def fake_bulk_export(group: str, fhir_url: str, folder: str, start_time: datetime.datetime) -> None:
+    crawl_utils.create_fake_log(folder, fhir_url, group, start_time)

@@ -12,10 +12,11 @@ class NdjsonWriter:
     Note that this is not atomic - partial writes will make it to the target file.
     """
 
-    def __init__(self, path: str, append: bool = False, compressed: bool = False):
-        self._root = path
+    def __init__(self, path: str, append: bool = False):
+        self._path = path
+        self._write_path = path if append or not os.path.exists(path) else path + ".tmp"
         self._append = append
-        self._compressed = compressed
+        self._compressed = path.endswith(".gz")
         self._file = None
 
     def __enter__(self):
@@ -28,11 +29,14 @@ class NdjsonWriter:
             self._file.close()
             self._file = None
 
+            if self._write_path != self._path:
+                os.replace(self._write_path, self._path)
+
     def _ensure_file(self):
         if not self._file:
             mode = "a" if self._append else "w"
             open_func = gzip.open if self._compressed else open
-            self._file = open_func(self._root, mode + "t", encoding="utf8")
+            self._file = open_func(self._write_path, mode + "t", encoding="utf8")
 
     def write(self, obj: dict) -> None:
         # lazily create the file, to avoid 0-line ndjson files
