@@ -194,7 +194,7 @@ class BulkTests(utils.TestCase):
             f"{resources.PROCEDURE}?date=gt2022-01-05",
             f"{resources.SERVICE_REQUEST}?authored=gt2022-01-05",
         ]
-        type_filter = ",".join(urllib.parse.quote(f) for f in filters)
+        type_filter = ",".join(f.replace(",", "%2C") for f in filters)
 
         self.mock_bulk(
             "group1",

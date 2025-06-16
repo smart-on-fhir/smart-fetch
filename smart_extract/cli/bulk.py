@@ -1,6 +1,7 @@
 """Do a standalone bulk export from an EHR"""
 
 import argparse
+import os
 import sys
 
 import cumulus_fhir_support as cfs
@@ -72,6 +73,7 @@ async def export_main(args: argparse.Namespace) -> None:
             type_filter=filters,
             resume=args.resume,
         )
+        os.makedirs(workdir, exist_ok=True)
         await exporter.export()
 
     for res_type in res_types:

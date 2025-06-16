@@ -297,6 +297,7 @@ class BulkExporter:
 
         self.export_url = self._format_kickoff_url(
             url,
+            server_type=client.server_type,
             resources=resources,
             since=since,
             until=until,
@@ -308,9 +309,60 @@ class BulkExporter:
         self.export_datetime = None
 
     @staticmethod
+    def combine_filters(
+        filters: cli_utils.Filters | None, *, resources: set[str], server_type: cfs.ServerType
+    ) -> list[str]:
+        if filters is None:
+            return []
+
+        # The text of the spec is a little vague about how exactly to quote/escape type filters.
+        #
+        # Here's the one example from https://hl7.org/fhir/uv/bulkdata/export.html#example-request:
+        # $export?
+        #   _type=
+        #     MedicationRequest,
+        #     Condition&
+        #   _typeFilter=
+        #     MedicationRequest%3Fstatus%3Dactive,
+        #     MedicationRequest%3Fstatus%3Dcompleted%26date%3Dgt2018-07-01T00%3A00%3A00Z
+        #
+        # OK, that's fine. But what about commas, which now have three uses?
+        # 1) Separating multiple type filters (like above)
+        # 2) Separating filter values (Encounter?status=finished,unknown)
+        # 3) Internal to filter values (Encounter?status=internal\,comma)
+        #
+        # We now need a new layer of quoting to separate level 1 from level 2 (and 3).
+        # Is that another level of URL-quoting? For the whole filter or just commas?
+        # Or is it backslash escaping like how FHIR searches disambiguate 2 and 3 above normally?
+        # The spec is not explicit.
+        #
+        # And thus implementers may differ in how to quote it.
+        # Most seem to support URL-quoting just the inside commas an extra time. (and some don't
+        # like URL-quoting everything an extra time, just the comma)
+        # Epic's documentation suggests that it wants you to backslash escape the comma.
+        # And that does work like you want. But so does URL-quoting it!
+        # Since URL-quoting-the-comma has broad support, we'll use that by default.
+        # If we hit servers that can only handle a backslash version, we can add that below.
+        # Servers known to support URL-quoted-commas: Epic, Hapi, Kodjin
+
+        # if server_type in {...}:
+        #     def quote(type_filter: str) -> str:
+        #         return type_filter.replace("\\", "\\\\").replace(",", "\\,")
+
+        def quote(type_filter: str) -> str:
+            return type_filter.replace(",", "%2C")
+
+        return [
+            quote(f"{res_type}?{single_filter}")
+            for res_type in sorted(resources)
+            for single_filter in filters[res_type]
+        ]
+
+    @staticmethod
     def _format_kickoff_url(
         url: str,
         *,
+        server_type: cfs.ServerType,
         resources: set[str],
         since: str | None,
         until: str | None,
@@ -328,11 +380,9 @@ class BulkExporter:
         ignore_provided_resources = prefer_url_resources and "_type" in query
         if not ignore_provided_resources:
             query.setdefault("_type", []).extend(sorted(resources))
-        combined_filters = [
-            urllib.parse.quote(f"{res_type}?{single_filter}")
-            for res_type in sorted(resources)
-            for single_filter in type_filter[res_type]
-        ]
+        combined_filters = BulkExporter.combine_filters(
+            type_filter, resources=resources, server_type=server_type
+        )
         if combined_filters:
             query.setdefault("_typeFilter", []).extend(combined_filters)
         if since:

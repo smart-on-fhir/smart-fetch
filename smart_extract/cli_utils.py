@@ -103,11 +103,6 @@ def parse_type_filters(
 
         filters[resources.OBSERVATION] = {categories}
 
-        # Oracle doesn't seem to provide a category for Smoking Status observations, so we search
-        # on the US Core required loinc code to pick those up.
-        if server_type == cfs.ServerType.ORACLE:
-            filters[resources.OBSERVATION].add("code=http://loinc.org|72166-2")
-
     return filters
 
 

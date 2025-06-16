@@ -126,7 +126,7 @@ class CrawlTests(utils.TestCase):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         pat2 = {"resourceType": resources.PATIENT, "id": "pat2"}
 
-        self.mock_bulk("best-group", output=[pat1, pat2])
+        self.mock_bulk("best-group", output=[pat1, pat2], params={"_type": resources.PATIENT})
 
         await self.cli("crawl", self.folder, "--group=best-group", f"--type={resources.PATIENT}")
 
@@ -187,18 +187,6 @@ class CrawlTests(utils.TestCase):
             {"software": {"name": "Epic"}},
             [],
             [{"category": "social-history,vital-signs,imaging,laboratory,survey,exam"}],
-        ),
-        # Oracle uses a second query for smoking status codes
-        (
-            {"publisher": "Oracle Health"},
-            [],
-            [
-                {
-                    "category": "social-history,vital-signs,imaging,laboratory,survey,exam,"
-                    "procedure,therapy,activity"
-                },
-                {"code": "http://loinc.org|72166-2"},
-            ],
         ),
         # Custom filters
         (
