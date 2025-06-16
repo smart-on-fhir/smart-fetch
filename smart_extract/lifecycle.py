@@ -1,4 +1,3 @@
-import contextlib
 import json
 import os
 
@@ -43,50 +42,3 @@ class Metadata:
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp_path, self._path)
-
-
-def should_skip(folder: str, tag: str) -> bool:
-    if tag.startswith("fix:"):
-        return should_skip_fix(folder, tag.split(":", 1)[1])
-    done_file = f"{folder}/.{tag}.done"
-    return os.path.exists(done_file)
-
-
-@contextlib.contextmanager
-def mark_done(folder: str, tag: str):
-    """Marks a task as done"""
-    started = timing.now()
-
-    if tag.startswith("fix:"):
-        with mark_fix_done(folder, tag.split(":", 1)[1]):
-            yield
-        return
-
-    # Do the action!
-    yield
-
-    delta = started - timing.now()
-
-    done_file = f"{folder}/.{tag}.done"
-    metadata = _basic_metadata()
-    metadata["duration"] = delta.total_seconds()
-    _atomic_write(done_file, metadata)
-
-
-def should_skip_fix(folder: str, fix: str) -> bool:
-    done_file = f"{folder}/.fix.done"
-    done = _load_done(done_file)
-    return fix in done.get("fixes", [])
-
-
-@contextlib.contextmanager
-def mark_fix_done(folder: str, fix: str):
-    """Marks a fix task as done"""
-    yield
-
-    done_file = f"{folder}/.fix.done"
-    done = _load_done(done_file)
-    done.update(_basic_metadata())
-    done.setdefault("fixes", []).append(fix)
-
-    _atomic_write(done_file, done)
