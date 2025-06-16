@@ -49,4 +49,6 @@ async def fix_obs_dxr(client, args):
         callback=_download_dxr_result,
     )
     if stats:
-        stats.print("downloaded", f"{resources.DIAGNOSTIC_REPORT}s", f"Result {resources.OBSERVATION}s")
+        stats.print(
+            "downloaded", f"{resources.DIAGNOSTIC_REPORT}s", f"Result {resources.OBSERVATION}s"
+        )

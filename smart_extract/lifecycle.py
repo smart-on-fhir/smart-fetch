@@ -73,7 +73,6 @@ def mark_done(folder: str, tag: str):
     _atomic_write(done_file, metadata)
 
 
-
 def should_skip_fix(folder: str, fix: str) -> bool:
     done_file = f"{folder}/.fix.done"
     done = _load_done(done_file)

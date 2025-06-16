@@ -1,4 +1,5 @@
 import ddt
+import urllib.parse
 
 import smart_extract
 from smart_extract import resources, timing
@@ -17,7 +18,15 @@ class BulkTests(utils.TestCase):
             ],
         }
 
-        self.mock_bulk("group1", output=[pat1], error=[err1], deleted=[del1])
+        self.mock_bulk(
+            "group1",
+            output=[pat1],
+            error=[err1],
+            deleted=[del1],
+            params={
+                "_type": resources.PATIENT,
+            },
+        )
 
         await self.cli("bulk", self.folder, "--group=group1", "--type", resources.PATIENT)
 
@@ -157,7 +166,44 @@ class BulkTests(utils.TestCase):
                 ".metadata": {
                     "timestamp": timing.now().isoformat(),
                     "version": smart_extract.__version__,
-                    "done": [resources.PATIENT]
+                    "done": [resources.PATIENT],
                 },
             }
+        )
+
+    async def test_since_updated(self):
+        # Just confirm we passed in the right parameters and the request is mocked
+        self.mock_bulk("group1", params={"_since": "2022-03-23", "_type": resources.DEVICE})
+        await self.cli(
+            "bulk", self.folder, "--group=group1", "--since=2022-03-23", "--type", resources.DEVICE
+        )
+
+    async def test_since_created(self):
+        # Just confirm we passed in the right parameters and the request is mocked
+        types = ",".join(sorted(resources.PATIENT_TYPES))
+        filters = [
+            f"{resources.ALLERGY_INTOLERANCE}?date=gt2022-01-05",
+            f"{resources.CONDITION}?recorded-date=gt2022-01-05",
+            f"{resources.DIAGNOSTIC_REPORT}?issued=gt2022-01-05",
+            f"{resources.DOCUMENT_REFERENCE}?date=gt2022-01-05",
+            f"{resources.ENCOUNTER}?date=gt2022-01-05",
+            f"{resources.IMMUNIZATION}?date=gt2022-01-05",
+            f"{resources.MEDICATION_REQUEST}?authoredon=gt2022-01-05",
+            f"{resources.OBSERVATION}?category=social-history,vital-signs,imaging,laboratory,"
+            f"survey,exam,procedure,therapy,activity&date=gt2022-01-05",
+            f"{resources.PROCEDURE}?date=gt2022-01-05",
+            f"{resources.SERVICE_REQUEST}?authored=gt2022-01-05",
+        ]
+        type_filter = ",".join(urllib.parse.quote(f) for f in filters)
+
+        self.mock_bulk(
+            "group1",
+            params={
+                "_type": types,
+                "_typeFilter": type_filter,
+            },
+        )
+
+        await self.cli(
+            "bulk", self.folder, "--group=group1", "--since=2022-01-05", "--since-mode=created"
         )

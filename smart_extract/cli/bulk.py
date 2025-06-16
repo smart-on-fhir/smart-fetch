@@ -15,6 +15,12 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--group", metavar="GROUP", help="which group to export (default is whole system)"
     )
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
+    parser.add_argument(
+        "--since-mode",
+        choices=cli_utils.SinceMode,
+        help="how to interpret --since",
+        default=cli_utils.SinceMode.AUTO,
+    )
     parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")
     parser.add_argument(
         "--cancel", action="store_true", help="cancel an interrupted export, use with --resume"
@@ -35,9 +41,9 @@ async def export_main(args: argparse.Namespace) -> None:
 
     res_types = cli_utils.parse_resource_selection(args.type)
     workdir = args.folder
+    metadata = lifecycle.Metadata(workdir)
 
     # See which resources we can skip
-    metadata = lifecycle.Metadata(workdir)
     already_done = set()
     for res_type in res_types:
         if metadata.is_done(res_type):
@@ -48,13 +54,22 @@ async def export_main(args: argparse.Namespace) -> None:
         return
 
     async with bulk_client:
+        filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
+        since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
+        if since_mode == cli_utils.SinceMode.CREATED:
+            cli_utils.add_since_filter(filters, args.since, since_mode)
+            args.since = None
+        # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
+        # it with _lastUpdated, because _since has extra logic around older resources of patients
+        # added after _since.
+
         exporter = bulk_utils.BulkExporter(
             bulk_client,
             res_types,
             bulk_utils.export_url(args.fhir_url, args.group),
             workdir,
             since=args.since,
-            type_filter=args.type_filter,
+            type_filter=filters,
             resume=args.resume,
         )
         await exporter.export()
@@ -65,9 +80,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
 async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> None:
     if not resume_url:
-        sys.exit(
-            "You provided --cancel without a --resume URL, but you must provide both."
-        )
+        sys.exit("You provided --cancel without a --resume URL, but you must provide both.")
 
     async with bulk_client:
         exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)

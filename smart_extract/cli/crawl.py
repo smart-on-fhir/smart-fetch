@@ -70,12 +70,8 @@ async def crawl_main(args: argparse.Namespace) -> None:
 
     async with rest_client:
         filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
-        cli_utils.add_since_filter(
-            filters,
-            args.since,
-            server_type=rest_client.server_type,
-            since_mode=args.since_mode,
-        )
+        since_mode = cli_utils.calculate_since_mode(args.since_mode, rest_client.server_type)
+        cli_utils.add_since_filter(filters, args.since, since_mode)
         workdir = args.folder
         source_dir = args.source_dir or workdir
         os.makedirs(workdir, exist_ok=True)
@@ -169,7 +165,7 @@ async def gather_patients(bulk_client, processor, args, filters, workdir: str) -
                 {resources.PATIENT},
                 bulk_utils.export_url(args.fhir_url, args.group),
                 workdir,
-                type_filter=filters.get(resources.PATIENT),
+                type_filter=filters,
             )
             await exporter.export()
 
@@ -183,8 +179,7 @@ async def mark_done(metadata: lifecycle.Metadata, res_type: str) -> None:
 
 def read_patient_ids(folder: str) -> set[str]:
     return {
-        patient["id"]
-        for patient in cfs.read_multiline_json_from_dir(folder, resources.PATIENT)
+        patient["id"] for patient in cfs.read_multiline_json_from_dir(folder, resources.PATIENT)
     }
 
 

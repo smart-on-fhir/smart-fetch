@@ -132,9 +132,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
     def mock_bulk(
         self,
         group: str,
+        *,
         output: list[dict] | None = None,
         error: list[dict] | None = None,
         deleted: list[dict] | None = None,
+        params: dict[str, str] | None = None,
     ) -> None:
         output = output or []
         error = error or []
@@ -153,7 +155,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         error_refs = make_download_refs("error", error)
         deleted_refs = make_download_refs("deleted", deleted)
 
-        self.server.get(f"{self.url}/Group/{group}/$export").respond(
+        self.server.get(f"{self.url}/Group/{group}/$export", params__eq=params).respond(
             202, headers={"Content-Location": f"{self.url}/exports/1"}
         )
         self.server.get(f"{self.url}/exports/1").respond(

@@ -265,7 +265,7 @@ class BulkExporter:
         *,
         since: str | None = None,
         until: str | None = None,
-        type_filter: list[str] | None = None,
+        type_filter: cli_utils.Filters | None = None,
         resume: str | None = None,
         prefer_url_resources: bool = False,
     ):
@@ -314,7 +314,7 @@ class BulkExporter:
         resources: set[str],
         since: str | None,
         until: str | None,
-        type_filter: list[str] | None,
+        type_filter: cli_utils.Filters | None,
         prefer_url_resources: bool,
     ) -> str:
         parsed = urllib.parse.urlsplit(url)
@@ -327,9 +327,14 @@ class BulkExporter:
         query = urllib.parse.parse_qs(parsed.query)
         ignore_provided_resources = prefer_url_resources and "_type" in query
         if not ignore_provided_resources:
-            query.setdefault("_type", []).extend(resources)
-        if type_filter:
-            query.setdefault("_typeFilter", []).extend(type_filter)
+            query.setdefault("_type", []).extend(sorted(resources))
+        combined_filters = [
+            urllib.parse.quote(f"{res_type}?{single_filter}")
+            for res_type in sorted(resources)
+            for single_filter in type_filter[res_type]
+        ]
+        if combined_filters:
+            query.setdefault("_typeFilter", []).extend(combined_filters)
         if since:
             query["_since"] = since
         if until:

@@ -173,9 +173,7 @@ async def process(
     # Iterate through inputs
     stats = FixStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
-    processor = iter_utils.ResourceProcessor(
-        workdir, desc, writer, append=append
-    )
+    processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         output_file = None if append else res_file
         processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)

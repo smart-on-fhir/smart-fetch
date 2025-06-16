@@ -5,6 +5,7 @@ import hashlib
 import os
 import sys
 import tomllib
+from collections.abc import Iterable
 
 import cumulus_fhir_support as cfs
 import rich.progress
@@ -77,7 +78,7 @@ def parse_resource_selection(types: str) -> list[str]:
 
 
 def parse_type_filters(
-    server_type: cfs.ServerType, res_types: list[str], type_filters: list[str] | None
+    server_type: cfs.ServerType, res_types: Iterable[str], type_filters: list[str] | None
 ) -> Filters:
     # First, break out what the user provided on the CLI
     filters = {}
@@ -110,21 +111,23 @@ def parse_type_filters(
     return filters
 
 
-def add_since_filter(
-    filters: Filters,
-    since: str | None,
-    *,
-    since_mode: SinceMode,
-    server_type: cfs.ServerType,
-) -> None:
-    if not since:
-        return
-
+def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
     if since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
         # and greatest edits.
-        since_mode = SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
+        return SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
+    return since_mode
+
+
+def add_since_filter(
+    filters: Filters,
+    since: str | None,
+    since_mode: SinceMode,
+) -> None:
+    """Returns calculated since mode (based on server type)"""
+    if not since:
+        return
 
     def add_filter(res_type: str, field: str) -> None:
         if res_type not in filters:
