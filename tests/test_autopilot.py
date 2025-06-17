@@ -28,17 +28,17 @@ class AutopilotTests(utils.TestCase):
 
         self.assert_folder(
             {
-                "Condition.429c626ef720f128eadc5f68eabc00b9.000.ndjson": (
-                    "429c626ef720f128eadc5f68eabc00b9/Condition.000.ndjson"
+                "Condition.000.ndjson.gz": (
+                    "429c626ef720f128eadc5f68eabc00b9/Condition.000.ndjson.gz"
                 ),
-                "Patient.429c626ef720f128eadc5f68eabc00b9.000.ndjson": (
-                    "429c626ef720f128eadc5f68eabc00b9/Patient.000.ndjson"
+                "Patient.000.ndjson.gz": (
+                    "429c626ef720f128eadc5f68eabc00b9/Patient.000.ndjson.gz"
                 ),
                 "429c626ef720f128eadc5f68eabc00b9": {
                     ".metadata": None,
                     "log.ndjson": None,
-                    "Condition.000.ndjson": [con1],
-                    "Patient.000.ndjson": [pat1],
+                    "Condition.000.ndjson.gz": [con1],
+                    "Patient.000.ndjson.gz": [pat1],
                 },
                 ".metadata": {
                     "kind": "managed",

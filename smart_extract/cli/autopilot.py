@@ -2,8 +2,10 @@
 
 import argparse
 import enum
+import glob
 import hashlib
 import os
+import re
 from functools import partial
 
 import cumulus_fhir_support as cfs
@@ -139,15 +141,18 @@ def make_links(workdir: str, res_type: str) -> None:
     work_name = os.path.basename(workdir)
     source_dir = os.path.dirname(workdir)
 
+    current_links = glob.glob(f"{source_dir}/{res_type}.*.ndjson.gz")
+    current_matches = [re.fullmatch(r".*\.(\d+)\.ndjson\.gz", path) for path in current_links]
+    current_nums = [int(m.group(1)) for m in current_matches] + [-1]
+    index = max(current_nums)
+
     for filename in cfs.list_multiline_json_in_dir(workdir, res_type):
         ndjson_name = os.path.basename(filename)
-        if ndjson_name.startswith(f"{res_type}."):
-            prefix = f"{res_type}."
-        else:
-            print(f"Did not understand filename {ndjson_name}. Not linking.")
+        if not ndjson_name.endswith(".ndjson.gz"):
+            print(f"Found unexpected filename {ndjson_name}, not linking.")
             continue
 
-        link_name = ndjson_name.removeprefix(prefix)
-        link_name = f"{prefix}{work_name}.{link_name}"
+        index += 1
+        link_name = f"{res_type}.{index:03}.ndjson.gz"
 
         os.symlink(os.path.join(work_name, ndjson_name), os.path.join(source_dir, link_name))

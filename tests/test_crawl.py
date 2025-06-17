@@ -135,8 +135,8 @@ class CrawlTests(utils.TestCase):
             {
                 ".metadata": None,
                 "log.ndjson": None,
-                f"{resources.PATIENT}.000.ndjson": [pat1],
-                f"{resources.PATIENT}.001.ndjson": [pat2],
+                f"{resources.PATIENT}.000.ndjson.gz": [pat1],
+                f"{resources.PATIENT}.001.ndjson.gz": [pat2],
             }
         )
 

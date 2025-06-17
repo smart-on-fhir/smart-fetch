@@ -155,12 +155,12 @@ class BulkTests(utils.TestCase):
                         },
                     },
                 ],
-                f"{resources.PATIENT}.000.ndjson": [pat1],
+                f"{resources.PATIENT}.000.ndjson.gz": [pat1],
                 "error": {
-                    f"{resources.OPERATION_OUTCOME}.000.ndjson": [err1],
+                    f"{resources.OPERATION_OUTCOME}.000.ndjson.gz": [err1],
                 },
                 "deleted": {
-                    f"{resources.BUNDLE}.000.ndjson": [del1],
+                    f"{resources.BUNDLE}.000.ndjson.gz": [del1],
                 },
                 ".metadata": {
                     "kind": "output",

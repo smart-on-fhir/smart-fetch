@@ -2,12 +2,13 @@
 
 import asyncio
 import datetime
+import gzip
 import json
 import os
 import sys
 import urllib.parse
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from functools import partial
 
 import cumulus_fhir_support as cfs
@@ -682,7 +683,7 @@ class BulkExporter:
         for file in files:
             count = resource_counts.get(file["type"], -1) + 1
             resource_counts[file["type"]] = count
-            filename = f"{file['type']}.{count:03}.ndjson"
+            filename = f"{file['type']}.{count:03}.ndjson.gz"
             coroutines.append(
                 self._download_ndjson_file(
                     file["url"],
@@ -715,7 +716,7 @@ class BulkExporter:
         )
         try:
             os.makedirs(os.path.dirname(filename), exist_ok=True)
-            with open(filename, "w", encoding="utf8") as file:
+            with gzip.open(filename, "wt", encoding="utf8") as file:
                 async for block in response.aiter_text():
                     file.write(block)
                     decompressed_size += len(block)
@@ -728,9 +729,9 @@ class BulkExporter:
         lines = ndjson.read_local_line_count(filename)
         self._log.download_complete(url, lines, decompressed_size)
 
-        filename_last_part = filename.split("/")[-1]
+        rel_filename = os.path.relpath(filename, self._destination)
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
-        print(f"  Downloaded {filename_last_part} ({human_size})")
+        print(f"  Downloaded {rel_filename} ({human_size})")
 
 
 async def perform_bulk(
@@ -742,7 +743,7 @@ async def perform_bulk(
     workdir: str,
     since: str | None,
     resume: str | None,
-    finish_callback: Callable[[str], None] | None = None,
+    finish_callback: Callable[[str], Awaitable[None]] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
