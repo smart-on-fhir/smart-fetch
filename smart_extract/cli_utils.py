@@ -1,7 +1,5 @@
 import argparse
 import enum
-import glob
-import hashlib
 import os
 import sys
 import tomllib
@@ -21,6 +19,8 @@ ALLOWED_TYPES = {
 }
 ALLOWED_CASE_MAP: dict[str, str] = {res_type.casefold(): res_type for res_type in ALLOWED_TYPES}
 
+# Each covered resource type is present, with an empty set by default.
+# If there are filters in the set, those should be applied to the resource type.
 Filters = dict[str, set[str]]
 
 
@@ -152,6 +152,31 @@ def add_since_filter(
         add_filter(resources.SERVICE_REQUEST, "authored")
     else:
         raise ValueError(f"Unknown --since-mode parameter '{since_mode}'")
+
+
+# COHORT SELECTION
+
+
+def add_cohort_selection(parser: argparse.ArgumentParser):
+    group = parser.add_argument_group("cohort selection")
+    group.add_argument(
+        "--group",
+        metavar="GROUP",
+        help="a FHIR Group to export (default is whole system)",
+    )
+    group.add_argument(
+        "--group-nickname",
+        metavar="GROUP",
+        help="a human-friendly name for the cohort, used in log files and such",
+    )
+    group.add_argument("--mrn-system", metavar="SYSTEM", help="system identifier for MRNs")
+    group.add_argument(
+        "--mrn-file",
+        metavar="PATH",
+        help="file with MRNs to export (instead of a Group), one per line "
+        "(or a .csv with an 'mrn' column)",
+    )
+    return group
 
 
 # AUTHENTICATION
@@ -324,22 +349,3 @@ def human_time_offset(seconds: int) -> str:
 
     hours = minutes / 60
     return f"{_pretty_float(hours)}h"
-
-
-def calculate_workdir(filters: Filters) -> str:
-    raw = ""
-    for key in sorted(filters.keys()):
-        sorted_filters = sorted(filters[key])
-        if sorted_filters:
-            raw += "\n".join(f"{key}={res_filter}" for res_filter in sorted_filters) + "\n"
-        else:
-            raw += f"{key}=\n"
-
-    return hashlib.md5(raw.encode("utf8"), usedforsecurity=False).hexdigest()
-
-
-def make_links(workdir: str) -> None:
-    name = os.path.basename(workdir)
-    parent = os.path.dirname(workdir)
-    for child in glob.glob(workdir):
-        pass

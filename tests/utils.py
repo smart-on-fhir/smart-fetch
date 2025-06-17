@@ -109,6 +109,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
             if isinstance(val, dict) and os.path.isdir(root / name):
                 self._assert_folder(root / name, val)
                 continue
+            elif isinstance(val, str):
+                self.assertEqual(os.readlink(root / name), val)
+                continue
 
             if name.endswith(".gz"):
                 open_func = gzip.open

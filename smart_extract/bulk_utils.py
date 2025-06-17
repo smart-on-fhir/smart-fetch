@@ -16,7 +16,7 @@ import rich.live
 import rich.text
 
 import smart_extract
-from smart_extract import cli_utils, ndjson, resources, timing
+from smart_extract import cli_utils, lifecycle, ndjson, resources, timing
 
 
 def export_url(fhir_url: str, group: str) -> str:
@@ -731,3 +731,44 @@ class BulkExporter:
         filename_last_part = filename.split("/")[-1]
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
         print(f"  Downloaded {filename_last_part} ({human_size})")
+
+
+async def perform_bulk(
+    *,
+    fhir_url: str,
+    bulk_client: cfs.FhirClient,
+    filters: cli_utils.Filters,
+    group: str,
+    workdir: str,
+    since: str | None,
+    resume: str | None,
+    finish_callback: Callable[[str], None] | None = None,
+):
+    os.makedirs(workdir, exist_ok=True)
+    metadata = lifecycle.OutputMetadata(workdir)
+
+    # See which resources we can skip
+    already_done = set()
+    for res_type in filters:
+        if metadata.is_done(res_type):
+            print(f"Skipping {res_type}, already done.")
+            already_done.add(res_type)
+    res_types = set(filters) - already_done
+    if not res_types:
+        return
+
+    exporter = BulkExporter(
+        bulk_client,
+        res_types,
+        export_url(fhir_url, group),
+        workdir,
+        since=since,
+        type_filter=filters,
+        resume=resume,
+    )
+    await exporter.export()
+
+    for res_type in res_types:
+        metadata.mark_done(res_type)
+        if finish_callback:
+            await finish_callback(res_type)

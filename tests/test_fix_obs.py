@@ -20,6 +20,7 @@ class FixObsMemberTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
                     "done": ["obs-members"],
@@ -116,6 +117,7 @@ class FixObsDxrTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
                     "done": ["obs-dxr"],

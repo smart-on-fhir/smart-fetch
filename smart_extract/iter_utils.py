@@ -8,7 +8,7 @@ from typing import TypeVar
 
 import cumulus_fhir_support as cfs
 
-from smart_extract import cli_utils, lifecycle, ndjson
+from smart_extract import cli_utils, ndjson
 
 Item = TypeVar("Item")
 

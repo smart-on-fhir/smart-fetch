@@ -22,13 +22,15 @@ def parse_content_type(content_type: str) -> (str, str):
     return msg.get_content_type(), msg.get_content_charset("utf8")
 
 
-async def fix_doc_inline(client, args):
-    mimetypes = parse_mimetypes(args.mimetypes)
+async def fix_doc_inline(
+    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
+):
+    mimetypes = parse_mimetypes(mimetypes)
     stats = await fix_utils.process(
         client=client,
         fix_name="doc-inline",
         desc="Inlining",
-        workdir=args.folder,
+        workdir=workdir,
         input_type=resources.DOCUMENT_REFERENCE,
         callback=partial(_inline_resource, mimetypes),
         append=False,
@@ -37,13 +39,15 @@ async def fix_doc_inline(client, args):
         stats.print("inlined", f"{resources.DOCUMENT_REFERENCE}s", "Attachments")
 
 
-async def fix_dxr_inline(client, args):
-    mimetypes = parse_mimetypes(args.mimetypes)
+async def fix_dxr_inline(
+    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
+):
+    mimetypes = parse_mimetypes(mimetypes)
     stats = await fix_utils.process(
         client=client,
         fix_name="dxr-inline",
         desc="Inlining",
-        workdir=args.folder,
+        workdir=workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
         callback=partial(_inline_resource, mimetypes),
         append=False,

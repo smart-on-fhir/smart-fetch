@@ -49,6 +49,8 @@ async def fix_main(args: argparse.Namespace) -> None:
             sys.exit(2)
 
     async with client:
-        for fix_name in sorted(fixes.all_fixes.keys()):
+        for fix_name in fixes.all_fixes:
             if fix_name in cli_fixes or "all" in cli_fixes:
-                await fixes.all_fixes[fix_name][1](client, args)
+                await fixes.all_fixes[fix_name][1](
+                    client, args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
+                )

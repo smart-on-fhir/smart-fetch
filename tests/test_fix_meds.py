@@ -18,6 +18,7 @@ class FixMedsTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
                     "done": ["meds"],

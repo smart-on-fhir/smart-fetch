@@ -1,7 +1,5 @@
 import dataclasses
 import enum
-import os
-import sys
 from collections.abc import AsyncIterable, Callable
 from functools import partial
 
@@ -151,7 +149,7 @@ async def process(
         # Cannot use a separate source dir when re-writing resources, so enforce that here
         source_dir = workdir
 
-    metadata = lifecycle.Metadata(workdir)
+    metadata = lifecycle.OutputMetadata(workdir)
     if metadata.is_done(fix_name):
         print(f"Skipping {fix_name}, already done.")
         return None

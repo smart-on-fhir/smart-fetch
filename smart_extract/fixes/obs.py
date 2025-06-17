@@ -1,3 +1,5 @@
+import cumulus_fhir_support as cfs
+
 from smart_extract import fix_utils, resources
 
 
@@ -14,13 +16,15 @@ async def _download_members(client, resource: dict, id_pool: set[str]) -> fix_ut
     return results
 
 
-async def fix_obs_members(client, args):
+async def fix_obs_members(
+    client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
+):
     stats = await fix_utils.process(
         client=client,
         fix_name="obs-members",
         desc="Downloading",
-        workdir=args.folder,
-        source_dir=args.source_dir or args.folder,
+        workdir=workdir,
+        source_dir=source_dir or workdir,
         input_type=resources.OBSERVATION,
         callback=_download_members,
     )
@@ -37,13 +41,15 @@ async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> fix
     ]
 
 
-async def fix_obs_dxr(client, args):
+async def fix_obs_dxr(
+    client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
+):
     stats = await fix_utils.process(
         client=client,
         fix_name="obs-dxr",
         desc="Downloading",
-        workdir=args.folder,
-        source_dir=args.source_dir or args.folder,
+        workdir=workdir,
+        source_dir=source_dir or workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
         output_type=resources.OBSERVATION,
         callback=_download_dxr_result,

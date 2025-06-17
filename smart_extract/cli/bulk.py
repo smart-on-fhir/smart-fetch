@@ -1,12 +1,11 @@
 """Do a standalone bulk export from an EHR"""
 
 import argparse
-import os
 import sys
 
 import cumulus_fhir_support as cfs
 
-from smart_extract import bulk_utils, cli_utils, lifecycle
+from smart_extract import bulk_utils, cli_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -42,17 +41,6 @@ async def export_main(args: argparse.Namespace) -> None:
 
     res_types = cli_utils.parse_resource_selection(args.type)
     workdir = args.folder
-    metadata = lifecycle.Metadata(workdir)
-
-    # See which resources we can skip
-    already_done = set()
-    for res_type in res_types:
-        if metadata.is_done(res_type):
-            print(f"Skipping {res_type}, already done.")
-            already_done.add(res_type)
-    res_types = set(res_types) - already_done
-    if not res_types:
-        return
 
     async with bulk_client:
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
@@ -62,22 +50,17 @@ async def export_main(args: argparse.Namespace) -> None:
             args.since = None
         # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
         # it with _lastUpdated, because _since has extra logic around older resources of patients
-        # added after _since.
+        # added to the group after _since.
 
-        exporter = bulk_utils.BulkExporter(
-            bulk_client,
-            res_types,
-            bulk_utils.export_url(args.fhir_url, args.group),
-            workdir,
+        await bulk_utils.perform_bulk(
+            bulk_client=bulk_client,
+            fhir_url=args.fhir_url,
+            filters=filters,
+            group=args.group,
+            workdir=workdir,
             since=args.since,
-            type_filter=filters,
             resume=args.resume,
         )
-        os.makedirs(workdir, exist_ok=True)
-        await exporter.export()
-
-    for res_type in res_types:
-        metadata.mark_done(res_type)
 
 
 async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> None:

@@ -1,5 +1,4 @@
 import ddt
-import urllib.parse
 
 import smart_extract
 from smart_extract import resources, timing
@@ -164,6 +163,7 @@ class BulkTests(utils.TestCase):
                     f"{resources.BUNDLE}.000.ndjson": [del1],
                 },
                 ".metadata": {
+                    "kind": "output",
                     "timestamp": timing.now().isoformat(),
                     "version": smart_extract.__version__,
                     "done": [resources.PATIENT],

@@ -45,6 +45,7 @@ class CrawlTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "kind": "output",
                     "timestamp": timing.now().isoformat(),
                     "version": smart_extract.__version__,
                     "done": [resources.DEVICE],
