@@ -43,10 +43,10 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     cli_utils.add_auth(parser)
     cli_utils.add_cohort_selection(parser)
     cli_utils.add_type_selection(parser)
-    parser.set_defaults(func=autopilot_main)
+    parser.set_defaults(func=export_main)
 
 
-async def autopilot_main(args: argparse.Namespace) -> None:
+async def export_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)

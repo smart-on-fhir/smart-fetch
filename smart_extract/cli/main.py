@@ -7,7 +7,7 @@ import sys
 
 import rich.logging
 
-from smart_extract.cli import autopilot, bulk, crawl, fix
+from smart_extract.cli import export, bulk, crawl, fix
 
 
 def define_parser() -> argparse.ArgumentParser:
@@ -15,7 +15,7 @@ def define_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers()
-    autopilot.make_subparser(subparsers.add_parser("autopilot", help="run a managed export"))
+    export.make_subparser(subparsers.add_parser("export", help="run a managed export"))
     bulk.make_subparser(subparsers.add_parser("bulk", help="run a bulk export"))
     crawl.make_subparser(
         subparsers.add_parser("crawl", help="run a crawl (REST alternative to bulk export)")

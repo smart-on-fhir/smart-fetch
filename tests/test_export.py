@@ -7,7 +7,7 @@ from tests import utils
 
 
 @ddt.ddt
-class AutopilotTests(utils.TestCase):
+class ExportTests(utils.TestCase):
     async def test_basic(self):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         con1 = {"resourceType": resources.CONDITION, "id": "con1"}
@@ -21,7 +21,7 @@ class AutopilotTests(utils.TestCase):
         )
 
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             f"--type={resources.CONDITION},{resources.PATIENT}",
@@ -58,7 +58,7 @@ class AutopilotTests(utils.TestCase):
         self.server.get("metadata").respond(200, json={"software": {"name": "Epic"}})
 
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             f"--type={resources.CONDITION},{resources.PATIENT}",
@@ -84,7 +84,7 @@ class AutopilotTests(utils.TestCase):
         })
 
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             "--export-mode=crawl",
@@ -108,7 +108,7 @@ class AutopilotTests(utils.TestCase):
             "_type": f"{resources.ENCOUNTER},{resources.PATIENT}",
         })
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             f"--type={resources.ENCOUNTER},{resources.PATIENT}",
@@ -121,7 +121,7 @@ class AutopilotTests(utils.TestCase):
             "_since": "2022-10-23",
         })
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             f"--type={resources.ENCOUNTER},{resources.PATIENT}",
@@ -158,7 +158,7 @@ class AutopilotTests(utils.TestCase):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.mock_bulk("group1", output=[pat1], params={"_type": resources.PATIENT})
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             "--nickname=my-export",
@@ -181,7 +181,7 @@ class AutopilotTests(utils.TestCase):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.mock_bulk("group1", output=[pat1], params={"_type": resources.PATIENT})
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             f"--type={resources.PATIENT}",
@@ -191,7 +191,7 @@ class AutopilotTests(utils.TestCase):
         params = {resources.CONDITION: {httpx.QueryParams(patient="pat1"): [con1]}}
         missing = self.set_resource_search_queries(params)
         await self.cli(
-            "autopilot",
+            "export",
             self.folder,
             "--group=group1",
             "--export-mode=crawl",
