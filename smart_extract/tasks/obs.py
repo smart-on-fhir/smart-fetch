@@ -46,7 +46,7 @@ async def task_obs_dxr(
 ):
     stats = await hydrate_utils.process(
         client=client,
-        task_name="obs-dxr",
+        task_name="dxr-results",
         desc="Downloading",
         workdir=workdir,
         source_dir=source_dir or workdir,

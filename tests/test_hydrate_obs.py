@@ -105,14 +105,14 @@ class HydrateObsMemberTests(utils.TestCase):
 
 class HydrateObsDxrTests(utils.TestCase):
     async def test_basic(self):
-        """Simple obs-dxr task from scratch"""
+        """Simple dxr-results task from scratch"""
         dxr = [
             {"result": [{"reference": "Observation/a"}, {"reference": "Observation/b"}]},
             {"result": [{"reference": "Observation/c"}]},
         ]
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr)
         self.set_basic_resource_route()
-        await self.cli("hydrate", self.folder, "--hydration-tasks=obs-dxr")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=dxr-results")
 
         self.assert_folder(
             {
@@ -120,7 +120,7 @@ class HydrateObsDxrTests(utils.TestCase):
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
-                    "done": ["obs-dxr"],
+                    "done": ["dxr-results"],
                 },
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 f"{resources.OBSERVATION}.ndjson.gz": [
@@ -139,7 +139,11 @@ class HydrateObsDxrTests(utils.TestCase):
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr, subfolder="elsewhere")
         self.set_basic_resource_route()
         await self.cli(
-            "hydrate", self.folder, "--hydration-tasks=obs-dxr", "--source-dir", os.path.join(self.folder, "elsewhere")
+            "hydrate",
+            self.folder,
+            "--hydration-tasks=dxr-results",
+            "--source-dir",
+            os.path.join(self.folder, "elsewhere"),
         )
 
         self.assert_folder(

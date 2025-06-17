@@ -12,7 +12,7 @@ async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None
     stats = await hydrate_utils.process(
         client=client,
         task_name="meds",
-        desc="Downloading Meds",
+        desc="Downloading",
         workdir=workdir,
         source_dir=source_dir or workdir,
         input_type=resources.MEDICATION_REQUEST,

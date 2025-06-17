@@ -19,6 +19,11 @@ FROZEN_DATETIME = datetime.datetime(
 )
 FROZEN_TIMESTAMP = FROZEN_DATETIME.astimezone().isoformat()
 
+DEFAULT_OBS_FILTER = (
+    f"{resources.OBSERVATION}?category=social-history,vital-signs,"
+    f"imaging,laboratory,survey,exam,procedure,therapy,activity"
+).replace(",", "%2C")
+
 version = smart_extract.__version__
 
 
@@ -59,7 +64,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.set_resource_route(self.basic_resource)
 
     def set_resource_route(self, callback):
-        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)")
+        route = self.server.get(
+            url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)[^\$]*$"
+        )
         route.side_effect = callback
 
     def set_resource_search_queries(
@@ -125,7 +132,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 self._assert_folder(root / name, val)
                 continue
             elif isinstance(val, str):
-                self.assertEqual(os.readlink(root / name), val)
+                self.assertEqual(os.readlink(root / name), val, name)
                 continue
 
             if name.endswith(".gz"):

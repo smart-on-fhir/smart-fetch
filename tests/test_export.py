@@ -79,9 +79,13 @@ class ExportTests(utils.TestCase):
         con1 = {"resourceType": resources.CONDITION, "id": "con1"}
         params = {resources.CONDITION: {httpx.QueryParams(patient="pat1"): [con1]}}
         missing = self.set_resource_search_queries(params)
-        self.mock_bulk("group1", output=[pat1], params={
-            "_type": resources.PATIENT,
-        })
+        self.mock_bulk(
+            "group1",
+            output=[pat1],
+            params={
+                "_type": resources.PATIENT,
+            },
+        )
 
         await self.cli(
             "export",
@@ -104,9 +108,13 @@ class ExportTests(utils.TestCase):
     async def test_second_export(self):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         enc1 = {"resourceType": resources.ENCOUNTER, "id": "enc1"}
-        self.mock_bulk("group1", output=[pat1, enc1], params={
-            "_type": f"{resources.ENCOUNTER},{resources.PATIENT}",
-        })
+        self.mock_bulk(
+            "group1",
+            output=[pat1, enc1],
+            params={
+                "_type": f"{resources.ENCOUNTER},{resources.PATIENT}",
+            },
+        )
         await self.cli(
             "export",
             self.folder,
@@ -116,10 +124,14 @@ class ExportTests(utils.TestCase):
 
         pat2 = {"resourceType": resources.PATIENT, "id": "pat2"}
         enc2 = {"resourceType": resources.ENCOUNTER, "id": "enc2"}
-        self.mock_bulk("group1", output=[pat2, enc2], params={
-            "_type": f"{resources.ENCOUNTER},{resources.PATIENT}",
-            "_since": "2022-10-23",
-        })
+        self.mock_bulk(
+            "group1",
+            output=[pat2, enc2],
+            params={
+                "_type": f"{resources.ENCOUNTER},{resources.PATIENT}",
+                "_since": "2022-10-23",
+            },
+        )
         await self.cli(
             "export",
             self.folder,
@@ -205,6 +217,141 @@ class ExportTests(utils.TestCase):
                 "Patient.000.ndjson.gz": "6fd669b7904f3e1e63674456c6b2bac8/Patient.000.ndjson.gz",
                 "6fd669b7904f3e1e63674456c6b2bac8": None,
                 "c0364eeb431653e28217058258792f8b": None,
+                ".metadata": None,
+            }
+        )
+
+    async def test_meds_hydration(self):
+        """Confirm we automatically run med hydration"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        medreq1 = {
+            "resourceType": resources.MEDICATION_REQUEST,
+            "id": "medreq1",
+            "medicationReference": {"reference": "Medication/1"},
+        }
+        self.mock_bulk(
+            "group1",
+            output=[pat1, medreq1],
+            params={"_type": f"{resources.MEDICATION_REQUEST},{resources.PATIENT}"},
+        )
+        self.set_basic_resource_route()
+        await self.cli(
+            "export",
+            self.folder,
+            "--group=group1",
+            f"--type={resources.PATIENT},{resources.MEDICATION_REQUEST}",
+        )
+
+        self.assert_folder(
+            {
+                "Medication.000.ndjson.gz": "2833a8e392566c339ab7a1d3096759ac/Medication.ndjson.gz",
+                "MedicationRequest.000.ndjson.gz": (
+                    "2833a8e392566c339ab7a1d3096759ac/MedicationRequest.000.ndjson.gz"
+                ),
+                "Patient.000.ndjson.gz": "2833a8e392566c339ab7a1d3096759ac/Patient.000.ndjson.gz",
+                "2833a8e392566c339ab7a1d3096759ac": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Medication.ndjson.gz": [{"resourceType": resources.MEDICATION, "id": "1"}],
+                    "MedicationRequest.000.ndjson.gz": None,
+                    "Patient.000.ndjson.gz": None,
+                },
+                ".metadata": None,
+            }
+        )
+
+    async def test_dxr_results_hydration_together(self):
+        """Confirm we correctly handle dxr-results hydration, when DxRs are exported at same time"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        dxr1 = {
+            "resourceType": resources.DIAGNOSTIC_REPORT,
+            "id": "dxr1",
+            "result": [{"reference": "Observation/obs2"}],
+        }
+        obs1 = {"resourceType": resources.OBSERVATION, "id": "obs1"}
+
+        self.mock_bulk(
+            "group1",
+            output=[pat1, dxr1, obs1],
+            params={
+                "_type": f"{resources.DIAGNOSTIC_REPORT},{resources.OBSERVATION},"
+                f"{resources.PATIENT}",
+                "_typeFilter": utils.DEFAULT_OBS_FILTER,
+            },
+        )
+        self.set_basic_resource_route()
+        await self.cli(
+            "export",
+            self.folder,
+            "--group=group1",
+            f"--type={resources.PATIENT},{resources.OBSERVATION},{resources.DIAGNOSTIC_REPORT}",
+        )
+
+        self.assert_folder(
+            {
+                "DiagnosticReport.000.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/DiagnosticReport.000.ndjson.gz"
+                ),
+                "Observation.000.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/Observation.000.ndjson.gz"
+                ),
+                "Observation.001.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/Observation.ndjson.gz"
+                ),
+                "Patient.000.ndjson.gz": "51c899230c8523059734d6c168ea5971/Patient.000.ndjson.gz",
+                "51c899230c8523059734d6c168ea5971": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "DiagnosticReport.000.ndjson.gz": [dxr1],
+                    "Observation.ndjson.gz": [
+                        {"resourceType": resources.OBSERVATION, "id": "obs2"},
+                    ],
+                    "Observation.000.ndjson.gz": [obs1],
+                    "Patient.000.ndjson.gz": [pat1],
+                },
+                ".metadata": None,
+            }
+        )
+
+    async def test_dxr_results_hydration_separately(self):
+        """Confirm we correctly handle dxr-results hydration, with just a DxR export"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        dxr1 = {
+            "resourceType": resources.DIAGNOSTIC_REPORT,
+            "id": "dxr1",
+            "result": [{"reference": "Observation/obs2"}],
+        }
+        self.mock_bulk(
+            "group1",
+            output=[pat1, dxr1],
+            params={"_type": f"{resources.DIAGNOSTIC_REPORT},{resources.PATIENT}"},
+        )
+        self.set_basic_resource_route()
+        await self.cli(
+            "export",
+            self.folder,
+            "--group=group1",
+            f"--type={resources.PATIENT},{resources.DIAGNOSTIC_REPORT}",
+        )
+
+        self.assert_folder(
+            {
+                "DiagnosticReport.000.ndjson.gz": (
+                    "2ad4e53a236e44752ccc301537e74320/DiagnosticReport.000.ndjson.gz"
+                ),
+                "Observation.000.ndjson.gz": (
+                    "2ad4e53a236e44752ccc301537e74320/Observation.ndjson.gz"
+                ),
+                "Patient.000.ndjson.gz": "2ad4e53a236e44752ccc301537e74320/Patient.000.ndjson.gz",
+                "2ad4e53a236e44752ccc301537e74320": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "DiagnosticReport.000.ndjson.gz": [dxr1],
+                    "Observation.ndjson.gz": [
+                        {"resourceType": resources.OBSERVATION, "id": "obs2"},
+                    ],
+                    "Patient.000.ndjson.gz": [pat1],
+                },
                 ".metadata": None,
             }
         )

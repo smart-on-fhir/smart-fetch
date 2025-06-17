@@ -10,7 +10,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks
+from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, resources, tasks
 
 
 class ExportMode(enum.StrEnum):
@@ -81,7 +81,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 workdir=workdir,
                 since=args.since,
                 resume=None,  # FIXME
-                finish_callback=partial(finish_resource, rest_client, workdir),
+                finish_callback=partial(finish_resource, rest_client, workdir, open_client=True),
             )
         else:
             await crawl_utils.perform_crawl(
@@ -126,13 +126,21 @@ def calculate_workdir(filters: cli_utils.Filters, since: str | None) -> str:
     return hashlib.md5(raw.encode("utf8"), usedforsecurity=False).hexdigest()
 
 
-async def finish_resource(client: cfs.FhirClient, workdir: str, res_type: str):
-    source_dir = os.path.dirname(workdir)
+async def finish_resource(
+    client: cfs.FhirClient, workdir: str, res_type: str, open_client: bool = False
+):
+    async def run_hydration_tasks():
+        # We don't provide a source_dir, because we want the hydration to only affect this most
+        # recent export in the workdir.
+        for task_type, task_func in tasks.all_tasks.values():
+            if task_type == res_type:
+                await task_func(client, workdir)
 
-    # Now run hydration tasks on the folder
-    for task_type, task_func in tasks.all_tasks.values():
-        if task_type == res_type:
-            await task_func(client, workdir, source_dir=source_dir)
+    if open_client:
+        async with client:
+            await run_hydration_tasks()
+    else:
+        await run_hydration_tasks()
 
     make_links(workdir, res_type)
 
@@ -142,6 +150,7 @@ def make_links(workdir: str, res_type: str) -> None:
     source_dir = os.path.dirname(workdir)
 
     current_links = glob.glob(f"{source_dir}/{res_type}.*.ndjson.gz")
+    current_targets = {os.readlink(link) for link in current_links}
     current_matches = [re.fullmatch(r".*\.(\d+)\.ndjson\.gz", path) for path in current_links]
     current_nums = [int(m.group(1)) for m in current_matches] + [-1]
     index = max(current_nums)
@@ -152,7 +161,18 @@ def make_links(workdir: str, res_type: str) -> None:
             print(f"Found unexpected filename {ndjson_name}, not linking.")
             continue
 
+        target = os.path.join(work_name, ndjson_name)
+        if target in current_targets:
+            continue
+
         index += 1
         link_name = f"{res_type}.{index:03}.ndjson.gz"
 
-        os.symlink(os.path.join(work_name, ndjson_name), os.path.join(source_dir, link_name))
+        os.symlink(target, os.path.join(source_dir, link_name))
+
+    # Some resources have linked resources created by the hydration tasks
+    match res_type:
+        case resources.DIAGNOSTIC_REPORT:
+            make_links(workdir, resources.OBSERVATION)
+        case resources.MEDICATION_REQUEST:
+            make_links(workdir, resources.MEDICATION)

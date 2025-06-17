@@ -11,7 +11,7 @@ TaskFunc = Callable
 all_tasks: dict[str, tuple[str, TaskFunc]] = {
     "doc-inline": (resources.DOCUMENT_REFERENCE, task_doc_inline),
     "dxr-inline": (resources.DIAGNOSTIC_REPORT, task_dxr_inline),
+    "dxr-results": (resources.DIAGNOSTIC_REPORT, task_obs_dxr),
     "meds": (resources.MEDICATION_REQUEST, task_meds),
-    "obs-dxr": (resources.OBSERVATION, task_obs_dxr),
     "obs-members": (resources.OBSERVATION, task_obs_members),
 }
