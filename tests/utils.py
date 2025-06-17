@@ -36,6 +36,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
 
         self.url = "http://example.invalid/R4"
 
+        # Use a separate download root, to avoid colliding with any search URL regexes above.
+        self.dlserver = "http://example.invalid/dl"
+
         self.server = respx.MockRouter(assert_all_called=False, base_url=self.url)
         self.server.get("metadata").respond(200, json={})
 
@@ -157,14 +160,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         error = error or []
         deleted = deleted or []
 
-        # Use a separate download root, to avoid colliding with any search URL regexes above.
-        dlserver = "http://example.invalid/dl"
-
         def make_download_refs(mode: str, resources: list[dict]) -> list[dict]:
             # Download each resource separately, to test how we handle multiples
             refs = []
             for index, resource in enumerate(resources):
-                url = f"{dlserver}/{mode}/{index}"
+                url = f"{self.dlserver}/{mode}/{index}"
                 self.server.get(url).respond(200, json=resource)
                 refs.append({"type": resource["resourceType"], "url": url})
             return refs
@@ -174,9 +174,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         deleted_refs = make_download_refs("deleted", deleted)
 
         self.server.get(f"{self.url}/Group/{group}/$export", params__eq=params).respond(
-            202, headers={"Content-Location": f"{dlserver}/exports/1"}
+            202, headers={"Content-Location": f"{self.dlserver}/exports/1"}
         )
-        self.server.get(f"{dlserver}/exports/1").respond(
+        self.server.get(f"{self.dlserver}/exports/1").respond(
             200,
             json={
                 "transactionTime": timing.now().isoformat(),
@@ -185,4 +185,4 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 "deleted": deleted_refs,
             },
         )
-        self.server.delete(f"{dlserver}/exports/1").respond(202)
+        self.server.delete(f"{self.dlserver}/exports/1").respond(202)

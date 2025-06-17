@@ -4,16 +4,16 @@ from smart_extract import resources
 from tests import utils
 
 
-class FixMedsTests(utils.TestCase):
+class HydrateMedsTests(utils.TestCase):
     async def test_basic(self):
-        """Simple meds fix from scratch"""
+        """Simple meds hydration from scratch"""
         med_reqs = [
             {"medicationReference": {"reference": "Medication/1"}},
             {"medicationReference": {"reference": "Medication/2"}},
         ]
         self.write_res(resources.MEDICATION_REQUEST, med_reqs)
         self.set_basic_resource_route()
-        await self.cli("fix", self.folder, "meds")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
 
         self.assert_folder(
             {
@@ -31,7 +31,7 @@ class FixMedsTests(utils.TestCase):
             }
         )
 
-    # This is a general "fix plumbing" test that is using MedReqs as an example
+    # This is a general "hydrate plumbing" test that is using MedReqs as an example
     async def test_edge_cases(self):
         """Odd ball issues"""
         self.write_res(
@@ -56,7 +56,7 @@ class FixMedsTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("fix", self.folder, "meds")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
 
         self.assert_folder(
             {
@@ -68,7 +68,7 @@ class FixMedsTests(utils.TestCase):
             }
         )
 
-    # This is a general "fix plumbing" test that is using MedReqs as an example
+    # This is a general "hydrate plumbing" test that is using MedReqs as an example
     async def test_resuming(self):
         """Test that we can pick up where we left off"""
         self.write_res(
@@ -87,7 +87,7 @@ class FixMedsTests(utils.TestCase):
                 assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("fix", self.folder, "meds")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
 
         self.assert_folder(
             {
@@ -100,8 +100,8 @@ class FixMedsTests(utils.TestCase):
             }
         )
 
-    # This is a general "fix plumbing" test that is using MedReqs as an example
+    # This is a general "hydrate plumbing" test that is using MedReqs as an example
     async def test_no_med_reqs(self):
-        """Test that we gracefully skip the fix when missing MedReqs"""
-        await self.cli("fix", self.folder, "meds")
+        """Test that we gracefully skip the task when missing MedReqs"""
+        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
         self.assert_folder({})

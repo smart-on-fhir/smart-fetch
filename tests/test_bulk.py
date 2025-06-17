@@ -33,7 +33,7 @@ class BulkTests(utils.TestCase):
             {
                 "log.ndjson": [
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "kickoff",
                         "_client": "smart-extract",
@@ -48,11 +48,11 @@ class BulkTests(utils.TestCase):
                             "requestParameters": {"_type": resources.PATIENT},
                             "errorCode": None,
                             "errorBody": None,
-                            "responseHeaders": {"content-location": f"{self.url}/exports/1"},
+                            "responseHeaders": {"content-location": f"{self.dlserver}/exports/1"},
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "status_complete",
                         "eventDetail": {
@@ -60,7 +60,7 @@ class BulkTests(utils.TestCase):
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "status_page_complete",
                         "eventDetail": {
@@ -71,7 +71,7 @@ class BulkTests(utils.TestCase):
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "manifest_complete",
                         "eventDetail": {
@@ -83,67 +83,67 @@ class BulkTests(utils.TestCase):
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/output/0",
+                            "fileUrl": f"{self.dlserver}/output/0",
                             "itemType": "output",
                             "resourceType": "Patient",
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/output/0",
+                            "fileUrl": f"{self.dlserver}/output/0",
                             "resourceCount": 1,
                             "fileSize": 41,
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/error/0",
+                            "fileUrl": f"{self.dlserver}/error/0",
                             "itemType": "error",
                             "resourceType": "OperationOutcome",
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/error/0",
+                            "fileUrl": f"{self.dlserver}/error/0",
                             "resourceCount": 1,
                             "fileSize": 50,
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/deleted/0",
+                            "fileUrl": f"{self.dlserver}/deleted/0",
                             "itemType": "deleted",
                             "resourceType": "Bundle",
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.url}/downloads/deleted/0",
+                            "fileUrl": f"{self.dlserver}/deleted/0",
                             "resourceCount": 1,
                             "fileSize": 95,
                         },
                     },
                     {
-                        "exportId": f"{self.url}/exports/1",
+                        "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": timing.now().isoformat(),
                         "eventId": "export_complete",
                         "eventDetail": {

@@ -1,11 +1,11 @@
 import cumulus_fhir_support as cfs
 
-from smart_extract import fix_utils, resources
+from smart_extract import hydrate_utils, resources
 
 
-async def _download_members(client, resource: dict, id_pool: set[str]) -> fix_utils.Result:
+async def _download_members(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:
     results = [
-        await fix_utils.download_reference(
+        await hydrate_utils.download_reference(
             client, id_pool, member.get("reference"), resources.OBSERVATION
         )
         for member in resource.get("hasMember", [])
@@ -16,12 +16,12 @@ async def _download_members(client, resource: dict, id_pool: set[str]) -> fix_ut
     return results
 
 
-async def fix_obs_members(
+async def task_obs_members(
     client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
 ):
-    stats = await fix_utils.process(
+    stats = await hydrate_utils.process(
         client=client,
-        fix_name="obs-members",
+        task_name="obs-members",
         desc="Downloading",
         workdir=workdir,
         source_dir=source_dir or workdir,
@@ -32,21 +32,21 @@ async def fix_obs_members(
         stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
 
 
-async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> fix_utils.Result:
+async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:
     return [
-        await fix_utils.download_reference(
+        await hydrate_utils.download_reference(
             client, id_pool, result.get("reference"), resources.OBSERVATION
         )
         for result in resource.get("result", [])
     ]
 
 
-async def fix_obs_dxr(
+async def task_obs_dxr(
     client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
 ):
-    stats = await fix_utils.process(
+    stats = await hydrate_utils.process(
         client=client,
-        fix_name="obs-dxr",
+        task_name="obs-dxr",
         desc="Downloading",
         workdir=workdir,
         source_dir=source_dir or workdir,

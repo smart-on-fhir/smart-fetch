@@ -1,17 +1,17 @@
 import cumulus_fhir_support as cfs
 
-from smart_extract import fix_utils, resources
+from smart_extract import hydrate_utils, resources
 
 
-async def _download_med(client, resource: dict, id_pool: set[str]) -> fix_utils.Result:
+async def _download_med(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:
     med_ref = resource.get("medicationReference", {}).get("reference")
-    return [await fix_utils.download_reference(client, id_pool, med_ref, resources.MEDICATION)]
+    return [await hydrate_utils.download_reference(client, id_pool, med_ref, resources.MEDICATION)]
 
 
-async def fix_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs):
-    stats = await fix_utils.process(
+async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs):
+    stats = await hydrate_utils.process(
         client=client,
-        fix_name="meds",
+        task_name="meds",
         desc="Downloading Meds",
         workdir=workdir,
         source_dir=source_dir or workdir,

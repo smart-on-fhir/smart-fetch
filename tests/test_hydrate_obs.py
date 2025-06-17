@@ -6,16 +6,16 @@ from smart_extract import resources
 from tests import utils
 
 
-class FixObsMemberTests(utils.TestCase):
+class HydrateObsMemberTests(utils.TestCase):
     async def test_basic(self):
-        """Simple obs-members fix from scratch"""
+        """Simple obs-members task from scratch"""
         obs = [
             {"hasMember": [{"reference": "Observation/a1"}, {"reference": "Observation/a2"}]},
             {"hasMember": [{"reference": "Observation/b"}]},
         ]
         self.write_res(resources.OBSERVATION, obs)
         self.set_basic_resource_route()
-        await self.cli("fix", self.folder, "obs-members")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=obs-members")
 
         self.assert_folder(
             {
@@ -65,7 +65,7 @@ class FixObsMemberTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("fix", self.folder, "obs-members")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=obs-members")
 
         self.assert_folder(
             {
@@ -103,16 +103,16 @@ class FixObsMemberTests(utils.TestCase):
         )
 
 
-class FixObsDxrTests(utils.TestCase):
+class HydrateObsDxrTests(utils.TestCase):
     async def test_basic(self):
-        """Simple obs-dxr fix from scratch"""
+        """Simple obs-dxr task from scratch"""
         dxr = [
             {"result": [{"reference": "Observation/a"}, {"reference": "Observation/b"}]},
             {"result": [{"reference": "Observation/c"}]},
         ]
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr)
         self.set_basic_resource_route()
-        await self.cli("fix", self.folder, "obs-dxr")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=obs-dxr")
 
         self.assert_folder(
             {
@@ -139,7 +139,7 @@ class FixObsDxrTests(utils.TestCase):
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr, subfolder="elsewhere")
         self.set_basic_resource_route()
         await self.cli(
-            "fix", self.folder, "obs-dxr", "--source-dir", os.path.join(self.folder, "elsewhere")
+            "hydrate", self.folder, "--hydration-tasks=obs-dxr", "--source-dir", os.path.join(self.folder, "elsewhere")
         )
 
         self.assert_folder(

@@ -10,7 +10,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, fixes, lifecycle
+from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks
 
 
 class ExportMode(enum.StrEnum):
@@ -129,10 +129,10 @@ def calculate_workdir(filters: cli_utils.Filters, since: str | None) -> str:
 async def finish_resource(client: cfs.FhirClient, workdir: str, res_type: str):
     source_dir = os.path.dirname(workdir)
 
-    # Now run fixes on the folder
-    for fix_type, fix_func in fixes.all_fixes.values():
-        if fix_type == res_type:
-            await fix_func(client, workdir, source_dir=source_dir)
+    # Now run hydration tasks on the folder
+    for task_type, task_func in tasks.all_tasks.values():
+        if task_type == res_type:
+            await task_func(client, workdir, source_dir=source_dir)
 
     make_links(workdir, res_type)
 

@@ -3,12 +3,18 @@
 import argparse
 import sys
 
-from smart_extract import cli_utils, fixes
+from smart_extract import cli_utils, tasks
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("folder", metavar="OUTPUT_DIR")
-    parser.add_argument("fixes", metavar="FIX", nargs="*", default=["all"])
+    parser.add_argument(
+        "--hydration-tasks",
+        metavar="TASK",
+        nargs="*",
+        default=["all"],
+        help="which hydration tasks to run (defaults to 'all', use 'help' to see list)",
+    )
     cli_utils.add_general(parser)
     parser.add_argument(
         "--source-dir",
@@ -22,35 +28,35 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     )
 
     cli_utils.add_auth(parser)
-    parser.set_defaults(func=fix_main)
+    parser.set_defaults(func=hydrate_main)
 
 
 def print_help():
-    print("These fixes are supported:")
+    print("These hydration tasks are supported:")
     print("  all")
-    for fix_name in sorted(fixes.all_fixes.keys()):
-        print(f"  {fix_name}")
+    for task_name in sorted(tasks.all_tasks.keys()):
+        print(f"  {task_name}")
 
 
-async def fix_main(args: argparse.Namespace) -> None:
-    """Fixes up data."""
+async def hydrate_main(args: argparse.Namespace) -> None:
+    """Hydrate some data."""
     client, _bulk_client = cli_utils.prepare(args)
-    cli_fixes = set(args.fixes)
+    cli_tasks = set(args.hydration_tasks)
 
-    if "help" in cli_fixes:
+    if "help" in cli_tasks:
         print_help()
         sys.exit(0)
 
-    for fix_name in cli_fixes:
-        if fix_name != "all" and fix_name not in fixes.all_fixes:
-            print(f"Unknown fix provided: {fix_name}")
+    for task_name in cli_tasks:
+        if task_name != "all" and task_name not in tasks.all_tasks:
+            print(f"Unknown hydration task provided: {task_name}")
             print()
             print_help()
             sys.exit(2)
 
     async with client:
-        for fix_name in fixes.all_fixes:
-            if fix_name in cli_fixes or "all" in cli_fixes:
-                await fixes.all_fixes[fix_name][1](
+        for task_name in tasks.all_tasks:
+            if task_name in cli_tasks or "all" in cli_tasks:
+                await tasks.all_tasks[task_name][1](
                     client, args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
                 )

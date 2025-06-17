@@ -5,7 +5,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 
-from smart_extract import fix_utils, resources
+from smart_extract import hydrate_utils, resources
 
 
 def parse_mimetypes(mimetypes: str | None) -> set[str]:
@@ -22,13 +22,13 @@ def parse_content_type(content_type: str) -> (str, str):
     return msg.get_content_type(), msg.get_content_charset("utf8")
 
 
-async def fix_doc_inline(
+async def task_doc_inline(
     client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
 ):
     mimetypes = parse_mimetypes(mimetypes)
-    stats = await fix_utils.process(
+    stats = await hydrate_utils.process(
         client=client,
-        fix_name="doc-inline",
+        task_name="doc-inline",
         desc="Inlining",
         workdir=workdir,
         input_type=resources.DOCUMENT_REFERENCE,
@@ -39,13 +39,13 @@ async def fix_doc_inline(
         stats.print("inlined", f"{resources.DOCUMENT_REFERENCE}s", "Attachments")
 
 
-async def fix_dxr_inline(
+async def task_dxr_inline(
     client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
 ):
     mimetypes = parse_mimetypes(mimetypes)
-    stats = await fix_utils.process(
+    stats = await hydrate_utils.process(
         client=client,
-        fix_name="dxr-inline",
+        task_name="dxr-inline",
         desc="Inlining",
         workdir=workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
@@ -58,7 +58,7 @@ async def fix_dxr_inline(
 
 async def _inline_resource(
     mimetypes: set[str], client, resource: dict, id_pool: set[str]
-) -> fix_utils.Result:
+) -> hydrate_utils.Result:
     match resource.get("resourceType"):
         case "DiagnosticReport":
             attachments = resource.get("presentedForm", [])
@@ -72,7 +72,7 @@ async def _inline_resource(
             attachments = []  # don't do anything, but we will leave the resource line in place
 
     if not attachments:
-        return [(resource, fix_utils.FixResultReason.IGNORED)]
+        return [(resource, hydrate_utils.TaskResultReason.IGNORED)]
 
     result = [
         [None, await _inline_attachment(client, attachment, mimetypes=mimetypes)]
@@ -85,22 +85,22 @@ async def _inline_resource(
 
 async def _inline_attachment(
     client: cfs.FhirClient, attachment: dict, *, mimetypes: set[str]
-) -> fix_utils.FixResultReason:
+) -> hydrate_utils.TaskResultReason:
     # First, check if we should even examine this attachment
     if "contentType" not in attachment:
-        return fix_utils.FixResultReason.IGNORED
+        return hydrate_utils.TaskResultReason.IGNORED
     mimetype, _charset = parse_content_type(attachment["contentType"])
     if mimetype not in mimetypes:
-        return fix_utils.FixResultReason.IGNORED
+        return hydrate_utils.TaskResultReason.IGNORED
 
     # OK - this is a valid attachment to process
 
     if "data" in attachment:
-        return fix_utils.FixResultReason.ALREADY_DONE
+        return hydrate_utils.TaskResultReason.ALREADY_DONE
 
     if "url" not in attachment:
         # neither data nor url... nothing to do
-        return fix_utils.FixResultReason.IGNORED
+        return hydrate_utils.TaskResultReason.IGNORED
 
     try:
         response = await client.request(
@@ -111,9 +111,9 @@ async def _inline_attachment(
             headers={"Accept": mimetype},
         )
     except cfs.FatalNetworkError:
-        return fix_utils.FixResultReason.FATAL_ERROR
+        return hydrate_utils.TaskResultReason.FATAL_ERROR
     except cfs.TemporaryNetworkError:
-        return fix_utils.FixResultReason.RETRY_ERROR
+        return hydrate_utils.TaskResultReason.RETRY_ERROR
 
     attachment["data"] = base64.standard_b64encode(response.content).decode("ascii")
     # Overwrite other associated metadata with latest info (existing metadata might now be stale)
@@ -122,4 +122,4 @@ async def _inline_attachment(
     sha1_hash = hashlib.sha1(response.content).digest()  # noqa: S324
     attachment["hash"] = base64.standard_b64encode(sha1_hash).decode("ascii")
 
-    return fix_utils.FixResultReason.NEWLY_DONE
+    return hydrate_utils.TaskResultReason.NEWLY_DONE

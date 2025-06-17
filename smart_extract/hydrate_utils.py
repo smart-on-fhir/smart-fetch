@@ -9,7 +9,7 @@ import rich.table
 from smart_extract import iter_utils, lifecycle, ndjson
 
 
-class FixResultReason(enum.Enum):
+class TaskResultReason(enum.Enum):
     ALREADY_DONE = enum.auto()
     NEWLY_DONE = enum.auto()
     FATAL_ERROR = enum.auto()
@@ -17,12 +17,12 @@ class FixResultReason(enum.Enum):
     IGNORED = enum.auto()
 
 
-SingleResult = tuple[dict | None, FixResultReason]
+SingleResult = tuple[dict | None, TaskResultReason]
 Result = list[SingleResult]
 
 
 @dataclasses.dataclass()
-class FixStats:
+class TaskStats:
     total: int = 0
     total_resources: int = 0
     already_done: int = 0
@@ -34,27 +34,27 @@ class FixStats:
     retry_errors: int = 0
     retry_errors_resources: int = 0
 
-    def _add(self, reason: FixResultReason) -> None:
+    def _add(self, reason: TaskResultReason) -> None:
         self.total += 1
         match reason:
-            case FixResultReason.ALREADY_DONE:
+            case TaskResultReason.ALREADY_DONE:
                 self.already_done += 1
-            case FixResultReason.NEWLY_DONE:
+            case TaskResultReason.NEWLY_DONE:
                 self.newly_done += 1
-            case FixResultReason.FATAL_ERROR:
+            case TaskResultReason.FATAL_ERROR:
                 self.fatal_errors += 1
-            case FixResultReason.RETRY_ERROR:
+            case TaskResultReason.RETRY_ERROR:
                 self.retry_errors += 1
 
-    def add_resource_reasons(self, reasons: list[FixResultReason]) -> None:
+    def add_resource_reasons(self, reasons: list[TaskResultReason]) -> None:
         self.total_resources += 1
-        if any(r == FixResultReason.ALREADY_DONE for r in reasons):
+        if any(r == TaskResultReason.ALREADY_DONE for r in reasons):
             self.already_done_resources += 1
-        if any(r == FixResultReason.NEWLY_DONE for r in reasons):
+        if any(r == TaskResultReason.NEWLY_DONE for r in reasons):
             self.newly_done_resources += 1
-        if any(r == FixResultReason.FATAL_ERROR for r in reasons):
+        if any(r == TaskResultReason.FATAL_ERROR for r in reasons):
             self.fatal_errors_resources += 1
-        if any(r == FixResultReason.RETRY_ERROR for r in reasons):
+        if any(r == TaskResultReason.RETRY_ERROR for r in reasons):
             self.retry_errors_resources += 1
 
         for reason in reasons:
@@ -109,7 +109,7 @@ async def _write(
     callback: Callable,
     client,
     id_pool: set[str],
-    stats: FixStats,
+    stats: TaskStats,
     res_type: str,
     writer: ndjson.NdjsonWriter,
     resource: dict,
@@ -131,7 +131,7 @@ async def _write(
 async def process(
     *,
     client,
-    fix_name: str,
+    task_name: str,
     desc: str,
     workdir: str | None,
     input_type: str,
@@ -139,7 +139,7 @@ async def process(
     output_type: str | None = None,
     append: bool = True,
     callback: Callable,
-) -> FixStats | None:
+) -> TaskStats | None:
     output_type = output_type or input_type
     source_dir = source_dir or workdir
 
@@ -150,8 +150,8 @@ async def process(
         source_dir = workdir
 
     metadata = lifecycle.OutputMetadata(workdir)
-    if metadata.is_done(fix_name):
-        print(f"Skipping {fix_name}, already done.")
+    if metadata.is_done(task_name):
+        print(f"Skipping {task_name}, already done.")
         return None
 
     # Calculate total progress needed
@@ -159,7 +159,7 @@ async def process(
     total_lines = sum(ndjson.read_local_line_count(path) for path in found_files)
 
     if not total_lines:
-        print(f"Skipping {fix_name}, no {input_type} resources found.")
+        print(f"Skipping {task_name}, no {input_type} resources found.")
         return None
 
     # See what is already present
@@ -169,7 +169,7 @@ async def process(
             downloaded_ids.add(f"{output_type}/{resource['id']}")
 
     # Iterate through inputs
-    stats = FixStats()
+    stats = TaskStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
     processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
@@ -177,7 +177,7 @@ async def process(
         processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
     await processor.run()
 
-    metadata.mark_done(fix_name)
+    metadata.mark_done(task_name)
 
     return stats
 
@@ -186,24 +186,24 @@ async def download_reference(
     client, id_pool: set[str], reference: str | None, expected_type: str
 ) -> SingleResult:
     if not reference or reference.startswith("#"):
-        return None, FixResultReason.IGNORED
+        return None, TaskResultReason.IGNORED
     elif not reference.startswith(f"{expected_type}/"):
-        return None, FixResultReason.IGNORED
+        return None, TaskResultReason.IGNORED
     elif reference in id_pool:
-        return None, FixResultReason.ALREADY_DONE
+        return None, TaskResultReason.ALREADY_DONE
 
     try:
         response = await client.request("GET", reference)
         resource = response.json()
     except cfs.FatalNetworkError:
-        return None, FixResultReason.FATAL_ERROR
+        return None, TaskResultReason.FATAL_ERROR
     except cfs.TemporaryNetworkError:
-        return None, FixResultReason.RETRY_ERROR
+        return None, TaskResultReason.RETRY_ERROR
 
     if resource.get("resourceType") != expected_type:
         # Hmm, wrong type. Could be OperationOutcome? Mark as fatal.
-        return None, FixResultReason.FATAL_ERROR
+        return None, TaskResultReason.FATAL_ERROR
 
-    # Add this immediately, to help avoid any re-downloading during a fix operation
+    # Add this immediately, to help avoid any re-downloading during a hydrate operation
     id_pool.add(f"{resource['resourceType']}/{resource['id']}")
-    return resource, FixResultReason.NEWLY_DONE
+    return resource, TaskResultReason.NEWLY_DONE

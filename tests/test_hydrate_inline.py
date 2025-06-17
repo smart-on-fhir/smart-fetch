@@ -7,7 +7,7 @@ from smart_extract import resources
 from tests import utils
 
 
-class FixDocInlineTests(utils.TestCase):
+class HydrateDocInlineTests(utils.TestCase):
     async def test_edge_cases(self):
         """All sorts of edge cases"""
         docrefs = [
@@ -82,7 +82,7 @@ class FixDocInlineTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("fix", self.folder, "doc-inline")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=doc-inline")
 
         self.assert_folder(
             {
@@ -160,9 +160,9 @@ class FixDocInlineTests(utils.TestCase):
         )
 
 
-class FixDxrInlineTests(utils.TestCase):
+class HydrateDxrInlineTests(utils.TestCase):
     async def test_basic(self):
-        """Simple dxr-inline fix from scratch, edge cases are handled above"""
+        """Simple dxr-inline task from scratch, edge cases are handled above"""
         dxr = [{"presentedForm": [{"url": "Binary/x", "contentType": "text/plain"}]}]
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr)
 
@@ -174,7 +174,7 @@ class FixDxrInlineTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("fix", self.folder, "dxr-inline")
+        await self.cli("hydrate", self.folder, "--hydration-tasks=dxr-inline")
 
         self.assert_folder(
             {

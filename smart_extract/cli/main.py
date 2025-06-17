@@ -7,7 +7,7 @@ import sys
 
 import rich.logging
 
-from smart_extract.cli import export, bulk, crawl, fix
+from smart_extract.cli import export, bulk, crawl, hydrate
 
 
 def define_parser() -> argparse.ArgumentParser:
@@ -20,7 +20,7 @@ def define_parser() -> argparse.ArgumentParser:
     crawl.make_subparser(
         subparsers.add_parser("crawl", help="run a crawl (REST alternative to bulk export)")
     )
-    fix.make_subparser(subparsers.add_parser("fix", help="fix up exported data"))
+    hydrate.make_subparser(subparsers.add_parser("hydrate", help="add to already-exported data"))
 
     return parser
 
