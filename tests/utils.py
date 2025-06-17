@@ -59,16 +59,28 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)")
         route.side_effect = callback
 
-    def set_resource_search_queries(self, all_results: dict[str, list[httpx.QueryParams]]):
+    def set_resource_search_queries(
+        self, all_results: dict[str, list[httpx.QueryParams] | dict[httpx.QueryParams, list[dict]]]
+    ):
         all_params = []
         for params in all_results.values():
-            all_params.extend(params)
+            if isinstance(params, list):
+                all_params.extend(params)
+            else:
+                all_params.extend(params.keys())
 
         def respond(request: httpx.Request, res_type: str) -> httpx.Response:
-            results_left = all_results.get(res_type, [])
-            if request.url.params in results_left:
+            res_results = all_results.get(res_type, [])
+            if request.url.params in res_results:
                 all_params.remove(request.url.params)
-                return httpx.Response(200, json={"resourceType": resources.BUNDLE})
+                entries = [] if isinstance(res_results, list) else res_results[request.url.params]
+                return httpx.Response(
+                    200,
+                    json={
+                        "resourceType": resources.BUNDLE,
+                        "entry": [{"resource": resource} for resource in entries],
+                    },
+                )
             assert False, f"Invalid request: {request.url.params}"
 
         self.set_resource_search_route(respond)
@@ -76,7 +88,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         return all_params
 
     def set_resource_search_route(self, callback):
-        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)")
+        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)[^\$]*$")
         route.side_effect = callback
 
     async def cli(self, *args) -> None:
@@ -145,11 +157,14 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         error = error or []
         deleted = deleted or []
 
+        # Use a separate download root, to avoid colliding with any search URL regexes above.
+        dlserver = "http://example.invalid/dl"
+
         def make_download_refs(mode: str, resources: list[dict]) -> list[dict]:
             # Download each resource separately, to test how we handle multiples
             refs = []
             for index, resource in enumerate(resources):
-                url = f"{self.url}/downloads/{mode}/{index}"
+                url = f"{dlserver}/{mode}/{index}"
                 self.server.get(url).respond(200, json=resource)
                 refs.append({"type": resource["resourceType"], "url": url})
             return refs
@@ -159,9 +174,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         deleted_refs = make_download_refs("deleted", deleted)
 
         self.server.get(f"{self.url}/Group/{group}/$export", params__eq=params).respond(
-            202, headers={"Content-Location": f"{self.url}/exports/1"}
+            202, headers={"Content-Location": f"{dlserver}/exports/1"}
         )
-        self.server.get(f"{self.url}/exports/1").respond(
+        self.server.get(f"{dlserver}/exports/1").respond(
             200,
             json={
                 "transactionTime": timing.now().isoformat(),
@@ -170,4 +185,4 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 "deleted": deleted_refs,
             },
         )
-        self.server.delete(f"{self.url}/exports/1").respond(202)
+        self.server.delete(f"{dlserver}/exports/1").respond(202)
