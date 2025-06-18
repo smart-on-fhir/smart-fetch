@@ -21,9 +21,9 @@ def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: da
     log = bulk_utils.BulkExportLogWriter(folder)
     log.export_id = "fake-log"
     log.kickoff(url, {}, httpx.Response(202))
-    log.status_complete(httpx.Response(200, json={
-        "transactionTime": transaction_time.astimezone().isoformat()
-    }))
+    log.status_complete(
+        httpx.Response(200, json={"transactionTime": transaction_time.astimezone().isoformat()})
+    )
     log.export_complete()
 
 
@@ -106,7 +106,7 @@ async def perform_crawl(
             print(f"Skipping {res_type}, already done.")
             continue
         processor.add_source(
-            res_type, resource_urls(res_type, patient_ids, filters), len(patient_ids)
+            res_type, resource_urls(res_type, "patient=", patient_ids, filters), len(patient_ids)
         )
 
     if processor.sources:
@@ -139,7 +139,11 @@ async def gather_patients(
                 mrns = {row.strip() for row in f}
         mrns = set(filter(None, mrns))  # ignore empty lines
 
-        processor.add_source(resources.PATIENT, patient_urls(mrn_system, mrns, filters), len(mrns))
+        processor.add_source(
+            resources.PATIENT,
+            resource_urls(resources.PATIENT, f"identifier={mrn_system}|", mrns, filters),
+            len(mrns),
+        )
         await processor.run()
 
     else:
@@ -173,20 +177,9 @@ def read_patient_ids(folder: str) -> set[str]:
     }
 
 
-async def patient_urls(mrn_system, mrns, filters) -> AsyncIterable[str]:
-    for mrn in mrns:
-        url = f"{resources.PATIENT}?identifier={mrn_system}|{mrn}"
-
-        if res_filters := filters.get(resources.PATIENT):
-            for res_filter in res_filters:
-                yield f"{url}&{res_filter}"
-        else:
-            yield url
-
-
-async def resource_urls(res_type, patients, filters) -> AsyncIterable[str]:
-    for patient in patients:
-        url = f"{res_type}?patient={patient}"
+async def resource_urls(res_type, query_prefix, ids, filters) -> AsyncIterable[str]:
+    for one_id in ids:
+        url = f"{res_type}?{query_prefix}{one_id}"
 
         if res_filters := filters.get(res_type):
             for res_filter in res_filters:

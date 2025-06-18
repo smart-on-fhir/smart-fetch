@@ -11,11 +11,12 @@ class MetadataKind(enum.StrEnum):
     MANAGED = enum.auto()
     OUTPUT = enum.auto()
 
-    def pretty(self) -> str:
-        if self == MetadataKind.MANAGED:
-            return f"a {self} folder"
+    @classmethod
+    def pretty(cls, kind: "MetadataKind") -> str:
+        if kind == MetadataKind.MANAGED:
+            return f"a {kind} folder"
         else:
-            return f"an {self} folder"
+            return f"an {kind} folder"
 
 
 class Metadata:
@@ -25,7 +26,10 @@ class Metadata:
         self._contents = self._read()
         if found_kind := self._contents.get("kind"):
             if found_kind != self._kind:
-                sys.exit(f"Folder {folder} is not {self._kind.pretty()}, but {found_kind.pretty()}")
+                sys.exit(
+                    f"Folder {folder} is not {MetadataKind.pretty(self._kind)},"
+                    f" but {MetadataKind.pretty(found_kind)}"
+                )
 
     def _basic_metadata(self) -> dict:
         return {

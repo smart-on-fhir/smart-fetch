@@ -197,7 +197,13 @@ class CrawlTests(utils.TestCase):
                         200, json=self.make_bundle(proc1, link=f"{resources.PROCEDURE}?resume=2")
                     )
                 elif request.url.params == httpx.QueryParams(resume="2"):
-                    return httpx.Response(200, json=self.make_bundle(proc2))
+                    return httpx.Response(
+                        200, json=self.make_bundle(proc2, link=f"{resources.PROCEDURE}?resume=3")
+                    )
+                elif request.url.params == httpx.QueryParams(resume="3"):
+                    # Fake an issue of some sort, where we don't get a bundle.
+                    # We should quietly ignore this, as a weird edge case.
+                    return httpx.Response(200, json={"resourceType": resources.PATIENT})
             assert False, f"Invalid request: {request.url.params}"
 
         self.set_resource_search_route(respond)
@@ -421,3 +427,27 @@ class CrawlTests(utils.TestCase):
         )
 
         self.assertEqual(missing, [])
+
+    async def test_complain_if_no_patients(self):
+        with self.assertRaisesRegex(SystemExit, "No cohort patients found"):
+            await self.cli(
+                "crawl",
+                self.folder,
+                f"--source-dir={self.folder}",
+                f"--type={resources.ENCOUNTER}",
+            )
+
+    async def test_complain_if_no_mrn_header(self):
+        mrn_file = self.tmp_file(suffix=".csv")
+        with mrn_file:
+            mrn_file.write("header1,header2\n")
+            mrn_file.write("abc,def\nghi,jkl\n")
+
+        with self.assertRaisesRegex(SystemExit, "has no 'mrn' header"):
+            await self.cli(
+                "crawl",
+                self.folder,
+                f"--mrn-file={mrn_file.name}",
+                "--mrn-system=my-system",
+                f"--type={resources.PATIENT}",
+            )

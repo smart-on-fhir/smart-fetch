@@ -144,7 +144,9 @@ async def process(
     source_dir = source_dir or workdir
 
     if not append and output_type != input_type:
-        raise ValueError("Must use same input and output type when re-writing resources")
+        raise ValueError(  # pragma: no cover
+            "Must use same input and output type when re-writing resources"
+        )
     if not append:
         # Cannot use a separate source dir when re-writing resources, so enforce that here
         source_dir = workdir

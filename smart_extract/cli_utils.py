@@ -34,7 +34,6 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("resource selection")
     group.add_argument(
         "--type",
-        default="all",
         help="only consider these resource types (comma separated, "
         "default is all supported FHIR resources, "
         "use '--type help' to see full list)",
@@ -63,7 +62,7 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
 
 
 def parse_resource_selection(types: str) -> list[str]:
-    orig_types = set(types.split(","))
+    orig_types = set(types.split(",")) if types else {"all"}
     lower_types = {t.casefold() for t in orig_types}
 
     def print_help():
@@ -101,6 +100,7 @@ def parse_type_filters(
 
     for type_filter in type_filters or []:
         if "?" not in type_filter:
+            print("MIKE", type_filter)
             sys.exit("Type filter arguments must be in the format 'Resource?params'.")
         res_type, params = type_filter.split("?", 1)
         if res_type not in filters:
@@ -121,7 +121,7 @@ def parse_type_filters(
 
 
 def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
-    if since_mode == SinceMode.AUTO:
+    if not since_mode or since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
         # and greatest edits.
@@ -147,10 +147,7 @@ def add_since_filter(
         else:
             filters[res_type] = {new_param}
 
-    if since_mode == SinceMode.UPDATED:
-        for res_type in filters:
-            add_filter(res_type, "_lastUpdated")
-    elif since_mode == SinceMode.CREATED:
+    if since_mode == SinceMode.CREATED:
         # There's no meta.created field, so we do the best we can for each resource.
         add_filter(resources.ALLERGY_INTOLERANCE, "date")
         add_filter(resources.CONDITION, "recorded-date")
@@ -164,8 +161,9 @@ def add_since_filter(
         # Skip PATIENT since it has no admin date to search on
         add_filter(resources.PROCEDURE, "date")  # clinical date, has no admin date
         add_filter(resources.SERVICE_REQUEST, "authored")
-    else:
-        raise ValueError(f"Unknown --since-mode parameter '{since_mode}'")
+    else:  # UPDATED mode
+        for res_type in filters:
+            add_filter(res_type, "_lastUpdated")
 
 
 # COHORT SELECTION
@@ -248,6 +246,10 @@ def load_config(args) -> None:
         for key in data:
             prop = key.replace("-", "_")
             if prop in args and getattr(args, prop) is None:
+                if prop in {"type_filter"}:
+                    # Special handling for "append" types, to upgrade to list
+                    if isinstance(data[key], str):
+                        data[key] = [data[key]]
                 setattr(args, prop, data[key])
 
 
@@ -291,19 +293,6 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     bulk_client = create_client_for_cli(args, smart_client_id=bulk_id, smart_key=bulk_key)
 
     return rest_client, bulk_client
-
-
-def confirm_dir_is_empty(folder: str, allow: set[str] | None = None) -> None:
-    """Errors out if the dir exists with contents"""
-    os.makedirs(folder, exist_ok=True)
-
-    files = {os.path.basename(p) for p in os.listdir(folder)}
-    if allow:
-        files -= allow
-    if files:
-        sys.exit(
-            f"The target folder '{folder}' already has contents. Please provide an empty folder.",
-        )
 
 
 def make_progress_bar() -> rich.progress.Progress:

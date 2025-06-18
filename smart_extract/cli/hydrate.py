@@ -11,9 +11,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--hydration-tasks",
         metavar="TASK",
-        nargs="*",
-        default=["all"],
-        help="which hydration tasks to run (defaults to 'all', use 'help' to see list)",
+        help="which hydration tasks to run "
+        "(comma separated, defaults to 'all', use 'help' to see list)",
     )
     cli_utils.add_general(parser)
     parser.add_argument(
@@ -41,7 +40,7 @@ def print_help():
 async def hydrate_main(args: argparse.Namespace) -> None:
     """Hydrate some data."""
     client, _bulk_client = cli_utils.prepare(args)
-    cli_tasks = set(args.hydration_tasks)
+    cli_tasks = set(args.hydration_tasks.split(",")) if args.hydration_tasks else {"all"}
 
     if "help" in cli_tasks:
         print_help()

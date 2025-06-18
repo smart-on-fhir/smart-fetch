@@ -115,7 +115,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
             output_path = self.folder / f"{res_type}.ndjson.gz"
         with gzip.open(output_path, "wt", encoding="utf8") as f:
             for index, resource in enumerate(resources):
-                resource["resourceType"] = res_type
+                resource.setdefault("resourceType", res_type)
                 resource.setdefault("id", str(index))
                 json.dump(resource, f)
                 f.write("\n")
@@ -158,38 +158,67 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self,
         group: str,
         *,
-        output: list[dict] | None = None,
-        error: list[dict] | None = None,
-        deleted: list[dict] | None = None,
         params: dict[str, str] | None = None,
+        output: list[dict | httpx.Response] | None = None,
+        error: list[dict | httpx.Response] | None = None,
+        deleted: list[dict | httpx.Response] | None = None,
+        kickoff_response: httpx.Response | None = None,
+        skip_kickoff: bool = False,
+        status_response: httpx.Response | list[httpx.Response] | None = None,
+        skip_status: bool = False,
+        delete_response: httpx.Response | None = None,
+        skip_delete: bool = False,
     ) -> None:
-        output = output or []
-        error = error or []
-        deleted = deleted or []
+        if not skip_kickoff:
+            if kickoff_response is None:
+                kickoff_response = httpx.Response(
+                    202, headers={"Content-Location": f"{self.dlserver}/exports/1"}
+                )
+            param_args = {"params__eq": params} if params else {}
+            self.server.get(f"{self.url}/Group/{group}/$export", **param_args).mock(
+                kickoff_response
+            )
 
-        def make_download_refs(mode: str, resources: list[dict]) -> list[dict]:
-            # Download each resource separately, to test how we handle multiples
-            refs = []
-            for index, resource in enumerate(resources):
-                url = f"{self.dlserver}/{mode}/{index}"
-                self.server.get(url).respond(200, json=resource)
-                refs.append({"type": resource["resourceType"], "url": url})
-            return refs
+        if not skip_status:
+            output = output or []
+            error = error or []
+            deleted = deleted or []
 
-        output_refs = make_download_refs("output", output)
-        error_refs = make_download_refs("error", error)
-        deleted_refs = make_download_refs("deleted", deleted)
+            def make_download_refs(mode: str, resources: list[dict | httpx.Response]) -> list[dict]:
+                # Download each resource separately, to test how we handle multiples
+                refs = []
+                for index, resource in enumerate(resources):
+                    url = f"{self.dlserver}/{mode}/{index}"
+                    if isinstance(resource, dict):
+                        self.server.get(url).respond(200, json=resource)
+                        res_type = resource["resourceType"]
+                    else:
+                        self.server.get(url).mock(resource)
+                        res_type = "Patient"  # does not really matter in this flow
+                    refs.append({"type": res_type, "url": url})
+                return refs
 
-        self.server.get(f"{self.url}/Group/{group}/$export", params__eq=params).respond(
-            202, headers={"Content-Location": f"{self.dlserver}/exports/1"}
-        )
-        self.server.get(f"{self.dlserver}/exports/1").respond(
-            200,
-            json={
-                "transactionTime": timing.now().isoformat(),
-                "output": output_refs,
-                "error": error_refs,
-                "deleted": deleted_refs,
-            },
-        )
-        self.server.delete(f"{self.dlserver}/exports/1").respond(202)
+            output_refs = make_download_refs("output", output)
+            error_refs = make_download_refs("error", error)
+            deleted_refs = make_download_refs("deleted", deleted)
+
+            if status_response is None:
+                status_response = [
+                    httpx.Response(
+                        200,
+                        json={
+                            "transactionTime": timing.now().isoformat(),
+                            "output": output_refs,
+                            "error": error_refs,
+                            "deleted": deleted_refs,
+                        },
+                    )
+                ]
+            elif isinstance(status_response, httpx.Response):
+                status_response = [status_response]
+            self.server.get(f"{self.dlserver}/exports/1").mock(side_effect=status_response)
+
+        if not skip_delete:
+            if delete_response is None:
+                delete_response = httpx.Response(202)
+            self.server.delete(f"{self.dlserver}/exports/1").mock(delete_response)

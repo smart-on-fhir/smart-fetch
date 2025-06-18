@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 import httpx
 
@@ -8,7 +9,8 @@ from tests import utils
 
 
 class HydrateDocInlineTests(utils.TestCase):
-    async def test_edge_cases(self):
+    @mock.patch("asyncio.sleep")
+    async def test_edge_cases(self, mock_sleep):
         """All sorts of edge cases"""
         docrefs = [
             {
@@ -32,13 +34,16 @@ class HydrateDocInlineTests(utils.TestCase):
                     },
                     # xhtml
                     {"attachment": {"url": "Binary/z", "contentType": "application/xhtml+xml"}},
-                    # error case
-                    {"attachment": {"url": "Binary/error", "contentType": "text/plain"}},
+                    # fatal error case
+                    {"attachment": {"url": "Binary/fatal-error", "contentType": "text/plain"}},
+                    # retry error case
+                    {"attachment": {"url": "Binary/retry-error", "contentType": "text/plain"}},
                     # ignored mimetype
                     {"attachment": {"url": "Binary/c", "contentType": "text/custom"}},
                 ]
             },
             {},  # No attachments at all
+            {"resourceType": resources.PROCEDURE},  # Wrong type
         ]
         self.write_res(resources.DOCUMENT_REFERENCE, docrefs)
 
@@ -76,8 +81,10 @@ class HydrateDocInlineTests(utils.TestCase):
                             "Content-Type": "application/xhtml+xml; charset=utf8",
                         },
                     )
-                case "error":
+                case "fatal-error":
                     return httpx.Response(404)
+                case "retry-error":
+                    return httpx.Response(500)
                 case _:
                     assert False, f"Wrong res_id {res_id}"
 
@@ -147,7 +154,13 @@ class HydrateDocInlineTests(utils.TestCase):
                             },
                             {
                                 "attachment": {
-                                    "url": "Binary/error",
+                                    "url": "Binary/fatal-error",
+                                    "contentType": "text/plain",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/retry-error",
                                     "contentType": "text/plain",
                                 }
                             },
@@ -155,6 +168,88 @@ class HydrateDocInlineTests(utils.TestCase):
                         ],
                     },
                     {"resourceType": resources.DOCUMENT_REFERENCE, "id": "1"},
+                    {"resourceType": resources.PROCEDURE, "id": "2"},
+                ],
+            }
+        )
+
+    async def test_custom_mimetypes(self):
+        docrefs = [
+            {
+                "content": [
+                    {"attachment": {"url": "Binary/a", "contentType": "text/html"}},
+                    {"attachment": {"url": "Binary/b", "contentType": "text/plain"}},
+                    {"attachment": {"url": "Binary/c", "contentType": "application/xhtml+xml"}},
+                    {"attachment": {"url": "Binary/d", "contentType": "text/custom1"}},
+                    {"attachment": {"url": "Binary/e", "contentType": "application/custom2"}},
+                ]
+            },
+        ]
+        self.write_res(resources.DOCUMENT_REFERENCE, docrefs)
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            match res_id:
+                case "d":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        content=b"hello",
+                        headers={"Content-Type": "text/custom1; charset=utf8"},
+                    )
+                case "e":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        content=b"hello",
+                        headers={"Content-Type": "application/custom2; charset=utf8"},
+                    )
+                case _:
+                    assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+        await self.cli(
+            "hydrate",
+            self.folder,
+            "--hydration-tasks=doc-inline",
+            "--mimetypes=tEXt/Custom1,application/custom2",
+        )
+
+        self.assert_folder(
+            {
+                ".metadata": None,
+                f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": [
+                    {
+                        "resourceType": resources.DOCUMENT_REFERENCE,
+                        "id": "0",
+                        "content": [
+                            {"attachment": {"url": "Binary/a", "contentType": "text/html"}},
+                            {"attachment": {"url": "Binary/b", "contentType": "text/plain"}},
+                            {
+                                "attachment": {
+                                    "url": "Binary/c",
+                                    "contentType": "application/xhtml+xml",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/d",
+                                    "contentType": "text/custom1; charset=utf8",
+                                    "data": "aGVsbG8=",
+                                    "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
+                                    "size": 5,
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/e",
+                                    "contentType": "application/custom2; charset=utf8",
+                                    "data": "aGVsbG8=",
+                                    "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
+                                    "size": 5,
+                                }
+                            },
+                        ],
+                    },
                 ],
             }
         )

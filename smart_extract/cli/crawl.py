@@ -16,7 +16,6 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--since-mode",
         choices=cli_utils.SinceMode,
         help="how to interpret --since",
-        default=cli_utils.SinceMode.AUTO,
     )
 
     group = cli_utils.add_cohort_selection(parser)

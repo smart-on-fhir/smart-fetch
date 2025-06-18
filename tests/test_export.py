@@ -1,8 +1,12 @@
+import gzip
+import json
+import os
+
 import ddt
 import httpx
 
 import smart_extract
-from smart_extract import resources, timing
+from smart_extract import lifecycle, resources, timing
 from tests import utils
 
 
@@ -352,6 +356,49 @@ class ExportTests(utils.TestCase):
                     ],
                     "Patient.000.ndjson.gz": [pat1],
                 },
+                ".metadata": None,
+            }
+        )
+
+    async def test_wrong_context(self):
+        metadata = lifecycle.ManagedMetadata(self.folder)
+        metadata.note_context(fhir_url="old-url", group="group1")
+        with self.assertRaisesRegex(SystemExit, "is for a different FHIR URL"):
+            await self.cli("export", self.folder)
+
+        os.unlink(f"{self.folder}/.metadata")
+        metadata = lifecycle.ManagedMetadata(self.folder)
+        metadata.note_context(fhir_url=self.url, group="group1")
+        with self.assertRaisesRegex(SystemExit, "is for a different Group"):
+            await self.cli("export", self.folder, "--group=new-group")
+
+    async def test_random_resource_file_is_ignored(self):
+        os.makedirs(f"{self.folder}/6fe4dc54280b62bf8992843f2bd9a544")
+
+        # Non gzipped is ignored
+        with open(
+            f"{self.folder}/6fe4dc54280b62bf8992843f2bd9a544/test.ndjson", "w", encoding="utf8"
+        ) as f:
+            json.dump({"resourceType": resources.PATIENT, "id": "pat1"}, f)
+
+        # Gzipped is assumed to be ours
+        with gzip.open(
+            f"{self.folder}/6fe4dc54280b62bf8992843f2bd9a544/test.ndjson.gz", "wt", encoding="utf8"
+        ) as f:
+            json.dump({"resourceType": resources.PATIENT, "id": "pat1"}, f)
+
+        self.mock_bulk("group1")
+        await self.cli("export", self.folder, "--group=group1")
+
+        self.assert_folder(
+            {
+                "6fe4dc54280b62bf8992843f2bd9a544": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "test.ndjson": None,
+                    "test.ndjson.gz": None,
+                },
+                "Patient.000.ndjson.gz": "6fe4dc54280b62bf8992843f2bd9a544/test.ndjson.gz",
                 ".metadata": None,
             }
         )

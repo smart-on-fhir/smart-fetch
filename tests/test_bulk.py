@@ -1,7 +1,14 @@
+import contextlib
+import io
+import urllib.parse
+from collections.abc import AsyncIterator
+from unittest import mock
+
 import ddt
+import httpx
 
 import smart_extract
-from smart_extract import resources, timing
+from smart_extract import lifecycle, resources, timing
 from tests import utils
 
 
@@ -207,3 +214,144 @@ class BulkTests(utils.TestCase):
         await self.cli(
             "bulk", self.folder, "--group=group1", "--since=2022-01-05", "--since-mode=created"
         )
+
+    async def test_custom_type_filter(self):
+        self.mock_bulk(
+            "group1",
+            params={
+                "_type": resources.PROCEDURE,
+                "_typeFilter": f"{resources.PROCEDURE}?code=123",
+            },
+        )
+        await self.cli(
+            "bulk",
+            self.folder,
+            "--group=group1",
+            f"--type={resources.PROCEDURE}",
+            f"--type-filter={resources.PROCEDURE}?code=123",
+        )
+
+    async def test_export_warnings(self):
+        self.mock_bulk(
+            "group1",
+            error=[
+                {
+                    "resourceType": "OperationOutcome",
+                    "issue": [{"severity": "warning", "diagnostics": "warning1"}],
+                },
+                {
+                    "resourceType": "OperationOutcome",
+                    "issue": [{"severity": "error", "code": "error1"}],
+                },
+            ],
+            params={"_type": resources.PROCEDURE},
+        )
+
+        stdout = io.StringIO()
+        with self.assertRaisesRegex(SystemExit, "Errors occurred during export:\n - error1"):
+            with contextlib.redirect_stdout(stdout):
+                await self.cli(
+                    "bulk",
+                    self.folder,
+                    "--group=group1",
+                    f"--type={resources.PROCEDURE}",
+                )
+
+        self.assertIn("Messages from server:\n - warning1\n", stdout.getvalue())
+
+    async def test_kickoff_error(self):
+        self.mock_bulk("group1", kickoff_response=httpx.Response(404))
+        with self.assertRaisesRegex(SystemExit, "An error occurred when connecting to"):
+            await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_download_error(self):
+        self.mock_bulk("group1", output=[httpx.Response(400)])
+        with self.assertRaisesRegex(SystemExit, "An error occurred when connecting to"):
+            await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_download_error_while_streaming(self):
+        async def exploding_stream() -> AsyncIterator[bytes]:
+            raise ZeroDivisionError("oops")
+            yield b"hello"
+
+        self.mock_bulk("group1", output=[httpx.Response(200, stream=exploding_stream())])
+
+        with self.assertRaisesRegex(
+            SystemExit, "Error downloading 'http://example.invalid/dl/output/0': oops"
+        ):
+            await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_unexpected_status_code(self):
+        self.mock_bulk("group1", status_response=httpx.Response(204))
+
+        with self.assertRaisesRegex(
+            SystemExit, "Unexpected status code 204 from the bulk FHIR export server"
+        ):
+            await self.cli(
+                "bulk",
+                self.folder,
+                "--group=group1",
+            )
+
+    async def test_no_delete_if_interrupted(self):
+        """Verify that we don't delete the export on the server if we bail during the export"""
+        self.mock_bulk(
+            "group1",
+            output=[httpx.Response(400)],
+            skip_delete=True,
+        )
+
+        with self.assertRaises(SystemExit):
+            # Would complain about unmocked network call if we tried to delete
+            await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_delete_error_is_ignored(self):
+        self.mock_bulk("group1", delete_response=httpx.Response(404))
+        # No fatal error
+        await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_resume(self):
+        self.mock_bulk("group1", skip_kickoff=True)
+        # No complaint about missing kickoff, we just go straight to status checking
+        await self.cli("bulk", self.folder, f"--resume={self.dlserver}/exports/1")
+
+    async def test_resume_quoted(self):
+        self.mock_bulk("group1", skip_kickoff=True)
+        quoted = urllib.parse.quote(f"{self.dlserver}/exports/1")
+        await self.cli("bulk", self.folder, "--resume", quoted)
+
+    async def test_cancel(self):
+        self.mock_bulk("group1", skip_kickoff=True, skip_status=True)
+        await self.cli("bulk", self.folder, f"--resume={self.dlserver}/exports/1", "--cancel")
+
+    async def test_cancel_no_resume(self):
+        with self.assertRaisesRegex(
+            SystemExit, "You provided --cancel without a --resume URL, but you must provide both."
+        ):
+            await self.cli("bulk", self.folder, "--cancel")
+
+    @mock.patch("asyncio.sleep")
+    async def test_timeout(self, mock_sleep):
+        headers = [httpx.Response(202, headers={"Retry-After": "300"})] * 9000
+        self.mock_bulk("group1", status_response=headers)
+        with self.assertRaisesRegex(
+            SystemExit, "Timed out waiting for the bulk FHIR export to finish."
+        ):
+            await self.cli("bulk", self.folder, "--group=group1")
+
+    async def test_skip_done_resources(self):
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.mark_done(resources.PROCEDURE)
+        self.mock_bulk("group1", params={"_type": resources.DEVICE})
+        await self.cli(
+            "bulk",
+            self.folder,
+            "--group=group1",
+            f"--type={resources.DEVICE},{resources.PROCEDURE}",
+        )
+
+    async def test_skip_all_resources(self):
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.mark_done(resources.DEVICE)
+        metadata.mark_done(resources.PROCEDURE)
+        await self.cli("bulk", self.folder, f"--type={resources.DEVICE},{resources.PROCEDURE}")

@@ -30,7 +30,6 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--export-mode",
         metavar="MODE",
         choices=ExportMode,
-        default=ExportMode.AUTO,
         help="how to export data (default is bulk if server supports it well)",
     )
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
@@ -38,7 +37,6 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--since-mode",
         choices=cli_utils.SinceMode,
         help="how to interpret --since",
-        default=cli_utils.SinceMode.AUTO,
     )
 
     cli_utils.add_auth(parser)
@@ -104,7 +102,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
 
 def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) -> ExportMode:
-    if export_mode == ExportMode.AUTO:
+    if not export_mode or export_mode == ExportMode.AUTO:
         # Epic's bulk export implementation is slow (it hits a live server, rather than a
         # shadow server). We prefer crawling it for now.
         return ExportMode.CRAWL if server_type == cfs.ServerType.EPIC else ExportMode.BULK
@@ -156,8 +154,8 @@ def make_links(workdir: str, res_type: str) -> None:
     current_links = glob.glob(f"{source_dir}/{res_type}.*.ndjson.gz")
     current_targets = {os.readlink(link) for link in current_links}
     current_matches = [re.fullmatch(r".*\.(\d+)\.ndjson\.gz", path) for path in current_links]
-    current_nums = [int(m.group(1)) for m in current_matches] + [-1]
-    index = max(current_nums)
+    current_nums = [int(m.group(1)) for m in current_matches]
+    index = max(current_nums) if current_nums else -1
 
     for filename in cfs.list_multiline_json_in_dir(workdir, res_type):
         ndjson_name = os.path.basename(filename)

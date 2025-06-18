@@ -6,6 +6,7 @@ import gzip
 import json
 import os
 import sys
+import typing
 import urllib.parse
 import uuid
 from collections.abc import Awaitable, Callable
@@ -140,11 +141,6 @@ class BulkExportLogWriter:
             },
         )
 
-    def status_progress(self, response: httpx.Response):
-        # We no longer log this event because it just clogs up the log file
-        # with thousands of lines that aren't interesting and bloat the size of the logs.
-        pass
-
     def status_complete(self, response: httpx.Response):
         response_json = response.json()
         transaction_time = response_json.get("transactionTime")
@@ -265,7 +261,6 @@ class BulkExporter:
         destination: str,
         *,
         since: str | None = None,
-        until: str | None = None,
         type_filter: cli_utils.Filters | None = None,
         resume: str | None = None,
         prefer_url_resources: bool = False,
@@ -278,7 +273,6 @@ class BulkExporter:
         :param url: a target export URL (like https://example.com/Group/1234)
         :param destination: a local folder to store all the files
         :param since: start date for export
-        :param until: end date for export
         :param type_filter: search filter for export (_typeFilter)
         :param resume: a polling status URL from a previous expor
         :param prefer_url_resources: if the URL includes _type, ignore the provided resources
@@ -301,13 +295,9 @@ class BulkExporter:
             server_type=client.server_type,
             resources=resources,
             since=since,
-            until=until,
             type_filter=type_filter,
             prefer_url_resources=prefer_url_resources,
         )
-
-        # Public properties, to be read after the export:
-        self.export_datetime = None
 
     @staticmethod
     def combine_filters(
@@ -366,7 +356,6 @@ class BulkExporter:
         server_type: cfs.ServerType,
         resources: set[str],
         since: str | None,
-        until: str | None,
         type_filter: cli_utils.Filters | None,
         prefer_url_resources: bool,
     ) -> str:
@@ -388,10 +377,6 @@ class BulkExporter:
             query.setdefault("_typeFilter", []).extend(combined_filters)
         if since:
             query["_since"] = since
-        if until:
-            # This parameter is not part of the FHIR spec and is unlikely to be supported by your
-            # server. But some custom servers *do* support it, so we added support for it too.
-            query["_until"] = until
 
         # Combine repeated query params into a single comma-delimited params.
         # The spec says servers SHALL support repeated params (and even prefers them, claiming
@@ -404,10 +389,8 @@ class BulkExporter:
 
         return urllib.parse.urlunsplit(parsed)
 
-    async def cancel(self) -> bool:
-        if not self._resume:
-            return False
-        return await self._delete_export(self._resume)
+    async def cancel(self) -> None:
+        await self._delete_export(self._resume)
 
     async def export(self) -> None:
         """
@@ -428,6 +411,12 @@ class BulkExporter:
 
         See http://hl7.org/fhir/uv/bulkdata/export/index.html for details.
         """
+        try:
+            await self._internal_export()
+        except cfs.NetworkError as exc:
+            sys.exit(str(exc))
+
+    async def _internal_export(self):
         self._log = BulkExportLogWriter(self._destination)
 
         if self._resume:
@@ -442,20 +431,12 @@ class BulkExporter:
         response = await self._request_with_delay_status(
             poll_location,
             headers={"Accept": "application/json"},
-            retry_errors=True,
-            log_progress=self._log.status_progress,
             log_error=self._log.status_error,
         )
         self._log.status_complete(response)
 
         # Finished! We're done waiting and can download all the files
         response_json = response.json()
-
-        try:
-            transaction_time = response_json.get("transactionTime", "")
-            self.export_datetime = datetime.datetime.fromisoformat(transaction_time)
-        except ValueError:
-            pass  # server gave us a bad timestamp, ignore it :shrug:
 
         # Download all the files
         print("Bulk FHIR export finished, now downloading resources…")
@@ -473,14 +454,14 @@ class BulkExporter:
         # Were there any server-side errors during the export?
         error_texts, warning_texts = self._gather_all_messages()
         if warning_texts:
-            print("\n - ".join(["Messages from server:", *warning_texts]))
+            print("\n - ".join(["Messages from server:", *sorted(warning_texts)]))
 
         # Make sure we're fully done before we bail because the server told us the export has
         # issues. We still want to DELETE the export in this case. And we still want to download
         # all the files the server DID give us. Servers may have lots of ignorable errors that
         # need human review, before passing back to us as input ndjson.
         if error_texts:
-            raise sys.exit("\n - ".join(["Errors occurred during export:", *error_texts]))
+            sys.exit("\n - ".join(["Errors occurred during export:", *sorted(error_texts)]))
 
     ##############################################################################################
     #
@@ -560,10 +541,8 @@ class BulkExporter:
         target_status_code: int = 200,
         method: str = "GET",
         log_request: Callable[[], None] | None = None,
-        log_progress: Callable[[httpx.Response], None] | None = None,
         log_error: Callable[[Exception], None] | None = None,
         stream: bool = False,
-        retry_errors: bool = False,
         rich_text: rich.text.Text | None = None,
     ) -> httpx.Response:
         """
@@ -574,10 +553,8 @@ class BulkExporter:
         :param target_status_code: retries until this status code is returned
         :param method: HTTP method to request
         :param log_request: method to call to report every request attempt
-        :param log_progress: method to call to report a successful request but not yet done
         :param log_error: method to call to report request failures
         :param stream: whether to stream the response
-        :param retry_errors: if True, server-side errors will be retried a few times
         :returns: the HTTP response
         """
 
@@ -593,6 +570,12 @@ class BulkExporter:
                 )
 
             self._total_wait_time += delay
+
+        def _raise_custom_error(*args) -> typing.NoReturn:
+            exc = cfs.NetworkError(*args)
+            if log_error:
+                log_error(exc)
+            raise exc
 
         # Actually loop, attempting the request multiple times as needed
         while self._total_wait_time < self._TIMEOUT_THRESHOLD:
@@ -615,9 +598,6 @@ class BulkExporter:
 
             # 202 == server is still working on it.
             if response.status_code == 202:
-                if log_progress:
-                    log_progress(response)
-
                 # Some servers can request unreasonably long delays (e.g. I've seen Cerner
                 # ask for five hours), which is... not helpful for our UX and often way
                 # too long for small exports. So limit the delay time to 5 minutes.
@@ -631,18 +611,15 @@ class BulkExporter:
                 # guidance on what the expected response codes are, that it's not clear if a code
                 # outside those parameters means we should keep waiting or stop waiting.
                 # So let's be strict here for now.
-                raise cfs.NetworkError(
+                _raise_custom_error(
                     f"Unexpected status code {response.status_code} "
                     "from the bulk FHIR export server.",
                     response,
                 )
 
-        exc = cfs.NetworkError("Timed out waiting for the bulk FHIR export to finish.", None)
-        if log_error:
-            log_error(exc)
-        raise exc
+        _raise_custom_error("Timed out waiting for the bulk FHIR export to finish.", None)
 
-    def _gather_all_messages(self) -> (list[str], list[str]):
+    def _gather_all_messages(self) -> (set[str], set[str]):
         """
         Parses all error/info ndjson files from the bulk export server.
 
@@ -652,17 +629,17 @@ class BulkExporter:
         # info messages.
         error_dir = f"{self._destination}/error"
 
-        fatal_messages = []
-        info_messages = []
+        fatal_messages = set()
+        info_messages = set()
         for outcome in cfs.read_multiline_json_from_dir(error_dir, resources.OPERATION_OUTCOME):
             for issue in outcome.get("issue", []):
                 text = issue.get("diagnostics")
                 text = text or issue.get("details", {}).get("text")
                 text = text or issue.get("code")  # code is required at least
                 if issue.get("severity") in ("fatal", "error"):
-                    fatal_messages.append(text)
+                    fatal_messages.add(text)
                 else:
-                    info_messages.append(text)
+                    info_messages.add(text)
 
         return fatal_messages, info_messages
 
@@ -710,7 +687,6 @@ class BulkExporter:
             url,
             headers={"Accept": "application/fhir+ndjson"},
             stream=True,
-            retry_errors=True,
             log_request=partial(self._log.download_request, url, item_type, resource_type),
             log_error=partial(self._log.download_error, url),
         )

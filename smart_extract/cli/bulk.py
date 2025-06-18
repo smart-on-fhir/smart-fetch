@@ -20,7 +20,6 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--since-mode",
         choices=cli_utils.SinceMode,
         help="how to interpret --since",
-        default=cli_utils.SinceMode.AUTO,
     )
     parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")
     parser.add_argument(
@@ -73,6 +72,5 @@ async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> No
 
     async with bulk_client:
         exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)
-        if not await exporter.cancel():
-            sys.exit(1)
+        await exporter.cancel()
         print("Export cancelled.")
