@@ -7,42 +7,24 @@ from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
 
 import cumulus_fhir_support as cfs
+import httpx
 
 from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
 
 def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: datetime.datetime):
-    timestamp = timing.now().isoformat()
     url = (
         os.path.join(fhir_url, "Group", group, "$export")
         if group
         else os.path.join(fhir_url, "$export")
     )
-    with open(f"{folder}/log.ndjson", "w", encoding="utf8") as f:
-        json.dump(
-            {
-                "exportId": "fake-log",
-                "timestamp": timestamp,
-                "eventId": "kickoff",
-                "eventDetail": {
-                    "exportUrl": url,
-                },
-            },
-            f,
-        )
-        f.write("\n")
-        json.dump(
-            {
-                "exportId": "fake-log",
-                "timestamp": timestamp,
-                "eventId": "status_complete",
-                "eventDetail": {
-                    "transactionTime": transaction_time.astimezone().isoformat(),
-                },
-            },
-            f,
-        )
-        f.write("\n")
+    log = bulk_utils.BulkExportLogWriter(folder)
+    log.export_id = "fake-log"
+    log.kickoff(url, {}, httpx.Response(202))
+    log.status_complete(httpx.Response(200, json={
+        "transactionTime": transaction_time.astimezone().isoformat()
+    }))
+    log.export_complete()
 
 
 async def perform_crawl(
