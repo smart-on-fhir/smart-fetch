@@ -52,6 +52,7 @@ async def export_main(args: argparse.Namespace) -> None:
     res_types = cli_utils.parse_resource_selection(args.type)
 
     async with bulk_client:
+        res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         export_mode = calculate_export_mode(args.export_mode, bulk_client.server_type)
         client = bulk_client if export_mode == ExportMode.BULK else rest_client
 

@@ -43,6 +43,7 @@ async def export_main(args: argparse.Namespace) -> None:
     workdir = args.folder
 
     async with bulk_client:
+        res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
         if since_mode == cli_utils.SinceMode.CREATED:

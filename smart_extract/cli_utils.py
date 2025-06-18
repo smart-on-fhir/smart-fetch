@@ -47,7 +47,21 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
     )
 
 
-# TODO: don't hardcode any supported resources, just use whatever we have access to from scopes
+def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> list[str]:
+    for rest in client.capabilities.get("rest", []):
+        if rest.get("mode") == "server" and "resource" in rest:
+            break
+    else:
+        return res_types
+
+    server_types = {res["type"] for res in rest["resource"] if "type" in res}
+    for res_type in sorted(res_types):
+        if res_type not in server_types:
+            print(f"Skipping {res_type} because the server does not support it.")
+
+    return [x for x in res_types if x in server_types]
+
+
 def parse_resource_selection(types: str) -> list[str]:
     orig_types = set(types.split(","))
     lower_types = {t.casefold() for t in orig_types}
