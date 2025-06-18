@@ -5,6 +5,7 @@ import os
 import ddt
 
 from smart_extract import lifecycle, resources
+from smart_extract.cli import main
 from tests import utils
 
 
@@ -112,3 +113,7 @@ class CommandLineTests(utils.TestCase):
         metadata.note_context(fhir_url=self.url, group="group1")
         with self.assertRaisesRegex(SystemExit, "is not an output folder, but a managed folder"):
             await self.cli("bulk", self.folder)
+
+    async def test_no_fhir_url(self):
+        with self.assertRaisesRegex(SystemExit, "--fhir-url is required"):
+            await main.main(["bulk", str(self.folder)])

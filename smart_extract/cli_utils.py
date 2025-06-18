@@ -1,6 +1,5 @@
 import argparse
 import enum
-import os
 import sys
 import tomllib
 from collections.abc import Iterable
@@ -273,8 +272,7 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     load_config(args)
 
     if not args.fhir_url:
-        print("--fhir-url is required")
-        sys.exit(2)
+        sys.exit("--fhir-url is required")
 
     rest_id = args.smart_client_id
     rest_key = args.smart_key
