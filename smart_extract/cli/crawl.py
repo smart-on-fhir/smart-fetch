@@ -2,6 +2,8 @@
 
 import argparse
 
+import rich
+
 from smart_extract import cli_utils, crawl_utils
 
 
@@ -32,6 +34,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def crawl_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
+    rich.get_console().rule()
+
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 

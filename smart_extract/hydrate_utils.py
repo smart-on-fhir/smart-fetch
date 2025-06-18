@@ -149,6 +149,8 @@ async def process(
         # Cannot use a separate source dir when re-writing resources, so enforce that here
         source_dir = workdir
 
+    rich.get_console().rule()
+
     metadata = lifecycle.OutputMetadata(workdir)
     if metadata.is_done(task_name):
         print(f"Skipping {task_name}, already done.")
@@ -156,9 +158,8 @@ async def process(
 
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
-    total_lines = sum(ndjson.read_local_line_count(path) for path in found_files)
 
-    if not total_lines:
+    if not found_files:
         print(f"Skipping {task_name}, no {input_type} resources found.")
         return None
 
@@ -174,6 +175,7 @@ async def process(
     processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         output_file = None if append else res_file
+        total_lines = ndjson.read_local_line_count(res_file)
         processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
     await processor.run()
 

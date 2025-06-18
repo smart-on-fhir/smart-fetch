@@ -9,6 +9,7 @@ import re
 from functools import partial
 
 import cumulus_fhir_support as cfs
+import rich
 
 from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, resources, tasks
 
@@ -48,6 +49,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def export_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
+    rich.get_console().rule()
+
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 

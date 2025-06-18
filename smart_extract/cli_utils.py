@@ -274,8 +274,6 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
         print("--fhir-url is required")
         sys.exit(2)
 
-    rich.get_console().rule()
-
     rest_id = args.smart_client_id
     rest_key = args.smart_key
     bulk_id = args.bulk_smart_client_id
