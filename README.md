@@ -73,19 +73,20 @@ ls -l /tmp/export
 # Encounter.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Encounter.000.ndjson.gz
 # Patient.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Patient.000.ndjson.gz
 
-# Second export with a --since date and a new resource
+# Second export with a --since date, a new resource, and a nickname for the export
 smart-extract export \
   --fhir-url https://bulk-data.smarthealthit.org/fhir \
   --type Encounter,Patient,Condition \
   --since 2020-01-01 \
+  --nickname second-run \
   /tmp/export
 
 ls -l /tmp/export
 # 238ec0e72fb1fd8dc9c4c0aa6a92459f/
-# 641d8e2f0551daf9c5097b3fecd80038/
-# Condition.000.ndjson.gz -> 641d8e2f0551daf9c5097b3fecd80038/Condition.000.ndjson.gz
+# second-run/
+# Condition.000.ndjson.gz -> second-run/Condition.000.ndjson.gz
 # Encounter.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Encounter.000.ndjson.gz
-# Encounter.001.ndjson.gz -> 641d8e2f0551daf9c5097b3fecd80038/Encounter.000.ndjson.gz
+# Encounter.001.ndjson.gz -> second-run/Encounter.000.ndjson.gz
 # Patient.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Patient.000.ndjson.gz
-# Patient.001.ndjson.gz -> 641d8e2f0551daf9c5097b3fecd80038/Patient.000.ndjson.gz
+# Patient.001.ndjson.gz -> second-run/Patient.000.ndjson.gz
 ```
