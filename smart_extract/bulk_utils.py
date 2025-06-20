@@ -110,7 +110,10 @@ class BulkExportLogWriter:
         request_headers = {}
         for k, v in httpx.URL(url).params.multi_items():
             if k in request_headers:
-                request_headers[k] += f",{v}"
+                # We currently don't hit this path, since we don't allow duplicates in headers
+                # right now. But we may in the future (and must, with future versions of the bulk
+                # spec), so leave this here, dormant.
+                request_headers[k] += f",{v}"  # pragma: no cover
             else:
                 request_headers[k] = v
         # Spec says we shouldn't log the `patient` parameter, so strip it here.
@@ -529,7 +532,9 @@ class BulkExporter:
             response = await self._request_with_retries(*args, rich_text=status_box, **kwargs)
 
         if status_box.plain:
-            print(f"  Waited for a total of {cli_utils.human_time_offset(self._total_wait_time)}")
+            print(  # pragma: no cover
+                f"  Waited for a total of {cli_utils.human_time_offset(self._total_wait_time)}"
+            )
 
         return response
 

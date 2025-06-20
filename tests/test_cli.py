@@ -1,10 +1,11 @@
 import contextlib
 import io
 import os
+from unittest import mock
 
 import ddt
 
-from smart_extract import lifecycle, resources
+from smart_extract import cli_utils, lifecycle, resources
 from smart_extract.cli import main
 from tests import utils
 
@@ -117,3 +118,49 @@ class CommandLineTests(utils.TestCase):
     async def test_no_fhir_url(self):
         with self.assertRaisesRegex(SystemExit, "--fhir-url is required"):
             await main.main(["bulk", str(self.folder)])
+
+    @mock.patch("cumulus_fhir_support.FhirClient.create_for_cli")
+    async def test_fallback_clients(self, mock_client):
+        # Confirm we use rest auth for bulk if needed
+        with self.assertRaises(SystemExit):
+            await self.cli("export", self.folder, "--type=help", "--smart-client-id=rest",
+                           "--smart-key=rest.jwks")
+        self.assertEqual(mock_client.call_count, 2)
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "rest")
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "rest.jwks")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_client_id"], "rest")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_key"], "rest.jwks")
+
+        mock_client.reset_mock()
+
+        # And the reverse
+        with self.assertRaises(SystemExit):
+            await self.cli("export", self.folder, "--type=help", "--bulk-smart-client-id=bulk",
+                           "--bulk-smart-key=bulk.jwks")
+        self.assertEqual(mock_client.call_count, 2)
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "bulk")
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "bulk.jwks")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_client_id"], "bulk")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_key"], "bulk.jwks")
+
+        mock_client.reset_mock()
+
+        # And finally, confirm we can provide both
+        with self.assertRaises(SystemExit):
+            await self.cli("export", self.folder, "--type=help",  "--smart-client-id=rest",
+                           "--smart-key=rest.jwks", "--bulk-smart-client-id=bulk",
+                           "--bulk-smart-key=bulk.jwks")
+        self.assertEqual(mock_client.call_count, 2)
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "rest")
+        self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "rest.jwks")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_client_id"], "bulk")
+        self.assertEqual(mock_client.call_args_list[1].kwargs["smart_key"], "bulk.jwks")
+
+    @ddt.data(
+        (12288, "12KB"),
+        (12024036, "11.5MB"),
+        (12024036048, "11.2GB"),
+    )
+    @ddt.unpack
+    def test_unit_human_file_size(self, size, expected_string):
+        self.assertEqual(cli_utils.human_file_size(size), expected_string)

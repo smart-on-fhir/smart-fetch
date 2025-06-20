@@ -282,10 +282,10 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     # Have rest and bulk keys fall back to the other one, if only one is provided.
     if rest_id and rest_key and not bulk_id and not bulk_key:
         bulk_id = rest_id
-        bulk_key = bulk_key
-    elif bulk_id and bulk_key and not rest_id and not rest_key:
-        bulk_id = rest_id
         bulk_key = rest_key
+    elif bulk_id and bulk_key and not rest_id and not rest_key:
+        rest_id = bulk_id
+        rest_key = bulk_key
 
     rest_client = create_client_for_cli(args, smart_client_id=rest_id, smart_key=rest_key)
     bulk_client = create_client_for_cli(args, smart_client_id=bulk_id, smart_key=bulk_key)

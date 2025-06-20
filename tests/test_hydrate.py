@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import io
 from unittest import mock
@@ -128,3 +129,29 @@ class HydrateTests(utils.TestCase):
                 await self.cli("hydrate", self.folder, f"--hydration-tasks={arg}")
         self.assertEqual(cm.exception.code, exit_code)
         self.assertIn("These hydration tasks are supported:", stdout.getvalue())
+
+    async def test_unexpected_error(self):
+        """We should complain loudly about this - shouldn't happen"""
+        # Write so many MedReqs out, so we can exercise our queue-draining code
+        self.write_res(
+            resources.MEDICATION_REQUEST, [
+                {"medicationReference": {"reference": "Medication/0"}},
+                {"medicationReference": {"reference": "Medication/1"}},
+                {"medicationReference": {"reference": "Medication/2"}},
+                {"medicationReference": {"reference": "Medication/3"}},
+                {"medicationReference": {"reference": "Medication/4"}},
+                {"medicationReference": {"reference": "Medication/5"}},
+                {"medicationReference": {"reference": "Medication/6"}},
+                {"medicationReference": {"reference": "Medication/7"}},
+                {"medicationReference": {"reference": "Medication/8"}},
+                {"medicationReference": {"reference": "Medication/9"}},
+                {"medicationReference": {"reference": "Medication/10"}},
+            ],
+        )
+
+        async def slow_explode(client, id_pool, reference, expected_type):
+            raise RuntimeError("oops")
+
+        with self.assertRaisesRegex(SystemExit, "oops"):
+            with mock.patch("smart_extract.hydrate_utils.download_reference", new=slow_explode):
+                await self.cli("hydrate", self.folder, "--hydration-tasks=meds")

@@ -260,9 +260,46 @@ class BulkTests(utils.TestCase):
         self.assertIn("Messages from server:\n - warning1\n", stdout.getvalue())
 
     async def test_kickoff_error(self):
-        self.mock_bulk("group1", kickoff_response=httpx.Response(404))
+        self.mock_bulk("group1", kickoff_response=httpx.Response(404, json={"err": "404"}))
         with self.assertRaisesRegex(SystemExit, "An error occurred when connecting to"):
             await self.cli("bulk", self.folder, "--group=group1")
+
+    @mock.patch("asyncio.sleep", side_effect=RuntimeError("insomnia"))
+    @mock.patch("uuid.uuid4", new=lambda: "1234")
+    async def test_log_non_network_kickoff_error(self, mock_sleep):
+        """Confirm that we log unexpected code/runtime errors"""
+        self.mock_bulk("group1", kickoff_response=httpx.Response(500))
+
+        # These errors we don't catch, since they are unexpected programming errors.
+        # But we do still log them.
+        with self.assertRaisesRegex(RuntimeError, "insomnia"):
+            await self.cli("bulk", self.folder, "--group=group1", "--type", resources.CONDITION)
+
+        self.assert_folder(
+            {
+                "log.ndjson": [
+                    {
+                        "exportId": "1234",  # did not have time to get a status URL
+                        "timestamp": timing.now().isoformat(),
+                        "eventId": "kickoff",
+                        "_client": "smart-extract",
+                        "_clientVersion": "1!0.0.0",
+                        "eventDetail": {
+                            "exportUrl": f"{self.url}/Group/group1/$export?"
+                            f"_type={resources.CONDITION}",
+                            "softwareName": None,
+                            "softwareVersion": None,
+                            "softwareReleaseDate": None,
+                            "fhirVersion": None,
+                            "requestParameters": {"_type": resources.CONDITION},
+                            "errorCode": None,
+                            "errorBody": "insomnia",
+                            "responseHeaders": None,
+                        },
+                    },
+                ],
+            }
+        )
 
     async def test_download_error(self):
         self.mock_bulk("group1", output=[httpx.Response(400)])
