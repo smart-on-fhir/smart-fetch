@@ -371,7 +371,11 @@ class ExportTests(utils.TestCase):
                     "log.ndjson": None,
                     "DiagnosticReport.000.ndjson.gz": [dxr1],
                     "Observation.ndjson.gz": [
-                        {"resourceType": resources.OBSERVATION, "id": "obs1", "hasMember": [{"reference": "Observation/obs2"}]},
+                        {
+                            "resourceType": resources.OBSERVATION,
+                            "id": "obs1",
+                            "hasMember": [{"reference": "Observation/obs2"}],
+                        },
                         {"resourceType": resources.OBSERVATION, "id": "obs2"},
                     ],
                     "Patient.000.ndjson.gz": [pat1],

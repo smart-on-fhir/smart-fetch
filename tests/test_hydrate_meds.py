@@ -1,4 +1,3 @@
-import httpx
 
 from smart_extract import resources
 from tests import utils

@@ -1,4 +1,3 @@
-import asyncio
 import contextlib
 import io
 from unittest import mock
@@ -134,7 +133,8 @@ class HydrateTests(utils.TestCase):
         """We should complain loudly about this - shouldn't happen"""
         # Write so many MedReqs out, so we can exercise our queue-draining code
         self.write_res(
-            resources.MEDICATION_REQUEST, [
+            resources.MEDICATION_REQUEST,
+            [
                 {"medicationReference": {"reference": "Medication/0"}},
                 {"medicationReference": {"reference": "Medication/1"}},
                 {"medicationReference": {"reference": "Medication/2"}},

@@ -123,8 +123,13 @@ class CommandLineTests(utils.TestCase):
     async def test_fallback_clients(self, mock_client):
         # Confirm we use rest auth for bulk if needed
         with self.assertRaises(SystemExit):
-            await self.cli("export", self.folder, "--type=help", "--smart-client-id=rest",
-                           "--smart-key=rest.jwks")
+            await self.cli(
+                "export",
+                self.folder,
+                "--type=help",
+                "--smart-client-id=rest",
+                "--smart-key=rest.jwks",
+            )
         self.assertEqual(mock_client.call_count, 2)
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "rest")
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "rest.jwks")
@@ -135,8 +140,13 @@ class CommandLineTests(utils.TestCase):
 
         # And the reverse
         with self.assertRaises(SystemExit):
-            await self.cli("export", self.folder, "--type=help", "--bulk-smart-client-id=bulk",
-                           "--bulk-smart-key=bulk.jwks")
+            await self.cli(
+                "export",
+                self.folder,
+                "--type=help",
+                "--bulk-smart-client-id=bulk",
+                "--bulk-smart-key=bulk.jwks",
+            )
         self.assertEqual(mock_client.call_count, 2)
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "bulk")
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "bulk.jwks")
@@ -147,9 +157,15 @@ class CommandLineTests(utils.TestCase):
 
         # And finally, confirm we can provide both
         with self.assertRaises(SystemExit):
-            await self.cli("export", self.folder, "--type=help",  "--smart-client-id=rest",
-                           "--smart-key=rest.jwks", "--bulk-smart-client-id=bulk",
-                           "--bulk-smart-key=bulk.jwks")
+            await self.cli(
+                "export",
+                self.folder,
+                "--type=help",
+                "--smart-client-id=rest",
+                "--smart-key=rest.jwks",
+                "--bulk-smart-client-id=bulk",
+                "--bulk-smart-key=bulk.jwks",
+            )
         self.assertEqual(mock_client.call_count, 2)
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_client_id"], "rest")
         self.assertEqual(mock_client.call_args_list[0].kwargs["smart_key"], "rest.jwks")
