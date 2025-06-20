@@ -132,11 +132,22 @@ async def finish_resource(
     client: cfs.FhirClient, workdir: str, res_type: str, open_client: bool = False
 ):
     async def run_hydration_tasks():
-        # We don't provide a source_dir, because we want the hydration to only affect this most
-        # recent export in the workdir.
-        for task_type, task_func in tasks.all_tasks.values():
-            if task_type == res_type:
-                await task_func(client, workdir)
+        done_types = set()
+        loop_types = {res_type}
+        while loop_types:
+            next_loop_types = set()
+            for task_name, task_info in tasks.all_tasks.items():
+                input_type, output_type, task_func = task_info
+                if input_type in loop_types:
+                    # We don't provide a source_dir, because we want the hydration to only affect
+                    # this most recent export subfolder, not other exports.
+                    await task_func(client, workdir)
+                if output_type not in done_types:
+                    # We wrote a new type out - we should iterate again to hydrate the new
+                    # resources, as needed
+                    next_loop_types.add(output_type)
+            done_types |= loop_types
+            loop_types = next_loop_types
 
     if open_client:
         async with client:

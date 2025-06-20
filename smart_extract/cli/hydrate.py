@@ -56,6 +56,6 @@ async def hydrate_main(args: argparse.Namespace) -> None:
     async with client:
         for task_name in tasks.all_tasks:
             if task_name in cli_tasks or "all" in cli_tasks:
-                await tasks.all_tasks[task_name][1](
+                await tasks.all_tasks[task_name][2](
                     client, args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
                 )

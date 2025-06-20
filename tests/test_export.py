@@ -323,14 +323,33 @@ class ExportTests(utils.TestCase):
         dxr1 = {
             "resourceType": resources.DIAGNOSTIC_REPORT,
             "id": "dxr1",
-            "result": [{"reference": "Observation/obs2"}],
+            "result": [{"reference": "Observation/obs1"}],
         }
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            match res_id:
+                case "obs1":
+                    return self.basic_resource(
+                        # Recursive - confirm that we then run obs-members on the results,
+                        # despite this not being originally an observation export.
+                        request,
+                        res_type,
+                        res_id,
+                        hasMember=[{"reference": "Observation/obs2"}],
+                    )
+                case "obs2":
+                    return self.basic_resource(request, res_type, res_id)
+                case _:
+                    assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+
         self.mock_bulk(
             "group1",
             output=[pat1, dxr1],
             params={"_type": f"{resources.DIAGNOSTIC_REPORT},{resources.PATIENT}"},
         )
-        self.set_basic_resource_route()
+
         await self.cli(
             "export",
             self.folder,
@@ -352,6 +371,7 @@ class ExportTests(utils.TestCase):
                     "log.ndjson": None,
                     "DiagnosticReport.000.ndjson.gz": [dxr1],
                     "Observation.ndjson.gz": [
+                        {"resourceType": resources.OBSERVATION, "id": "obs1", "hasMember": [{"reference": "Observation/obs2"}]},
                         {"resourceType": resources.OBSERVATION, "id": "obs2"},
                     ],
                     "Patient.000.ndjson.gz": [pat1],
