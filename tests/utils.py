@@ -19,10 +19,12 @@ FROZEN_DATETIME = datetime.datetime(
 )
 FROZEN_TIMESTAMP = FROZEN_DATETIME.astimezone().isoformat()
 
+DEFAULT_OBS_CATEGORIES = (
+    "social-history,vital-signs,imaging,laboratory,survey,exam,procedure,therapy,activity"
+)
 DEFAULT_OBS_FILTER = (
-    f"{resources.OBSERVATION}?category=social-history,vital-signs,"
-    f"imaging,laboratory,survey,exam,procedure,therapy,activity"
-).replace(",", "%2C")
+    f"{resources.OBSERVATION}?category={DEFAULT_OBS_CATEGORIES.replace(",", "%2C")}"
+)
 
 version = smart_extract.__version__
 
@@ -65,7 +67,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
 
     def set_resource_route(self, callback):
         route = self.server.get(
-            url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)[^\$]*$"
+            url__regex=rf"{self.url}/(?P<res_type>[^/]+)/(?P<res_id>[^/?]+)[^/\$]*$"
         )
         route.side_effect = callback
 
@@ -91,14 +93,14 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                         "entry": [{"resource": resource} for resource in entries],
                     },
                 )
-            assert False, f"Invalid request: {request.url.params}"
+            assert False, f"Invalid request: {request}"
 
         self.set_resource_search_route(respond)
 
         return all_params
 
     def set_resource_search_route(self, callback):
-        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)[^\$]*$")
+        route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^/?]+)[^/\$]*$")
         route.side_effect = callback
 
     async def cli(self, *args) -> None:
