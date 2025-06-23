@@ -1,5 +1,6 @@
 import argparse
 import enum
+import logging
 import sys
 import tomllib
 from collections.abc import Iterable
@@ -46,6 +47,11 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
 
 
 def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> list[str]:
+    """
+    Returns a subset of `res_types` based on what the server supports.
+
+    For example, the demo SMART bulk export server does not support ServiceRequest.
+    """
     for rest in client.capabilities.get("rest", []):
         if rest.get("mode") == "server" and "resource" in rest:
             break
@@ -55,26 +61,31 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
     server_types = {res["type"] for res in rest["resource"] if "type" in res}
     for res_type in sorted(res_types):
         if res_type not in server_types:
-            print(f"Skipping {res_type} because the server does not support it.")
+            logging.info(f"Skipping {res_type} because the server does not support it.")
 
     return [x for x in res_types if x in server_types]
 
 
 def parse_resource_selection(types: str) -> list[str]:
+    """
+    Determines the list of resource types based on the requested CLI values.
+
+    Handles "help", "all", and case-insensitivity.
+    """
     orig_types = set(types.split(",")) if types else {"all"}
     lower_types = {t.casefold() for t in orig_types}
 
     def print_help():
-        print("These types are supported:")
-        print("  all")
+        rich.get_console().print("These types are supported:")
+        rich.get_console().print("  all")
         for pat_type in resources.PATIENT_TYPES:
-            print(f"  {pat_type}")
+            rich.get_console().print(f"  {pat_type}")
 
     # Check if any provided types are bogus
     for orig_type in orig_types:
         if orig_type.casefold() not in ALLOWED_CASE_MAP:
-            print(f"Unknown resource type provided: {orig_type}")
-            print()
+            rich.get_console().print(f"Unknown resource type provided: {orig_type}")
+            rich.get_console().print()
             print_help()
             sys.exit(2)
 
@@ -92,6 +103,7 @@ def parse_resource_selection(types: str) -> list[str]:
 def parse_type_filters(
     server_type: cfs.ServerType, res_types: Iterable[str], type_filters: list[str] | None
 ) -> Filters:
+    """Parses the incoming --type-filter arguments and adds in default filters."""
     # First, break out what the user provided on the CLI
     filters = {}
     for res_type in res_types:
@@ -99,7 +111,6 @@ def parse_type_filters(
 
     for type_filter in type_filters or []:
         if "?" not in type_filter:
-            print("MIKE", type_filter)
             sys.exit("Type filter arguments must be in the format 'Resource?params'.")
         res_type, params = type_filter.split("?", 1)
         if res_type not in filters:
@@ -120,6 +131,7 @@ def parse_type_filters(
 
 
 def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
+    """Converts "auto" into created or updated based on whether the server supports created."""
     if not since_mode or since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
@@ -132,10 +144,22 @@ def add_since_filter(
     filters: Filters,
     since: str | None,
     since_mode: SinceMode,
-) -> None:
-    """Returns calculated since mode (based on server type)"""
+) -> Filters:
+    """
+    Modifies `filters` by adding parameters to search for resources "since" a certain time.
+
+    This is not bulk export's _since parameter, but rather a way to emulate it.
+
+    The "updated" mode fakes _since by just searching for _lastUpdated.
+
+    The "created" mode fakes _since by searching for per-resource fields (when they are available)
+    for a date that is as close to creation date as possible. This is necessary for servers that
+    don't offer a meta.lastUpdated field (like Epic).
+
+    Returns the modified filters object.
+    """
     if not since:
-        return
+        return filters
 
     def add_filter(res_type: str, field: str) -> None:
         if res_type not in filters:
@@ -163,6 +187,8 @@ def add_since_filter(
     else:  # UPDATED mode
         for res_type in filters:
             add_filter(res_type, "_lastUpdated")
+
+    return filters
 
 
 # COHORT SELECTION
@@ -238,18 +264,21 @@ def add_general(parser: argparse.ArgumentParser) -> None:
 
 
 def load_config(args) -> None:
-    if args.config:
-        with open(args.config, "rb") as f:
-            data = tomllib.load(f)
+    """Loads a config file and injects the contents into our CLI argument list"""
+    if not args.config:
+        return
 
-        for key in data:
-            prop = key.replace("-", "_")
-            if prop in args and getattr(args, prop) is None:
-                if prop in {"type_filter"}:
-                    # Special handling for "append" types, to upgrade to list
-                    if isinstance(data[key], str):
-                        data[key] = [data[key]]
-                setattr(args, prop, data[key])
+    with open(args.config, "rb") as f:
+        data = tomllib.load(f)
+
+    for key in data:
+        prop = key.replace("-", "_")
+        if prop in args and getattr(args, prop) is None:
+            if prop in {"type_filter"}:
+                # Special handling for "append" types, to upgrade to list
+                if isinstance(data[key], str):
+                    data[key] = [data[key]]
+            setattr(args, prop, data[key])
 
 
 def create_client_for_cli(

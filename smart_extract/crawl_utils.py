@@ -1,5 +1,7 @@
 import csv
 import datetime
+import json
+import logging
 import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
@@ -7,11 +9,18 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
+import rich.progress
 
 from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
 
 def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: datetime.datetime):
+    """
+    Creates a "fake" bulk export log, like a bulk export would have made.
+
+    This is useful to let other tools that process bulk logs to treat this folder as one, and
+    extract information like transactionTime and the group name.
+    """
     url = (
         os.path.join(fhir_url, "Group", group, "$export")
         if group
@@ -75,7 +84,7 @@ async def perform_crawl(
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
     if resources.PATIENT in filters:
         if metadata.is_done(resources.PATIENT):
-            print(f"Skipping {resources.PATIENT}, already done.")
+            logging.info(f"Skipping {resources.PATIENT}, already done.")
         else:
             await gather_patients(
                 bulk_client=bulk_client,
@@ -102,7 +111,7 @@ async def perform_crawl(
 
     for res_type in filters:
         if metadata.is_done(res_type):
-            print(f"Skipping {res_type}, already done.")
+            logging.info(f"Skipping {res_type}, already done.")
             continue
         processor.add_source(
             res_type, resource_urls(res_type, "patient=", patient_ids, filters), len(patient_ids)
@@ -110,7 +119,7 @@ async def perform_crawl(
 
     if processor.sources:
         await processor.run()
-        fake_bulk_export(group_name, fhir_url, workdir, transaction_time)
+        create_fake_log(workdir, fhir_url, group_name, transaction_time)
 
 
 async def gather_patients(
@@ -164,10 +173,12 @@ async def finish_wrapper(
     metadata: lifecycle.OutputMetadata,
     custom_finish: Callable[[str], Awaitable[None]] | None,
     res_type: str,
+    *,
+    progress: rich.progress.Progress | None = None,
 ) -> None:
     metadata.mark_done(res_type)
     if custom_finish:
-        await custom_finish(res_type)
+        await custom_finish(res_type, progress=progress)
 
 
 def read_patient_ids(folder: str) -> set[str]:
@@ -187,8 +198,24 @@ async def resource_urls(res_type, query_prefix, ids, filters) -> AsyncIterable[s
             yield url
 
 
-async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
-    response = await client.request("GET", url)
+async def crawl_bundle_chain(client: cfs.FhirClient, url: str) -> AsyncIterable[dict]:
+    try:
+        response = await client.request("GET", url)
+    except cfs.NetworkError as exc:
+        try:
+            resource = exc.response and exc.response.json()
+        except json.JSONDecodeError:
+            resource = None
+        if resource and resource.get("resourceType") == resources.OPERATION_OUTCOME:
+            yield resource
+        else:
+            # Make up our own OperationOutcome to hold the error
+            yield {
+                "resourceType": resources.OPERATION_OUTCOME,
+                "issue": [{"severity": "error", "code": "exception", "diagnostics": str(exc)}],
+            }
+        return
+
     bundle = response.json()
     if bundle.get("resourceType") != resources.BUNDLE:
         return
@@ -204,6 +231,15 @@ async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
             break
 
 
+def _log_error(folder: str, resource: dict) -> None:
+    # Make a fake "error" folder, just like we'd see in a bulk export
+    error_subfolder = os.path.join(folder, "error")
+    os.makedirs(error_subfolder, exist_ok=True)
+    error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
+    with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
+        error_writer.write(resource)
+
+
 async def process(
     client,
     id_pool: dict[str, set[str]],
@@ -211,15 +247,11 @@ async def process(
     res_type: str,
     writer: ndjson.NdjsonWriter,
     url: str,
+    **kwargs,
 ) -> None:
     async for resource in crawl_bundle_chain(client, url):
-        if resource["resourceType"] == "OperationOutcome":
-            # Make a fake "error" folder, just like we'd see in a bulk export
-            error_subfolder = os.path.join(folder, "error")
-            os.makedirs(error_subfolder, exist_ok=True)
-            error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
-            with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
-                error_writer.write(resource)
+        if resource["resourceType"] == resources.OPERATION_OUTCOME:
+            _log_error(folder, resource)
             continue
 
         res_pool = id_pool.get(resource["resourceType"])
@@ -229,7 +261,3 @@ async def process(
             res_pool.add(resource["id"])
 
         writer.write(resource)
-
-
-def fake_bulk_export(group: str, fhir_url: str, folder: str, start_time: datetime.datetime) -> None:
-    create_fake_log(folder, fhir_url, group, start_time)

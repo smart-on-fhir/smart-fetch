@@ -4,6 +4,7 @@ import hashlib
 from functools import partial
 
 import cumulus_fhir_support as cfs
+import rich.progress
 
 from smart_extract import hydrate_utils, resources
 
@@ -22,38 +23,62 @@ def parse_content_type(content_type: str) -> (str, str):
     return msg.get_content_type(), msg.get_content_charset("utf8")
 
 
-async def task_doc_inline(
-    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
-):
+async def _inline_task(
+    *,
+    client: cfs.FhirClient,
+    task_name: str,
+    input_type: str,
+    workdir: str,
+    mimetypes: str | None = None,
+    progress: rich.progress.Progress | None = None,
+) -> None:
     mimetypes = parse_mimetypes(mimetypes)
     stats = await hydrate_utils.process(
         client=client,
-        task_name="doc-inline",
+        task_name=task_name,
         desc="Inlining",
         workdir=workdir,
-        input_type=resources.DOCUMENT_REFERENCE,
+        input_type=input_type,
         callback=partial(_inline_resource, mimetypes),
         append=False,
+        progress=progress,
     )
     if stats:
-        stats.print("inlined", f"{resources.DOCUMENT_REFERENCE}s", "Attachments")
+        stats.print("inlined", f"{input_type}s", "Attachments")
+
+
+async def task_doc_inline(
+    client: cfs.FhirClient,
+    workdir: str,
+    mimetypes: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
+):
+    await _inline_task(
+        client=client,
+        task_name="doc-inline",
+        workdir=workdir,
+        input_type=resources.DOCUMENT_REFERENCE,
+        mimetypes=mimetypes,
+        progress=progress,
+    )
 
 
 async def task_dxr_inline(
-    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    mimetypes: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
-    mimetypes = parse_mimetypes(mimetypes)
-    stats = await hydrate_utils.process(
+    await _inline_task(
         client=client,
         task_name="dxr-inline",
-        desc="Inlining",
         workdir=workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
-        callback=partial(_inline_resource, mimetypes),
-        append=False,
+        mimetypes=mimetypes,
+        progress=progress,
     )
-    if stats:
-        stats.print("inlined", f"{resources.DIAGNOSTIC_REPORT}s", "Attachments")
 
 
 async def _inline_resource(

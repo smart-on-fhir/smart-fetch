@@ -39,6 +39,7 @@ no matter what happens with your EHR later.
 ### Example Hydration Tasks
 
 - Inlining clinical notes from DiagnosticReport or DocumentReference
+  (it's more reliable to get the note once upfront, and then you have it forever)
 - Adding missing Observations (several EHRs don't provide
   DiagnosticReport.result or Observation.hasMember linked
   Observations by default in a search/export)

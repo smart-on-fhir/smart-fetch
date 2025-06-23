@@ -1,6 +1,7 @@
 """Do a standalone bulk export from an EHR"""
 
 import argparse
+import logging
 import sys
 
 import cumulus_fhir_support as cfs
@@ -49,7 +50,7 @@ async def export_main(args: argparse.Namespace) -> None:
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
         if since_mode == cli_utils.SinceMode.CREATED:
-            cli_utils.add_since_filter(filters, args.since, since_mode)
+            filters = cli_utils.add_since_filter(filters, args.since, since_mode)
             args.since = None
         # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
         # it with _lastUpdated, because _since has extra logic around older resources of patients
@@ -73,4 +74,4 @@ async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> No
     async with bulk_client:
         exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)
         await exporter.cancel()
-        print("Export cancelled.")
+        logging.info("Export cancelled.")

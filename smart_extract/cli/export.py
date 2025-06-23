@@ -4,12 +4,14 @@ import argparse
 import enum
 import glob
 import hashlib
+import logging
 import os
 import re
 from functools import partial
 
 import cumulus_fhir_support as cfs
 import rich
+import rich.progress
 
 from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, resources, tasks
 
@@ -61,7 +63,7 @@ async def export_main(args: argparse.Namespace) -> None:
         filters = cli_utils.parse_type_filters(client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, client.server_type)
         if since_mode == cli_utils.SinceMode.CREATED or export_mode == ExportMode.CRAWL:
-            cli_utils.add_since_filter(filters, args.since, since_mode)
+            filters = cli_utils.add_since_filter(filters, args.since, since_mode)
             args.since = None
         # else if in bulk/UPDATED mode, we use Bulk Export's _since param, which is better than
         # faking it with _lastUpdated, because _since has extra logic around older resources of
@@ -129,7 +131,12 @@ def calculate_workdir(filters: cli_utils.Filters, since: str | None) -> str:
 
 
 async def finish_resource(
-    client: cfs.FhirClient, workdir: str, res_type: str, open_client: bool = False
+    client: cfs.FhirClient,
+    workdir: str,
+    res_type: str,
+    *,
+    open_client: bool = False,
+    progress: rich.progress.Progress | None = None,
 ):
     async def run_hydration_tasks():
         done_types = set()
@@ -138,14 +145,18 @@ async def finish_resource(
             next_loop_types = set()
             for task_name, task_info in tasks.all_tasks.items():
                 input_type, output_type, task_func = task_info
-                if input_type in loop_types:
-                    # We don't provide a source_dir, because we want the hydration to only affect
-                    # this most recent export subfolder, not other exports.
-                    await task_func(client, workdir)
+                if input_type not in loop_types:
+                    continue
+
+                # We don't provide a source_dir, because we want the hydration to only affect
+                # this most recent export subfolder, not other exports.
+                await task_func(client, workdir, progress=progress)
+
                 if output_type not in done_types:
                     # We wrote a new type out - we should iterate again to hydrate the new
                     # resources, as needed
                     next_loop_types.add(output_type)
+
             done_types |= loop_types
             loop_types = next_loop_types
 
@@ -171,7 +182,7 @@ def make_links(workdir: str, res_type: str) -> None:
     for filename in cfs.list_multiline_json_in_dir(workdir, res_type):
         ndjson_name = os.path.basename(filename)
         if not ndjson_name.endswith(".ndjson.gz"):
-            print(f"Found unexpected filename {ndjson_name}, not linking.")
+            logging.info(f"Found unexpected filename {ndjson_name}, not linking.")
             continue
 
         target = os.path.join(work_name, ndjson_name)

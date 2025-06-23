@@ -1,4 +1,5 @@
 import cumulus_fhir_support as cfs
+import rich.progress
 
 from smart_extract import hydrate_utils, resources
 
@@ -17,7 +18,11 @@ async def _download_members(client, resource: dict, id_pool: set[str]) -> hydrat
 
 
 async def task_obs_members(
-    client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     stats = await hydrate_utils.process(
         client=client,
@@ -27,6 +32,7 @@ async def task_obs_members(
         source_dir=source_dir or workdir,
         input_type=resources.OBSERVATION,
         callback=_download_members,
+        progress=progress,
     )
     if stats:
         stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
@@ -42,7 +48,11 @@ async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> hyd
 
 
 async def task_obs_dxr(
-    client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     stats = await hydrate_utils.process(
         client=client,
@@ -53,6 +63,7 @@ async def task_obs_dxr(
         input_type=resources.DIAGNOSTIC_REPORT,
         output_type=resources.OBSERVATION,
         callback=_download_dxr_result,
+        progress=progress,
     )
     if stats:
         stats.print(
