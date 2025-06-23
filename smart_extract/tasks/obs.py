@@ -27,12 +27,13 @@ async def task_obs_members(
     stats = await hydrate_utils.process(
         client=client,
         task_name="obs-members",
-        desc="Downloading",
+        desc="Downloading member",
         workdir=workdir,
         source_dir=source_dir or workdir,
         input_type=resources.OBSERVATION,
         callback=_download_members,
         progress=progress,
+        file_slug="members",
     )
     if stats:
         stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
@@ -57,13 +58,14 @@ async def task_obs_dxr(
     stats = await hydrate_utils.process(
         client=client,
         task_name="dxr-results",
-        desc="Downloading",
+        desc="Downloading result",
         workdir=workdir,
         source_dir=source_dir or workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
         output_type=resources.OBSERVATION,
         callback=_download_dxr_result,
         progress=progress,
+        file_slug="results",
     )
     if stats:
         stats.print(

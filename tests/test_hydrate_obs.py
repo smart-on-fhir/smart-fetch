@@ -25,8 +25,8 @@ class HydrateObsMemberTests(utils.TestCase):
                     "version": utils.version,
                     "done": ["obs-members"],
                 },
-                f"{resources.OBSERVATION}.ndjson.gz": [
-                    *obs,
+                f"{resources.OBSERVATION}.ndjson.gz": obs,
+                f"{resources.OBSERVATION}.members.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a1"},
                     {"resourceType": resources.OBSERVATION, "id": "a2"},
                     {"resourceType": resources.OBSERVATION, "id": "b"},
@@ -75,6 +75,8 @@ class HydrateObsMemberTests(utils.TestCase):
                         "id": "0",
                         "hasMember": [{"reference": "Observation/a"}],
                     },
+                ],
+                f"{resources.OBSERVATION}.members.ndjson.gz": [
                     {
                         "resourceType": resources.OBSERVATION,
                         "id": "a",
@@ -123,7 +125,7 @@ class HydrateObsDxrTests(utils.TestCase):
                     "done": ["dxr-results"],
                 },
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
-                f"{resources.OBSERVATION}.ndjson.gz": [
+                f"{resources.OBSERVATION}.results.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a"},
                     {"resourceType": resources.OBSERVATION, "id": "b"},
                     {"resourceType": resources.OBSERVATION, "id": "c"},
@@ -152,7 +154,7 @@ class HydrateObsDxrTests(utils.TestCase):
                     f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 },
                 ".metadata": None,
-                f"{resources.OBSERVATION}.ndjson.gz": [
+                f"{resources.OBSERVATION}.results.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a"},
                 ],
             }

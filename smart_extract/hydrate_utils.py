@@ -1,6 +1,7 @@
 import dataclasses
 import enum
 import logging
+import os
 from collections.abc import AsyncIterable, Callable
 from functools import partial
 
@@ -141,6 +142,7 @@ async def process(
     source_dir: str | None = None,
     output_type: str | None = None,
     append: bool = True,
+    file_slug: str | None = None,
     callback: Callable,
     progress: rich.progress.Progress | None = None,
 ) -> TaskStats | None:
@@ -155,6 +157,10 @@ async def process(
     if not append and output_type != input_type:
         raise ValueError(  # pragma: no cover
             "Must use same input and output type when re-writing resources"
+        )
+    if not append and file_slug:
+        raise ValueError(  # pragma: no cover
+            "Cannot provide a file slug when re-writing resources"
         )
     if not append:
         # Cannot use a separate source dir when re-writing resources, so enforce that here
@@ -187,7 +193,12 @@ async def process(
         workdir, desc, writer, append=append, progress=progress
     )
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
-        output_file = None if append else res_file
+        if not append:
+            output_file = res_file
+        elif file_slug:
+            output_file = os.path.join(workdir, f"{output_type}.{file_slug}.ndjson.gz")
+        else:
+            output_file = None
         total_lines = ndjson.read_local_line_count(res_file)
         processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
     await processor.run()

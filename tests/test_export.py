@@ -300,17 +300,90 @@ class ExportTests(utils.TestCase):
                     "51c899230c8523059734d6c168ea5971/Observation.000.ndjson.gz"
                 ),
                 "Observation.001.ndjson.gz": (
-                    "51c899230c8523059734d6c168ea5971/Observation.ndjson.gz"
+                    "51c899230c8523059734d6c168ea5971/Observation.results.ndjson.gz"
                 ),
                 "Patient.000.ndjson.gz": "51c899230c8523059734d6c168ea5971/Patient.000.ndjson.gz",
                 "51c899230c8523059734d6c168ea5971": {
                     ".metadata": None,
                     "log.ndjson": None,
                     "DiagnosticReport.000.ndjson.gz": [dxr1],
-                    "Observation.ndjson.gz": [
+                    "Observation.results.ndjson.gz": [
                         {"resourceType": resources.OBSERVATION, "id": "obs2"},
                     ],
                     "Observation.000.ndjson.gz": [obs1],
+                    "Patient.000.ndjson.gz": [pat1],
+                },
+                ".metadata": None,
+            }
+        )
+
+    async def test_dxr_results_hydration_together_via_crawl(self):
+        """Run DxReports and then Observations and ensure the observations don't collide"""
+        # These resources both download initial observations, but also have DxReport.result
+        # and Observation.hasMember links to further observations. All of these should come through.
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        dxr1 = {
+            "resourceType": resources.DIAGNOSTIC_REPORT,
+            "id": "dxr1",
+            "result": [{"reference": "Observation/res-obs"}],
+        }
+        obs1 = {"resourceType": resources.OBSERVATION, "id": "obs1",
+                "hasMember": [{"reference": f"{resources.OBSERVATION}/obs1.member"}]}
+        res_obs = {"resourceType": resources.OBSERVATION, "id": "res-obs",
+                "hasMember": [{"reference": f"{resources.OBSERVATION}/res-obs.member"}]}
+
+        def respond(
+            request: httpx.Request, res_type: str, res_id: str, **kwargs
+        ) -> httpx.Response:
+            if res_type == resources.OBSERVATION and res_id == "res-obs":
+                return httpx.Response(200, request=request, json=res_obs)
+            else:
+                return self.basic_resource(request, res_type, res_id)
+
+        params = {
+            resources.DIAGNOSTIC_REPORT: {httpx.QueryParams(patient="pat1"): [dxr1]},
+            resources.OBSERVATION: {
+                httpx.QueryParams(patient="pat1", category=utils.DEFAULT_OBS_CATEGORIES): [obs1]
+            },
+        }
+        missing = self.set_resource_search_queries(params)
+        self.set_resource_route(respond)
+        self.mock_bulk("group1", output=[pat1], params={ "_type": resources.PATIENT})
+
+        await self.cli(
+            "export",
+            self.folder,
+            "--group=group1",
+            "--export-mode=crawl",
+            f"--type={resources.PATIENT},{resources.OBSERVATION},{resources.DIAGNOSTIC_REPORT}",
+        )
+
+        self.assertEqual(missing, [])
+        self.assert_folder(
+            {
+                "DiagnosticReport.000.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/DiagnosticReport.ndjson.gz"
+                ),
+                "Observation.000.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/Observation.members.ndjson.gz"
+                ),
+                "Observation.001.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/Observation.results.ndjson.gz"
+                ),
+                "Observation.002.ndjson.gz": (
+                    "51c899230c8523059734d6c168ea5971/Observation.ndjson.gz"
+                ),
+                "Patient.000.ndjson.gz": "51c899230c8523059734d6c168ea5971/Patient.000.ndjson.gz",
+                "51c899230c8523059734d6c168ea5971": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "DiagnosticReport.ndjson.gz": [dxr1],
+                    "Observation.ndjson.gz": [obs1],
+                    "Observation.members.ndjson.gz": [
+                        {"resourceType": resources.OBSERVATION, "id": "obs1.member"},
+                        {"resourceType": resources.OBSERVATION, "id": "res-obs.member"},
+                    ],
+                    "Observation.results.ndjson.gz": [res_obs],
                     "Patient.000.ndjson.gz": [pat1],
                 },
                 ".metadata": None,
@@ -363,20 +436,25 @@ class ExportTests(utils.TestCase):
                     "2ad4e53a236e44752ccc301537e74320/DiagnosticReport.000.ndjson.gz"
                 ),
                 "Observation.000.ndjson.gz": (
-                    "2ad4e53a236e44752ccc301537e74320/Observation.ndjson.gz"
+                    "2ad4e53a236e44752ccc301537e74320/Observation.members.ndjson.gz"
+                ),
+                "Observation.001.ndjson.gz": (
+                    "2ad4e53a236e44752ccc301537e74320/Observation.results.ndjson.gz"
                 ),
                 "Patient.000.ndjson.gz": "2ad4e53a236e44752ccc301537e74320/Patient.000.ndjson.gz",
                 "2ad4e53a236e44752ccc301537e74320": {
                     ".metadata": None,
                     "log.ndjson": None,
                     "DiagnosticReport.000.ndjson.gz": [dxr1],
-                    "Observation.ndjson.gz": [
+                    "Observation.members.ndjson.gz": [
+                        {"resourceType": resources.OBSERVATION, "id": "obs2"},
+                    ],
+                    "Observation.results.ndjson.gz": [
                         {
                             "resourceType": resources.OBSERVATION,
                             "id": "obs1",
                             "hasMember": [{"reference": "Observation/obs2"}],
                         },
-                        {"resourceType": resources.OBSERVATION, "id": "obs2"},
                     ],
                     "Patient.000.ndjson.gz": [pat1],
                 },
