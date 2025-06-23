@@ -18,8 +18,11 @@ async def _download_members(client, resource: dict, id_pool: set[str]) -> hydrat
 
 
 async def task_obs_members(
-    client: cfs.FhirClient, workdir: str, source_dir: str | None = None,
-    progress: rich.progress.Progress | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     stats = await hydrate_utils.process(
         client=client,
@@ -45,8 +48,11 @@ async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> hyd
 
 
 async def task_obs_dxr(
-    client: cfs.FhirClient, workdir: str, source_dir: str | None = None,
-    progress: rich.progress.Progress | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     stats = await hydrate_utils.process(
         client=client,

@@ -15,6 +15,12 @@ from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, 
 
 
 def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: datetime.datetime):
+    """
+    Creates a "fake" bulk export log, like a bulk export would have made.
+
+    This is useful to let other tools that process bulk logs to treat this folder as one, and
+    extract information like transactionTime and the group name.
+    """
     url = (
         os.path.join(fhir_url, "Group", group, "$export")
         if group
@@ -113,7 +119,7 @@ async def perform_crawl(
 
     if processor.sources:
         await processor.run()
-        fake_bulk_export(group_name, fhir_url, workdir, transaction_time)
+        create_fake_log(workdir, fhir_url, group_name, transaction_time)
 
 
 async def gather_patients(
@@ -255,7 +261,3 @@ async def process(
             res_pool.add(resource["id"])
 
         writer.write(resource)
-
-
-def fake_bulk_export(group: str, fhir_url: str, folder: str, start_time: datetime.datetime) -> None:
-    create_fake_log(folder, fhir_url, group, start_time)

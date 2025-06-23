@@ -131,7 +131,11 @@ def calculate_workdir(filters: cli_utils.Filters, since: str | None) -> str:
 
 
 async def finish_resource(
-    client: cfs.FhirClient, workdir: str, res_type: str, *, open_client: bool = False,
+    client: cfs.FhirClient,
+    workdir: str,
+    res_type: str,
+    *,
+    open_client: bool = False,
     progress: rich.progress.Progress | None = None,
 ):
     async def run_hydration_tasks():

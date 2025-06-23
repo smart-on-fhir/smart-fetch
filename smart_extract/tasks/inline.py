@@ -24,8 +24,11 @@ def parse_content_type(content_type: str) -> (str, str):
 
 
 async def task_doc_inline(
-    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None,
-    progress: rich.progress.Progress | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    mimetypes: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     mimetypes = parse_mimetypes(mimetypes)
     stats = await hydrate_utils.process(
@@ -43,8 +46,11 @@ async def task_doc_inline(
 
 
 async def task_dxr_inline(
-    client: cfs.FhirClient, workdir: str, mimetypes: str | None = None,
-    progress: rich.progress.Progress | None = None, **kwargs
+    client: cfs.FhirClient,
+    workdir: str,
+    mimetypes: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
 ):
     mimetypes = parse_mimetypes(mimetypes)
     stats = await hydrate_utils.process(

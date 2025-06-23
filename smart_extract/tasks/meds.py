@@ -9,8 +9,13 @@ async def _download_med(client, resource: dict, id_pool: set[str]) -> hydrate_ut
     return [await hydrate_utils.download_reference(client, id_pool, med_ref, resources.MEDICATION)]
 
 
-async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None = None,
-    progress: rich.progress.Progress | None = None, **kwargs):
+async def task_meds(
+    client: cfs.FhirClient,
+    workdir: str,
+    source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None,
+    **kwargs,
+):
     stats = await hydrate_utils.process(
         client=client,
         task_name="meds",

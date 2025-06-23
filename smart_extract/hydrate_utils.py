@@ -144,6 +144,11 @@ async def process(
     callback: Callable,
     progress: rich.progress.Progress | None = None,
 ) -> TaskStats | None:
+    """
+    Reads resources from a folder, and calls `callback` on each one.
+
+    This implements the guts of our hydration task workflow.
+    """
     output_type = output_type or input_type
     source_dir = source_dir or workdir
 
@@ -178,7 +183,9 @@ async def process(
     # Iterate through inputs
     stats = TaskStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
-    processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append, progress=progress)
+    processor = iter_utils.ResourceProcessor(
+        workdir, desc, writer, append=append, progress=progress
+    )
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         output_file = None if append else res_file
         total_lines = ndjson.read_local_line_count(res_file)

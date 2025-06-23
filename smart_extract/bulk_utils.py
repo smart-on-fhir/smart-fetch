@@ -458,7 +458,9 @@ class BulkExporter:
         # Were there any server-side errors during the export?
         error_texts, warning_texts = self._gather_all_messages()
         if warning_texts:
-            rich.get_console().print("\n - ".join(["Messages from server:", *sorted(warning_texts)]))
+            rich.get_console().print(
+                "\n - ".join(["Messages from server:", *sorted(warning_texts)])
+            )
 
         # Make sure we're fully done before we bail because the server told us the export has
         # issues. We still want to DELETE the export in this case. And we still want to download
@@ -492,7 +494,9 @@ class BulkExporter:
         self._log.kickoff(self.export_url, self._client.capabilities, response)
 
         rich.get_console().print()
-        rich.get_console().print("If interrupted, try again but add the following argument to resume the export:")
+        rich.get_console().print(
+            "If interrupted, try again but add the following argument to resume the export:"
+        )
         rich.get_console().print(
             # Quote the poll location here only so that it's easier to copy & paste the whole
             # argument in one double-click. Colons are often used as separators in word-

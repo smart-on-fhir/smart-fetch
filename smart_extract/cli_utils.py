@@ -47,6 +47,11 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
 
 
 def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> list[str]:
+    """
+    Returns a subset of `res_types` based on what the server supports.
+
+    For example, the demo SMART bulk export server does not support ServiceRequest.
+    """
     for rest in client.capabilities.get("rest", []):
         if rest.get("mode") == "server" and "resource" in rest:
             break
@@ -62,6 +67,11 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
 
 
 def parse_resource_selection(types: str) -> list[str]:
+    """
+    Determines the list of resource types based on the requested CLI values.
+
+    Handles "help", "all", and case-insensitivity.
+    """
     orig_types = set(types.split(",")) if types else {"all"}
     lower_types = {t.casefold() for t in orig_types}
 
@@ -93,6 +103,7 @@ def parse_resource_selection(types: str) -> list[str]:
 def parse_type_filters(
     server_type: cfs.ServerType, res_types: Iterable[str], type_filters: list[str] | None
 ) -> Filters:
+    """Parses the incoming --type-filter arguments and adds in default filters."""
     # First, break out what the user provided on the CLI
     filters = {}
     for res_type in res_types:
@@ -120,6 +131,7 @@ def parse_type_filters(
 
 
 def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
+    """Converts "auto" into created or updated based on whether the server supports created."""
     if not since_mode or since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
@@ -238,18 +250,21 @@ def add_general(parser: argparse.ArgumentParser) -> None:
 
 
 def load_config(args) -> None:
-    if args.config:
-        with open(args.config, "rb") as f:
-            data = tomllib.load(f)
+    """Loads a config file and injects the contents into our CLI argument list"""
+    if not args.config:
+        return
 
-        for key in data:
-            prop = key.replace("-", "_")
-            if prop in args and getattr(args, prop) is None:
-                if prop in {"type_filter"}:
-                    # Special handling for "append" types, to upgrade to list
-                    if isinstance(data[key], str):
-                        data[key] = [data[key]]
-                setattr(args, prop, data[key])
+    with open(args.config, "rb") as f:
+        data = tomllib.load(f)
+
+    for key in data:
+        prop = key.replace("-", "_")
+        if prop in args and getattr(args, prop) is None:
+            if prop in {"type_filter"}:
+                # Special handling for "append" types, to upgrade to list
+                if isinstance(data[key], str):
+                    data[key] = [data[key]]
+            setattr(args, prop, data[key])
 
 
 def create_client_for_cli(
