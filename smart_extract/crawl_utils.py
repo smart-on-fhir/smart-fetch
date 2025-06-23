@@ -1,5 +1,6 @@
 import csv
 import datetime
+import json
 import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
@@ -187,8 +188,24 @@ async def resource_urls(res_type, query_prefix, ids, filters) -> AsyncIterable[s
             yield url
 
 
-async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
-    response = await client.request("GET", url)
+async def crawl_bundle_chain(client: cfs.FhirClient, url: str) -> AsyncIterable[dict]:
+    try:
+        response = await client.request("GET", url)
+    except cfs.NetworkError as exc:
+        try:
+            resource = exc.response and exc.response.json()
+        except json.JSONDecodeError:
+            resource = None
+        if resource and resource.get("resourceType") == resources.OPERATION_OUTCOME:
+            yield resource
+        else:
+            # Make up our own OperationOutcome to hold the error
+            yield {
+                "resourceType": resources.OPERATION_OUTCOME,
+                "issue": [{"severity": "error", "code": "exception", "diagnostics": str(exc)}],
+            }
+        return
+
     bundle = response.json()
     if bundle.get("resourceType") != resources.BUNDLE:
         return
@@ -204,6 +221,15 @@ async def crawl_bundle_chain(client, url: str) -> AsyncIterable[dict]:
             break
 
 
+def _log_error(folder: str, resource: dict) -> None:
+    # Make a fake "error" folder, just like we'd see in a bulk export
+    error_subfolder = os.path.join(folder, "error")
+    os.makedirs(error_subfolder, exist_ok=True)
+    error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
+    with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
+        error_writer.write(resource)
+
+
 async def process(
     client,
     id_pool: dict[str, set[str]],
@@ -213,13 +239,8 @@ async def process(
     url: str,
 ) -> None:
     async for resource in crawl_bundle_chain(client, url):
-        if resource["resourceType"] == "OperationOutcome":
-            # Make a fake "error" folder, just like we'd see in a bulk export
-            error_subfolder = os.path.join(folder, "error")
-            os.makedirs(error_subfolder, exist_ok=True)
-            error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
-            with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
-                error_writer.write(resource)
+        if resource["resourceType"] == resources.OPERATION_OUTCOME:
+            _log_error(folder, resource)
             continue
 
         res_pool = id_pool.get(resource["resourceType"])

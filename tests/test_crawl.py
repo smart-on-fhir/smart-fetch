@@ -283,15 +283,45 @@ class CrawlTests(utils.TestCase):
 
     async def test_errors(self):
         """Confirm we write out errors like a bulk export does"""
-        self.write_res(resources.PATIENT, [{"resourceType": resources.PATIENT, "id": "pat1"}])
+        self.write_res(
+            resources.PATIENT,
+            [
+                {"resourceType": resources.PATIENT, "id": "pat1"},
+                {"resourceType": resources.PATIENT, "id": "pat2"},
+                {"resourceType": resources.PATIENT, "id": "pat3"},
+            ],
+        )
 
         outcome1 = {"resourceType": resources.OPERATION_OUTCOME, "id": "outcome1"}
+        outcome2 = {
+            "resourceType": resources.OPERATION_OUTCOME,
+            "id": "outcome2",
+            "issue": [{"diagnostics": "outcome2"}],
+        }
+        outcome3 = {  # outcome created by us as a client
+            "resourceType": resources.OPERATION_OUTCOME,
+            "issue": [
+                {
+                    "severity": "error",
+                    "code": "exception",
+                    "diagnostics": "An error occurred when connecting to "
+                    '"http://example.invalid/R4/Encounter?patient=pat3": boo',
+                }
+            ],
+        }
         enc1 = {"resourceType": resources.ENCOUNTER, "id": "enc1"}
 
         def respond(request: httpx.Request, res_type: str) -> httpx.Response:
             if res_type == resources.ENCOUNTER:
                 if request.url.params == httpx.QueryParams(patient="pat1"):
+                    # Internal "error" (as part of a successful request)
                     return httpx.Response(200, json=self.make_bundle([enc1, outcome1]))
+                elif request.url.params == httpx.QueryParams(patient="pat2"):
+                    # More in-your-face "error" outcome (a failed request)
+                    return httpx.Response(404, json=outcome2)
+                elif request.url.params == httpx.QueryParams(patient="pat3"):
+                    # In-your-face random text
+                    return httpx.Response(404, text="boo")
             assert False, f"Invalid request: {request.url.params}"
 
         self.set_resource_search_route(respond)
@@ -305,7 +335,7 @@ class CrawlTests(utils.TestCase):
                 f"{resources.ENCOUNTER}.ndjson.gz": [enc1],
                 f"{resources.PATIENT}.ndjson.gz": None,
                 "error": {
-                    f"{resources.OPERATION_OUTCOME}.ndjson.gz": [outcome1],
+                    f"{resources.OPERATION_OUTCOME}.ndjson.gz": [outcome1, outcome2, outcome3],
                 },
             }
         )
