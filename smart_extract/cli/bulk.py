@@ -50,7 +50,7 @@ async def export_main(args: argparse.Namespace) -> None:
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
         if since_mode == cli_utils.SinceMode.CREATED:
-            cli_utils.add_since_filter(filters, args.since, since_mode)
+            filters = cli_utils.add_since_filter(filters, args.since, since_mode)
             args.since = None
         # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
         # it with _lastUpdated, because _since has extra logic around older resources of patients

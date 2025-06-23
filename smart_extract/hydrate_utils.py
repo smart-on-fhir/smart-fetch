@@ -109,7 +109,7 @@ async def _read(res_file: str) -> AsyncIterable[dict]:
 
 async def _write(
     callback: Callable,
-    client,
+    client: cfs.FhirClient,
     id_pool: set[str],
     stats: TaskStats,
     res_type: str,
@@ -133,7 +133,7 @@ async def _write(
 
 async def process(
     *,
-    client,
+    client: cfs.FhirClient,
     task_name: str,
     desc: str,
     workdir: str | None,

@@ -42,7 +42,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types)
         filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, rest_client.server_type)
-        cli_utils.add_since_filter(filters, args.since, since_mode)
+        filters = cli_utils.add_since_filter(filters, args.since, since_mode)
         workdir = args.folder
         source_dir = args.source_dir or workdir
 

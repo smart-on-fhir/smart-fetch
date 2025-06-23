@@ -144,10 +144,22 @@ def add_since_filter(
     filters: Filters,
     since: str | None,
     since_mode: SinceMode,
-) -> None:
-    """Returns calculated since mode (based on server type)"""
+) -> Filters:
+    """
+    Modifies `filters` by adding parameters to search for resources "since" a certain time.
+
+    This is not bulk export's _since parameter, but rather a way to emulate it.
+
+    The "updated" mode fakes _since by just searching for _lastUpdated.
+
+    The "created" mode fakes _since by searching for per-resource fields (when they are available)
+    for a date that is as close to creation date as possible. This is necessary for servers that
+    don't offer a meta.lastUpdated field (like Epic).
+
+    Returns the modified filters object.
+    """
     if not since:
-        return
+        return filters
 
     def add_filter(res_type: str, field: str) -> None:
         if res_type not in filters:
@@ -175,6 +187,8 @@ def add_since_filter(
     else:  # UPDATED mode
         for res_type in filters:
             add_filter(res_type, "_lastUpdated")
+
+    return filters
 
 
 # COHORT SELECTION
