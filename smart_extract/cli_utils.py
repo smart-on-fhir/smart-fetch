@@ -1,5 +1,6 @@
 import argparse
 import enum
+import logging
 import sys
 import tomllib
 from collections.abc import Iterable
@@ -55,7 +56,7 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
     server_types = {res["type"] for res in rest["resource"] if "type" in res}
     for res_type in sorted(res_types):
         if res_type not in server_types:
-            print(f"Skipping {res_type} because the server does not support it.")
+            logging.info(f"Skipping {res_type} because the server does not support it.")
 
     return [x for x in res_types if x in server_types]
 
@@ -65,16 +66,16 @@ def parse_resource_selection(types: str) -> list[str]:
     lower_types = {t.casefold() for t in orig_types}
 
     def print_help():
-        print("These types are supported:")
-        print("  all")
+        rich.get_console().print("These types are supported:")
+        rich.get_console().print("  all")
         for pat_type in resources.PATIENT_TYPES:
-            print(f"  {pat_type}")
+            rich.get_console().print(f"  {pat_type}")
 
     # Check if any provided types are bogus
     for orig_type in orig_types:
         if orig_type.casefold() not in ALLOWED_CASE_MAP:
-            print(f"Unknown resource type provided: {orig_type}")
-            print()
+            rich.get_console().print(f"Unknown resource type provided: {orig_type}")
+            rich.get_console().print()
             print_help()
             sys.exit(2)
 
@@ -99,7 +100,6 @@ def parse_type_filters(
 
     for type_filter in type_filters or []:
         if "?" not in type_filter:
-            print("MIKE", type_filter)
             sys.exit("Type filter arguments must be in the format 'Resource?params'.")
         res_type, params = type_filter.split("?", 1)
         if res_type not in filters:

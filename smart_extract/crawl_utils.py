@@ -1,6 +1,7 @@
 import csv
 import datetime
 import json
+import logging
 import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
@@ -8,6 +9,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
+import rich.progress
 
 from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
@@ -76,7 +78,7 @@ async def perform_crawl(
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
     if resources.PATIENT in filters:
         if metadata.is_done(resources.PATIENT):
-            print(f"Skipping {resources.PATIENT}, already done.")
+            logging.info(f"Skipping {resources.PATIENT}, already done.")
         else:
             await gather_patients(
                 bulk_client=bulk_client,
@@ -103,7 +105,7 @@ async def perform_crawl(
 
     for res_type in filters:
         if metadata.is_done(res_type):
-            print(f"Skipping {res_type}, already done.")
+            logging.info(f"Skipping {res_type}, already done.")
             continue
         processor.add_source(
             res_type, resource_urls(res_type, "patient=", patient_ids, filters), len(patient_ids)
@@ -165,10 +167,12 @@ async def finish_wrapper(
     metadata: lifecycle.OutputMetadata,
     custom_finish: Callable[[str], Awaitable[None]] | None,
     res_type: str,
+    *,
+    progress: rich.progress.Progress | None = None,
 ) -> None:
     metadata.mark_done(res_type)
     if custom_finish:
-        await custom_finish(res_type)
+        await custom_finish(res_type, progress=progress)
 
 
 def read_patient_ids(folder: str) -> set[str]:
@@ -237,6 +241,7 @@ async def process(
     res_type: str,
     writer: ndjson.NdjsonWriter,
     url: str,
+    **kwargs,
 ) -> None:
     async for resource in crawl_bundle_chain(client, url):
         if resource["resourceType"] == resources.OPERATION_OUTCOME:

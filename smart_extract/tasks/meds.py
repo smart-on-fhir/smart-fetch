@@ -1,4 +1,5 @@
 import cumulus_fhir_support as cfs
+import rich.progress
 
 from smart_extract import hydrate_utils, resources
 
@@ -8,7 +9,8 @@ async def _download_med(client, resource: dict, id_pool: set[str]) -> hydrate_ut
     return [await hydrate_utils.download_reference(client, id_pool, med_ref, resources.MEDICATION)]
 
 
-async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None = None, **kwargs):
+async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None = None,
+    progress: rich.progress.Progress | None = None, **kwargs):
     stats = await hydrate_utils.process(
         client=client,
         task_name="meds",
@@ -18,6 +20,7 @@ async def task_meds(client: cfs.FhirClient, workdir: str, source_dir: str | None
         input_type=resources.MEDICATION_REQUEST,
         output_type=resources.MEDICATION,
         callback=_download_med,
+        progress=progress,
     )
     if stats:
         stats.print("downloaded", f"{resources.MEDICATION}s")

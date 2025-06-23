@@ -3,6 +3,8 @@
 import argparse
 import sys
 
+import rich
+
 from smart_extract import cli_utils, tasks
 
 
@@ -31,10 +33,10 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 
 def print_help():
-    print("These hydration tasks are supported:")
-    print("  all")
+    rich.get_console().print("These hydration tasks are supported:")
+    rich.get_console().print("  all")
     for task_name in sorted(tasks.all_tasks.keys()):
-        print(f"  {task_name}")
+        rich.get_console().print(f"  {task_name}")
 
 
 async def hydrate_main(args: argparse.Namespace) -> None:
@@ -48,8 +50,8 @@ async def hydrate_main(args: argparse.Namespace) -> None:
 
     for task_name in cli_tasks:
         if task_name != "all" and task_name not in tasks.all_tasks:
-            print(f"Unknown hydration task provided: {task_name}")
-            print()
+            rich.get_console().print(f"Unknown hydration task provided: {task_name}")
+            rich.get_console().print()
             print_help()
             sys.exit(2)
 

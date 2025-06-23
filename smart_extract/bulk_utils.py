@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import gzip
 import json
+import logging
 import os
 import sys
 import typing
@@ -425,10 +426,10 @@ class BulkExporter:
         if self._resume:
             poll_location = self._resume
             self._log.export_id = poll_location
-            print("Resuming bulk FHIR export… (all other export arguments ignored)")
+            logging.info("Resuming bulk FHIR export… (all other export arguments ignored)")
         else:
             poll_location = await self._kick_off()
-            print("Starting bulk FHIR export…")
+            logging.info("Starting bulk FHIR export…")
 
         # Request status report, until export is done
         response = await self._request_with_delay_status(
@@ -442,7 +443,7 @@ class BulkExporter:
         response_json = response.json()
 
         # Download all the files
-        print("Bulk FHIR export finished, now downloading resources…")
+        logging.info("Bulk FHIR export finished, now downloading resources…")
         await self._download_all_ndjson_files(response_json, "output")
         await self._download_all_ndjson_files(response_json, "error")
         await self._download_all_ndjson_files(response_json, "deleted")
@@ -457,7 +458,7 @@ class BulkExporter:
         # Were there any server-side errors during the export?
         error_texts, warning_texts = self._gather_all_messages()
         if warning_texts:
-            print("\n - ".join(["Messages from server:", *sorted(warning_texts)]))
+            rich.get_console().print("\n - ".join(["Messages from server:", *sorted(warning_texts)]))
 
         # Make sure we're fully done before we bail because the server told us the export has
         # issues. We still want to DELETE the export in this case. And we still want to download
@@ -490,8 +491,8 @@ class BulkExporter:
 
         self._log.kickoff(self.export_url, self._client.capabilities, response)
 
-        print()
-        print("If interrupted, try again but add the following argument to resume the export:")
+        rich.get_console().print()
+        rich.get_console().print("If interrupted, try again but add the following argument to resume the export:")
         rich.get_console().print(
             # Quote the poll location here only so that it's easier to copy & paste the whole
             # argument in one double-click. Colons are often used as separators in word-
@@ -501,7 +502,7 @@ class BulkExporter:
             highlight=False,
             soft_wrap=True,
         )
-        print()
+        rich.get_console().print()
 
         return poll_location
 
@@ -518,7 +519,7 @@ class BulkExporter:
             return True
         except cfs.NetworkError as err:
             # Don't bail on ETL as a whole, this isn't a show stopper error.
-            print(f"Failed to clean up export job on the server side: {err}")
+            logging.warning(f"Failed to clean up export job on the server side: {err}")
             return False
 
     async def _request_with_delay_status(self, *args, **kwargs) -> httpx.Response:
@@ -532,7 +533,7 @@ class BulkExporter:
             response = await self._request_with_retries(*args, rich_text=status_box, **kwargs)
 
         if status_box.plain:
-            print(  # pragma: no cover
+            logging.info(  # pragma: no cover
                 f"  Waited for a total of {cli_utils.human_time_offset(self._total_wait_time)}"
             )
 
@@ -712,7 +713,7 @@ class BulkExporter:
 
         rel_filename = os.path.relpath(filename, self._destination)
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
-        print(f"  Downloaded {rel_filename} ({human_size})")
+        logging.info(f"  Downloaded {rel_filename} ({human_size})")
 
 
 async def perform_bulk(
@@ -733,7 +734,7 @@ async def perform_bulk(
     already_done = set()
     for res_type in filters:
         if metadata.is_done(res_type):
-            print(f"Skipping {res_type}, already done.")
+            logging.info(f"Skipping {res_type}, already done.")
             already_done.add(res_type)
     res_types = set(filters) - already_done
     if not res_types:

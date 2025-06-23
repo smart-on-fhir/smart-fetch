@@ -1,9 +1,11 @@
 import dataclasses
 import enum
+import logging
 from collections.abc import AsyncIterable, Callable
 from functools import partial
 
 import cumulus_fhir_support as cfs
+import rich.progress
 import rich.table
 
 from smart_extract import iter_utils, lifecycle, ndjson
@@ -113,6 +115,7 @@ async def _write(
     res_type: str,
     writer: ndjson.NdjsonWriter,
     resource: dict,
+    **kwargs,
 ) -> None:
     del res_type
 
@@ -139,6 +142,7 @@ async def process(
     output_type: str | None = None,
     append: bool = True,
     callback: Callable,
+    progress: rich.progress.Progress | None = None,
 ) -> TaskStats | None:
     output_type = output_type or input_type
     source_dir = source_dir or workdir
@@ -155,14 +159,14 @@ async def process(
 
     metadata = lifecycle.OutputMetadata(workdir)
     if metadata.is_done(task_name):
-        print(f"Skipping {task_name}, already done.")
+        logging.info(f"Skipping {task_name}, already done.")
         return None
 
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
 
     if not found_files:
-        print(f"Skipping {task_name}, no {input_type} resources found.")
+        logging.info(f"Skipping {task_name}, no {input_type} resources found.")
         return None
 
     # See what is already present
@@ -174,7 +178,7 @@ async def process(
     # Iterate through inputs
     stats = TaskStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
-    processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
+    processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append, progress=progress)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         output_file = None if append else res_file
         total_lines = ndjson.read_local_line_count(res_file)
