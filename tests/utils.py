@@ -23,7 +23,7 @@ DEFAULT_OBS_CATEGORIES = (
     "social-history,vital-signs,imaging,laboratory,survey,exam,procedure,therapy,activity"
 )
 DEFAULT_OBS_FILTER = (
-    f"{resources.OBSERVATION}?category={DEFAULT_OBS_CATEGORIES.replace(",", "%2C")}"
+    f"{resources.OBSERVATION}?category={DEFAULT_OBS_CATEGORIES.replace(',', '%2C')}"
 )
 
 version = smart_extract.__version__

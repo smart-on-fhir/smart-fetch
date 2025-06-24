@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+from unittest import mock
 
 import ddt
 import httpx
@@ -327,14 +328,18 @@ class ExportTests(utils.TestCase):
             "id": "dxr1",
             "result": [{"reference": "Observation/res-obs"}],
         }
-        obs1 = {"resourceType": resources.OBSERVATION, "id": "obs1",
-                "hasMember": [{"reference": f"{resources.OBSERVATION}/obs1.member"}]}
-        res_obs = {"resourceType": resources.OBSERVATION, "id": "res-obs",
-                "hasMember": [{"reference": f"{resources.OBSERVATION}/res-obs.member"}]}
+        obs1 = {
+            "resourceType": resources.OBSERVATION,
+            "id": "obs1",
+            "hasMember": [{"reference": f"{resources.OBSERVATION}/obs1.member"}],
+        }
+        res_obs = {
+            "resourceType": resources.OBSERVATION,
+            "id": "res-obs",
+            "hasMember": [{"reference": f"{resources.OBSERVATION}/res-obs.member"}],
+        }
 
-        def respond(
-            request: httpx.Request, res_type: str, res_id: str, **kwargs
-        ) -> httpx.Response:
+        def respond(request: httpx.Request, res_type: str, res_id: str, **kwargs) -> httpx.Response:
             if res_type == resources.OBSERVATION and res_id == "res-obs":
                 return httpx.Response(200, request=request, json=res_obs)
             else:
@@ -348,7 +353,7 @@ class ExportTests(utils.TestCase):
         }
         missing = self.set_resource_search_queries(params)
         self.set_resource_route(respond)
-        self.mock_bulk("group1", output=[pat1], params={ "_type": resources.PATIENT})
+        self.mock_bulk("group1", output=[pat1], params={"_type": resources.PATIENT})
 
         await self.cli(
             "export",
@@ -501,6 +506,123 @@ class ExportTests(utils.TestCase):
                     "test.ndjson.gz": None,
                 },
                 "Patient.000.ndjson.gz": "6fe4dc54280b62bf8992843f2bd9a544/test.ndjson.gz",
+                ".metadata": None,
+            }
+        )
+
+    @ddt.data("bulk", "crawl")
+    async def test_interrupted_hydration_will_resume(self, export_mode):
+        """Confirm we don't skip the whole resource if we resume from hydration"""
+        # Setup
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        doc1 = {
+            "resourceType": resources.DOCUMENT_REFERENCE,
+            "id": "doc1",
+            "content": [{"attachment": {"url": "Binary/a", "contentType": "text/html"}}],
+        }
+        if export_mode == "crawl":
+            self.mock_bulk("group1", output=[pat1])
+        else:
+            self.mock_bulk("group1", output=[pat1, doc1])
+
+        params = {
+            resources.DOCUMENT_REFERENCE: {httpx.QueryParams(patient="pat1"): [doc1]},
+        }
+        self.set_resource_search_queries(params)
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            if res_type == resources.BINARY and res_id == "a":
+                return httpx.Response(
+                    200,
+                    request=request,
+                    content=b"hello",
+                    headers={"Content-Type": "text/html; charset=utf8"},
+                )
+            assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+
+        mocker = mock.patch("smart_extract.hydrate_utils.process", side_effect=RuntimeError)
+        mocker.start()
+
+        if export_mode == "crawl":
+            suffix = "ndjson.gz"
+        else:
+            suffix = "000.ndjson.gz"
+
+        # First interrupted run
+        with self.assertRaises(RuntimeError):
+            await self.cli(
+                "export",
+                self.folder,
+                "--group=group1",
+                f"--export-mode={export_mode}",
+                f"--type={resources.PATIENT},{resources.DOCUMENT_REFERENCE}",
+            )
+        self.assert_folder(
+            {
+                "f15b547993ad1394372c61c030da3b11": {
+                    ".metadata": {
+                        "done": [resources.DOCUMENT_REFERENCE, resources.PATIENT],
+                        "kind": "output",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "version": utils.version,
+                    },
+                    "log.ndjson": None,
+                    f"{resources.PATIENT}.000.ndjson.gz": [pat1],
+                    f"{resources.DOCUMENT_REFERENCE}.{suffix}": [doc1],
+                },
+                "Patient.000.ndjson.gz": (
+                    f"f15b547993ad1394372c61c030da3b11/{resources.PATIENT}.000.ndjson.gz"
+                ),
+                ".metadata": None,
+            }
+        )
+
+        # Second run to finish up
+        mocker.stop()
+        await self.cli(
+            "export",
+            self.folder,
+            "--group=group1",
+            f"--export-mode={export_mode}",
+            f"--type={resources.PATIENT},{resources.DOCUMENT_REFERENCE}",
+        )
+        self.assert_folder(
+            {
+                "f15b547993ad1394372c61c030da3b11": {
+                    ".metadata": {
+                        "done": [resources.DOCUMENT_REFERENCE, resources.PATIENT, "doc-inline"],
+                        "kind": "output",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "version": utils.version,
+                    },
+                    "log.ndjson": None,
+                    f"{resources.PATIENT}.000.ndjson.gz": [pat1],
+                    f"{resources.DOCUMENT_REFERENCE}.{suffix}": [
+                        {
+                            "resourceType": resources.DOCUMENT_REFERENCE,
+                            "id": "doc1",
+                            "content": [
+                                {
+                                    "attachment": {
+                                        "url": "Binary/a",
+                                        "contentType": "text/html; charset=utf8",
+                                        "data": "aGVsbG8=",
+                                        "hash": "qvTGHdzF6KLavt4PO0gs2a6pQ00=",
+                                        "size": 5,
+                                    }
+                                }
+                            ],
+                        }
+                    ],
+                },
+                f"{resources.DOCUMENT_REFERENCE}.000.ndjson.gz": (
+                    f"f15b547993ad1394372c61c030da3b11/{resources.DOCUMENT_REFERENCE}.{suffix}"
+                ),
+                f"{resources.PATIENT}.000.ndjson.gz": (
+                    f"f15b547993ad1394372c61c030da3b11/{resources.PATIENT}.000.ndjson.gz"
+                ),
                 ".metadata": None,
             }
         )

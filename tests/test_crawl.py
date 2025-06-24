@@ -355,12 +355,13 @@ class CrawlTests(utils.TestCase):
         )
 
         # We would have errored out if any network attempts were made.
-        # Just confirm we also didn't write anything new out.
+        # Just confirm we only wrote out a new log.ndjson.
 
         self.assert_folder(
             {
                 ".metadata": {"done": [resources.DEVICE, resources.PATIENT]},
                 f"{resources.PATIENT}.ndjson.gz": None,
+                "log.ndjson": None,
             }
         )
 

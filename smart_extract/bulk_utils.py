@@ -741,21 +741,21 @@ async def perform_bulk(
             logging.info(f"Skipping {res_type}, already done.")
             already_done.add(res_type)
     res_types = set(filters) - already_done
-    if not res_types:
-        return
 
-    exporter = BulkExporter(
-        bulk_client,
-        res_types,
-        export_url(fhir_url, group),
-        workdir,
-        since=since,
-        type_filter=filters,
-        resume=resume,
-    )
-    await exporter.export()
+    if res_types:
+        exporter = BulkExporter(
+            bulk_client,
+            res_types,
+            export_url(fhir_url, group),
+            workdir,
+            since=since,
+            type_filter=filters,
+            resume=resume,
+        )
+        await exporter.export()
+        for res_type in res_types:
+            metadata.mark_done(res_type)
 
-    for res_type in res_types:
-        metadata.mark_done(res_type)
+    for res_type in filters:  # Run on all requested res types
         if finish_callback:
             await finish_callback(res_type)

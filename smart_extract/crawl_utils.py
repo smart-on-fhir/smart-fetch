@@ -47,7 +47,7 @@ async def perform_crawl(
     group: str | None,
     mrn_file: str | None,
     mrn_system: str | None,
-    finish_callback: Callable[[str], None] | None = None,
+    finish_callback: Callable[[str], Awaitable[None]] | None = None,
 ) -> None:
     # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
     # avoid writing out duplicates, in the situations where we have multiple search streams
@@ -85,6 +85,8 @@ async def perform_crawl(
     if resources.PATIENT in filters:
         if metadata.is_done(resources.PATIENT):
             logging.info(f"Skipping {resources.PATIENT}, already done.")
+            if finish_callback:
+                await finish_callback(resources.PATIENT)
         else:
             await gather_patients(
                 bulk_client=bulk_client,
@@ -112,6 +114,8 @@ async def perform_crawl(
     for res_type in filters:
         if metadata.is_done(res_type):
             logging.info(f"Skipping {res_type}, already done.")
+            if finish_callback:
+                await finish_callback(res_type)
             continue
         processor.add_source(
             res_type, resource_urls(res_type, "patient=", patient_ids, filters), len(patient_ids)
@@ -119,7 +123,8 @@ async def perform_crawl(
 
     if processor.sources:
         await processor.run()
-        create_fake_log(workdir, fhir_url, group_name, transaction_time)
+
+    create_fake_log(workdir, fhir_url, group_name, transaction_time)
 
 
 async def gather_patients(
