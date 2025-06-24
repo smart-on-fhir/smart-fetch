@@ -19,7 +19,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
     parser.add_argument(
         "--since-mode",
-        choices=cli_utils.SinceMode,
+        choices=list(cli_utils.SinceMode),
         help="how to interpret --since",
     )
     parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")

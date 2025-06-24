@@ -148,7 +148,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                     # Allow any order, since we deal with so much async code
                     self.assertEqual(len(rows), len(val), rows)
                     missing = [row for row in rows if row not in val]
-                    self.assertEqual(missing, [])
+                    missing_other_direction = [row for row in val if row not in rows]
+                    self.assertEqual(missing, [], missing_other_direction)
                 else:
                     loaded = json.load(f)
                     self.assertEqual(loaded, val)
@@ -192,7 +193,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 for index, resource in enumerate(resources):
                     url = f"{self.dlserver}/{mode}/{index}"
                     if isinstance(resource, dict):
-                        self.server.get(url).respond(200, json=resource)
+                        # Dump ourselves, because Python 3.11 encodes it differently than later,
+                        # and that matters since we bulk logging records the byte size.
+                        self.server.get(url).respond(
+                            200, content=json.dumps(resource), content_type="application/fhir+json"
+                        )
                         res_type = resource["resourceType"]
                     else:
                         self.server.get(url).mock(resource)
