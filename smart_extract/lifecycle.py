@@ -66,7 +66,7 @@ class OutputMetadata(Metadata):
 
     def mark_done(self, tag: str) -> None:
         if not self.is_done(tag):
-            self._contents.setdefault("done", []).append(tag)
+            self._contents["done"] = sorted([*self._contents.get("done", []), tag])
         self._write()
 
 

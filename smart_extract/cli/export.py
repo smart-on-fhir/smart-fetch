@@ -195,8 +195,6 @@ def make_links(workdir: str, res_type: str) -> None:
         os.symlink(target, os.path.join(source_dir, link_name))
 
     # Some resources have linked resources created by the hydration tasks
-    match res_type:
-        case resources.DIAGNOSTIC_REPORT:
-            make_links(workdir, resources.OBSERVATION)
-        case resources.MEDICATION_REQUEST:
-            make_links(workdir, resources.MEDICATION)
+    for input_type, output_type, task_func in tasks.all_tasks.values():
+        if res_type == input_type and res_type != output_type:
+            make_links(workdir, output_type)
