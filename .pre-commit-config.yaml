@@ -1,0 +1,10 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.12.0  # keep in rough sync with pyproject.toml
+    hooks:
+      - name: Ruff formatting
+        id: ruff-format
+        entry: bash -c 'ruff format --force-exclude "$@"; git add -u' --
+      - name: Ruff linting
+        id: ruff
+        stages: [pre-push]

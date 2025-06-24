@@ -13,7 +13,7 @@ import cumulus_fhir_support as cfs
 import rich
 import rich.progress
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, resources, tasks
+from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks
 
 
 class ExportMode(enum.StrEnum):
@@ -31,13 +31,13 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--export-mode",
         metavar="MODE",
-        choices=ExportMode,
+        choices=list(ExportMode),
         help="how to export data (default is bulk if server supports it well)",
     )
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
     parser.add_argument(
         "--since-mode",
-        choices=cli_utils.SinceMode,
+        choices=list(cli_utils.SinceMode),
         help="how to interpret --since",
     )
 
