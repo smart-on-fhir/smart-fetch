@@ -39,6 +39,8 @@ async def perform_crawl(
     *,
     fhir_url: str,
     filters: cli_utils.Filters,
+    since: str | None,
+    since_mode: cli_utils.SinceMode,
     source_dir: str,
     workdir: str,
     rest_client: cfs.FhirClient,
@@ -69,6 +71,9 @@ async def perform_crawl(
 
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
+    metadata.note_context(filters=filters, since=since, since_mode=since_mode)
+
+    filters = cli_utils.add_since_filter(filters, since, since_mode)
 
     processor = iter_utils.ResourceProcessor(
         workdir,
@@ -84,7 +89,7 @@ async def perform_crawl(
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
     if resources.PATIENT in filters:
         if metadata.is_done(resources.PATIENT):
-            logging.info(f"Skipping {resources.PATIENT}, already done.")
+            logging.warning(f"Skipping {resources.PATIENT}, already done.")
             if finish_callback:
                 await finish_callback(resources.PATIENT)
         else:
@@ -113,7 +118,7 @@ async def perform_crawl(
 
     for res_type in filters:
         if metadata.is_done(res_type):
-            logging.info(f"Skipping {res_type}, already done.")
+            logging.warning(f"Skipping {res_type}, already done.")
             if finish_callback:
                 await finish_callback(res_type)
             continue
@@ -171,7 +176,9 @@ async def gather_patients(
                 type_filter=filters,
             )
             await exporter.export()
-            await finish_wrapper(metadata, finish_callback, resources.PATIENT)
+            await finish_wrapper(
+                metadata, finish_callback, resources.PATIENT, timestamp=exporter.transaction_time
+            )
 
 
 async def finish_wrapper(
@@ -180,8 +187,9 @@ async def finish_wrapper(
     res_type: str,
     *,
     progress: rich.progress.Progress | None = None,
+    timestamp: datetime.datetime,
 ) -> None:
-    metadata.mark_done(res_type)
+    metadata.mark_done(res_type, timestamp)
     if custom_finish:
         await custom_finish(res_type, progress=progress)
 

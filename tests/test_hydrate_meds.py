@@ -19,7 +19,7 @@ class HydrateMedsTests(utils.TestCase):
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
-                    "done": ["meds"],
+                    "done": {"meds": utils.FROZEN_TIMESTAMP},
                 },
                 f"{resources.MEDICATION}.ndjson.gz": [
                     {"resourceType": resources.MEDICATION, "id": "1"},

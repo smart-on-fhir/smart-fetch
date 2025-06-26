@@ -11,13 +11,15 @@ import respx
 import time_machine
 
 import smart_extract
-from smart_extract import resources, timing
+from smart_extract import resources
 from smart_extract.cli import main
 
 FROZEN_DATETIME = datetime.datetime(
     2021, 9, 15, 1, 23, 45, tzinfo=datetime.timezone(datetime.timedelta(hours=4))
 )
 FROZEN_TIMESTAMP = FROZEN_DATETIME.astimezone().isoformat()
+
+TRANSACTION_TIME = "2024-10-16T12:00:00-05:00"
 
 DEFAULT_OBS_CATEGORIES = (
     "social-history,vital-signs,imaging,laboratory,survey,exam,procedure,therapy,activity"
@@ -32,6 +34,7 @@ version = smart_extract.__version__
 class TestCase(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.maxDiff = None
+        self._bulk_count = 0
 
         tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(tempdir.cleanup)
@@ -122,19 +125,20 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 json.dump(resource, f)
                 f.write("\n")
 
-    def _assert_folder(self, root: pathlib.Path, expected: dict) -> None:
-        found_files = set(os.listdir(root))
-        self.assertEqual(found_files, set(expected.keys()))
+    def assert_subfolder(self, root: pathlib.Path, expected: dict) -> None:
+        abs_path = self.folder / root
+        found_files = set(os.listdir(abs_path))
+        self.assertEqual(found_files, set(expected.keys()), root)
 
         for name, val in expected.items():
             if val is None:
                 continue
 
-            if isinstance(val, dict) and os.path.isdir(root / name):
-                self._assert_folder(root / name, val)
+            if isinstance(val, dict) and os.path.isdir(abs_path / name):
+                self.assert_subfolder(root / name, val)
                 continue
             elif isinstance(val, str):
-                self.assertEqual(os.readlink(root / name), val, name)
+                self.assertEqual(os.readlink(abs_path / name), val, name)
                 continue
 
             if name.endswith(".gz"):
@@ -142,7 +146,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
             else:
                 open_func = open
 
-            with open_func(root / name, "rt", encoding="utf8") as f:
+            with open_func(abs_path / name, "rt", encoding="utf8") as f:
                 if isinstance(val, list):
                     rows = [json.loads(row) for row in f]
                     # Allow any order, since we deal with so much async code
@@ -155,11 +159,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                     self.assertEqual(loaded, val)
 
     def assert_folder(self, expected: dict) -> None:
-        self._assert_folder(self.folder, expected)
+        self.assert_subfolder(pathlib.Path("."), expected)
 
     def mock_bulk(
         self,
-        group: str,
+        group: str | None = None,
         *,
         params: dict[str, str] | None = None,
         output: list[dict | httpx.Response] | None = None,
@@ -171,16 +175,18 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         skip_status: bool = False,
         delete_response: httpx.Response | None = None,
         skip_delete: bool = False,
+        transaction_time: str | None = None,
     ) -> None:
+        self._bulk_count += 1
+
         if not skip_kickoff:
             if kickoff_response is None:
                 kickoff_response = httpx.Response(
-                    202, headers={"Content-Location": f"{self.dlserver}/exports/1"}
+                    202, headers={"Content-Location": f"{self.dlserver}/exports/{self._bulk_count}"}
                 )
             param_args = {"params__eq": params} if params else {}
-            self.server.get(f"{self.url}/Group/{group}/$export", **param_args).mock(
-                kickoff_response
-            )
+            url_base = f"{self.url}/Group/{group}" if group else self.url
+            self.server.get(f"{url_base}/$export", **param_args).mock(kickoff_response)
 
         if not skip_status:
             output = output or []
@@ -191,10 +197,10 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 # Download each resource separately, to test how we handle multiples
                 refs = []
                 for index, resource in enumerate(resources):
-                    url = f"{self.dlserver}/{mode}/{index}"
+                    url = f"{self.dlserver}/{mode}/{self._bulk_count}.{index}"
                     if isinstance(resource, dict):
-                        # Dump ourselves, because Python 3.11 encodes it differently than later,
-                        # and that matters since we bulk logging records the byte size.
+                        # Dump ourselves, because Python 3.11 encodes it differently than later
+                        # versions, and that matters since bulk logging records the byte size.
                         self.server.get(url).respond(
                             200, content=json.dumps(resource), content_type="application/fhir+json"
                         )
@@ -214,7 +220,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                     httpx.Response(
                         200,
                         json={
-                            "transactionTime": timing.now().isoformat(),
+                            "transactionTime": transaction_time or TRANSACTION_TIME,
                             "output": output_refs,
                             "error": error_refs,
                             "deleted": deleted_refs,
@@ -223,9 +229,11 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 ]
             elif isinstance(status_response, httpx.Response):
                 status_response = [status_response]
-            self.server.get(f"{self.dlserver}/exports/1").mock(side_effect=status_response)
+            self.server.get(f"{self.dlserver}/exports/{self._bulk_count}").mock(
+                side_effect=status_response
+            )
 
         if not skip_delete:
             if delete_response is None:
                 delete_response = httpx.Response(202)
-            self.server.delete(f"{self.dlserver}/exports/1").mock(delete_response)
+            self.server.delete(f"{self.dlserver}/exports/{self._bulk_count}").mock(delete_response)

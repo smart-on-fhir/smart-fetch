@@ -23,7 +23,7 @@ class HydrateObsMemberTests(utils.TestCase):
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
-                    "done": ["obs-members"],
+                    "done": {"obs-members": utils.FROZEN_TIMESTAMP},
                 },
                 f"{resources.OBSERVATION}.ndjson.gz": obs,
                 f"{resources.OBSERVATION}.members.ndjson.gz": [
@@ -122,7 +122,7 @@ class HydrateObsDxrTests(utils.TestCase):
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
-                    "done": ["dxr-results"],
+                    "done": {"dxr-results": utils.FROZEN_TIMESTAMP},
                 },
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 f"{resources.OBSERVATION}.results.ndjson.gz": [

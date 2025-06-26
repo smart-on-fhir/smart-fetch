@@ -3,17 +3,17 @@
 import argparse
 import enum
 import glob
-import hashlib
 import logging
 import os
 import re
+import sys
 from functools import partial
 
 import cumulus_fhir_support as cfs
 import rich
 import rich.progress
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks
+from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks, timing
 
 
 class ExportMode(enum.StrEnum):
@@ -34,7 +34,12 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         choices=list(ExportMode),
         help="how to export data (default is bulk if server supports it well)",
     )
-    parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
+    parser.add_argument(
+        "--since",
+        metavar="TIMESTAMP",
+        help="only get data since this date "
+        "(provide 'auto' to detect the date from previous exports)",
+    )
     parser.add_argument(
         "--since-mode",
         choices=list(cli_utils.SinceMode),
@@ -60,17 +65,16 @@ async def export_main(args: argparse.Namespace) -> None:
         client = bulk_client if export_mode == ExportMode.BULK else rest_client
 
     async with client:
+        source_dir = args.folder
         filters = cli_utils.parse_type_filters(client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, client.server_type)
-        if since_mode == cli_utils.SinceMode.CREATED or export_mode == ExportMode.CRAWL:
-            filters = cli_utils.add_since_filter(filters, args.since, since_mode)
-            args.since = None
-        # else if in bulk/UPDATED mode, we use Bulk Export's _since param, which is better than
-        # faking it with _lastUpdated, because _since has extra logic around older resources of
-        # patients added to the group after _since.
+        since = calculate_since(
+            source_dir, filters=filters, since=args.since, since_mode=since_mode
+        )
 
-        source_dir = args.folder
-        subdir = str(args.nickname or calculate_workdir(filters, args.since))
+        subdir = find_workdir(
+            source_dir, filters=filters, since=since, since_mode=since_mode, nickname=args.nickname
+        )
         workdir = os.path.join(source_dir, subdir)
 
         metadata = lifecycle.ManagedMetadata(source_dir)
@@ -83,7 +87,8 @@ async def export_main(args: argparse.Namespace) -> None:
                 filters=filters,
                 group=args.group,
                 workdir=workdir,
-                since=args.since,
+                since=since,
+                since_mode=since_mode,
                 resume=None,  # FIXME
                 finish_callback=partial(finish_resource, rest_client, workdir, open_client=True),
             )
@@ -91,6 +96,8 @@ async def export_main(args: argparse.Namespace) -> None:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
                 filters=filters,
+                since=since,
+                since_mode=since_mode,
                 source_dir=source_dir,
                 workdir=workdir,
                 rest_client=rest_client,
@@ -111,23 +118,86 @@ def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) 
     return export_mode
 
 
-def calculate_workdir(filters: cli_utils.Filters, since: str | None) -> str:
-    # FHIR URL and group identifiers should be consistent for a given managed dir, so we don't
-    # include them here.
+def calculate_since(
+    source_dir: str,
+    *,
+    filters: cli_utils.Filters,
+    since: str | None,
+    since_mode: cli_utils.SinceMode,
+) -> str | None:
+    # Early exit if we don't need to calculate anything
+    if since != "auto":
+        return since
 
-    raw = "Filters:\n"
-    for key in sorted(filters.keys()):
-        sorted_filters = sorted(filters[key])
-        if sorted_filters:
-            raw += "".join(f"  {key}={res_filter}\n" for res_filter in sorted_filters)
-        else:
-            raw += f"  {key}=\n"
+    max_dones = {}  # the newest "done" value for each resource we're interested in
+    for folder in list_workdirs(source_dir):
+        metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
+        matches = metadata.get_matching_timestamps(filters, since_mode)
+        for res_type, timestamp in matches.items():
+            if res_type not in max_dones or max_dones[res_type] < timestamp:
+                max_dones[res_type] = timestamp
 
-    raw += "Since:\n"
-    if since:
-        raw += f"  {since}\n"
+    if not max_dones:
+        sys.exit(
+            "Could not detect a since value to use from previous exports.\n"
+            "Try without a --since parameter, or provide a specific timestamp."
+        )
 
-    return hashlib.md5(raw.encode("utf8"), usedforsecurity=False).hexdigest()
+    # Now grab the oldest "done" value of all our target resources and use that.
+    timestamp = min(max_dones.values()).isoformat()
+    logging.warning(f"Using since value of {timestamp}.")
+    return timestamp
+
+
+def find_workdir(
+    source_dir: str,
+    *,
+    filters: cli_utils.Filters,
+    since: str | None,
+    since_mode: cli_utils.SinceMode,
+    nickname: str | None,
+) -> str:
+    # First, scan the workdirs to find the highest num and see if there's an exact nickname match.
+    highest_num = 0
+    for folder, (num, name) in list_workdirs(source_dir).items():
+        if not highest_num:
+            highest_num = num
+
+        if name == nickname:
+            logging.warning(f"Re-using existing subfolder '{folder}' with the same nickname.")
+            return folder
+
+    # Didn't find exact nickname match. Can we find the same context?
+    for folder in list_workdirs(source_dir):
+        metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
+        if metadata.has_same_context(filters=filters, since=since, since_mode=since_mode):
+            logging.warning(f"Re-using existing subfolder '{folder}' with similar arguments.")
+            return folder
+
+    # Workdir not found. Let's just make a new one!
+    next_num = highest_num + 1
+    nickname = nickname or timing.now().strftime("%Y-%m-%d")
+    folder = f"{next_num:03}.{nickname}"
+    logging.warning(f"Creating new subfolder '{folder}'.")
+    return folder
+
+
+def list_workdirs(source_dir: str) -> dict[str, tuple[int, str]]:
+    """
+    Returns workdirs in reverse order (i.e. latest first)
+
+    Return format is filename -> (num, nickname) for filenames like {num}.{nickname}
+    """
+    try:
+        with os.scandir(source_dir) as scanner:
+            folders = [entry.name for entry in scanner if entry.is_dir()]
+    except FileNotFoundError:
+        return {}
+
+    matches = {re.fullmatch(r"(\d+)\.(.*)", folder): folder for folder in folders}
+    nums = {int(m.group(1)): (m.group(2), val) for m, val in matches.items() if m}
+
+    return {nums[num][1]: (num, nums[num][0]) for num in sorted(nums, reverse=True)}
 
 
 async def finish_resource(
@@ -177,12 +247,12 @@ def make_links(workdir: str, res_type: str) -> None:
     current_targets = {os.readlink(link) for link in current_links}
     current_matches = [re.fullmatch(r".*\.(\d+)\.ndjson\.gz", path) for path in current_links]
     current_nums = [int(m.group(1)) for m in current_matches]
-    index = max(current_nums) if current_nums else -1
+    index = max(current_nums) if current_nums else 0
 
     for filename in cfs.list_multiline_json_in_dir(workdir, res_type):
         ndjson_name = os.path.basename(filename)
         if not ndjson_name.endswith(".ndjson.gz"):
-            logging.info(f"Found unexpected filename {ndjson_name}, not linking.")
+            logging.warning(f"Found unexpected filename {ndjson_name}, not linking.")
             continue
 
         target = os.path.join(work_name, ndjson_name)

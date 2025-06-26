@@ -9,7 +9,7 @@ from typing import TypeVar
 import cumulus_fhir_support as cfs
 import rich.progress
 
-from smart_extract import cli_utils, ndjson
+from smart_extract import cli_utils, ndjson, timing
 
 Item = TypeVar("Item")
 
@@ -134,6 +134,7 @@ class ResourceProcessor:
             self._progress_task = self._progress.add_task(
                 f"{self._desc} {res_type}s…", total=res_total
             )
+            timestamp = timing.now()
 
             for source in sources:
                 writer = ndjson.NdjsonWriter(source.output_file, append=self._append)
@@ -147,7 +148,7 @@ class ResourceProcessor:
             if self._finish_callback:
                 # Note: might fire more than once for same res_type, if there are multiple
                 # sources. We can add some disambiguation in the future, if we need that.
-                await self._finish_callback(res_type, progress=self._progress)
+                await self._finish_callback(res_type, timestamp=timestamp, progress=self._progress)
 
         # Reset sources, so we can be run again
         self.sources = {}

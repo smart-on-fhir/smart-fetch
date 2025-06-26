@@ -61,7 +61,7 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
     server_types = {res["type"] for res in rest["resource"] if "type" in res}
     for res_type in sorted(res_types):
         if res_type not in server_types:
-            logging.info(f"Skipping {res_type} because the server does not support it.")
+            logging.warning(f"Skipping {res_type} because the server does not support it.")
 
     return [x for x in res_types if x in server_types]
 
@@ -203,7 +203,7 @@ def add_cohort_selection(parser: argparse.ArgumentParser):
     )
     group.add_argument(
         "--group-nickname",
-        metavar="GROUP",
+        metavar="NAME",
         help="a human-friendly name for the cohort, used in log files and such",
     )
     group.add_argument("--mrn-system", metavar="SYSTEM", help="system identifier for MRNs")
@@ -233,7 +233,7 @@ def add_auth(parser: argparse.ArgumentParser):
     )
     group.add_argument(
         "--bulk-smart-key",
-        metavar="ID",
+        metavar="PATH",
         help="JWKS or PEM file for bulk export SMART authentication, "
         "only needed if your EHR uses separate bulk credentials",
     )
