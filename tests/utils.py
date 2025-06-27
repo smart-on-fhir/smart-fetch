@@ -10,9 +10,9 @@ import httpx
 import respx
 import time_machine
 
-import smart_extract
-from smart_extract import resources
-from smart_extract.cli import main
+import smart_fetch
+from smart_fetch import resources
+from smart_fetch.cli import main
 
 FROZEN_DATETIME = datetime.datetime(
     2021, 9, 15, 1, 23, 45, tzinfo=datetime.timezone(datetime.timedelta(hours=4))
@@ -28,7 +28,7 @@ DEFAULT_OBS_FILTER = (
     f"{resources.OBSERVATION}?category={DEFAULT_OBS_CATEGORIES.replace(',', '%2C')}"
 )
 
-version = smart_extract.__version__
+version = smart_fetch.__version__
 
 
 class TestCase(unittest.IsolatedAsyncioTestCase):

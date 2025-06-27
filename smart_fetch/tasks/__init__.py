@@ -1,6 +1,6 @@
 from collections.abc import Callable
 
-from smart_extract import resources
+from smart_fetch import resources
 
 from .inline import task_doc_inline, task_dxr_inline
 from .meds import task_meds

@@ -1,4 +1,4 @@
-from smart_extract import resources
+from smart_fetch import resources
 from tests import utils
 
 

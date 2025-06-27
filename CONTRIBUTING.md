@@ -1,14 +1,14 @@
-# How to contribute to SMART Extract
+# How to contribute to SMART Fetch
 
 ## Did you find a bug?
 
 Excellent!
 
 Please first look at the
-[existing GitHub issues](https://github.com/smart-on-fhir/smart-extract/issues)
+[existing GitHub issues](https://github.com/smart-on-fhir/smart-fetch/issues)
 to see if it has already been reported.
 But if you don't see your bug, please
-[file a new GitHub issue](https://github.com/smart-on-fhir/smart-extract/issues/new),
+[file a new GitHub issue](https://github.com/smart-on-fhir/smart-fetch/issues/new),
 and we will look at it as soon as we can.
 
 The more detail you can add, the quicker we will be able to fix the bug.

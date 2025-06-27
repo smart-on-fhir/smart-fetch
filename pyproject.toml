@@ -1,5 +1,5 @@
 [project]
-name = "smart-extract"
+name = "smart-fetch"
 requires-python = ">= 3.11"
 dependencies = [
     "cumulus-fhir-support >= 1.5",
@@ -34,10 +34,10 @@ dev = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/smart-on-fhir/smart-extract"
+"Homepage" = "https://github.com/smart-on-fhir/smart-fetch"
 
 [project.scripts]
-smart-extract = "smart_extract.cli.main:main_cli"
+smart-fetch = "smart_fetch.cli.main:main_cli"
 
 [build-system]
 requires = ["flit_core >=3.12,<4"]

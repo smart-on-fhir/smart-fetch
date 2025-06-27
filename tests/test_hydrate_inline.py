@@ -4,7 +4,7 @@ from unittest import mock
 
 import httpx
 
-from smart_extract import resources
+from smart_fetch import resources
 from tests import utils
 
 

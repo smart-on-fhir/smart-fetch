@@ -7,7 +7,7 @@ import sys
 
 import rich.logging
 
-from smart_extract.cli import bulk, crawl, export, hydrate
+from smart_fetch.cli import bulk, crawl, export, hydrate
 
 
 def define_parser() -> argparse.ArgumentParser:

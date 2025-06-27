@@ -4,7 +4,7 @@ import os
 import ddt
 import httpx
 
-from smart_extract import resources
+from smart_fetch import resources
 from tests import utils
 
 
@@ -68,7 +68,7 @@ class CrawlTests(utils.TestCase):
                             "errorBody": None,
                             "responseHeaders": {},
                         },
-                        "_client": "smart-extract",
+                        "_client": "smart-fetch",
                         "_clientVersion": utils.version,
                     },
                     {

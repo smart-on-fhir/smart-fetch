@@ -9,7 +9,7 @@ import cumulus_fhir_support as cfs
 import rich.progress
 import rich.table
 
-from smart_extract import iter_utils, lifecycle, ndjson
+from smart_fetch import iter_utils, lifecycle, ndjson
 
 
 class TaskResultReason(enum.Enum):

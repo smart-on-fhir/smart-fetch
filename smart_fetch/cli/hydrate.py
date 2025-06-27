@@ -5,7 +5,7 @@ import sys
 
 import rich
 
-from smart_extract import cli_utils, tasks
+from smart_fetch import cli_utils, tasks
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:

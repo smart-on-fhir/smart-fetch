@@ -7,7 +7,7 @@ import sys
 import cumulus_fhir_support as cfs
 import rich
 
-from smart_extract import bulk_utils, cli_utils
+from smart_fetch import bulk_utils, cli_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:

@@ -5,7 +5,7 @@ from unittest import mock
 import ddt
 import httpx
 
-from smart_extract import lifecycle, resources
+from smart_fetch import lifecycle, resources
 from tests import utils
 
 
@@ -153,5 +153,5 @@ class HydrateTests(utils.TestCase):
             raise RuntimeError("oops")
 
         with self.assertRaisesRegex(SystemExit, "oops"):
-            with mock.patch("smart_extract.hydrate_utils.download_reference", new=slow_explode):
+            with mock.patch("smart_fetch.hydrate_utils.download_reference", new=slow_explode):
                 await self.cli("hydrate", self.folder, "--hydration-tasks=meds")

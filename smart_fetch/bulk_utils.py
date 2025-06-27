@@ -18,8 +18,8 @@ import httpx
 import rich.live
 import rich.text
 
-import smart_extract
-from smart_extract import cli_utils, lifecycle, ndjson, resources, timing
+import smart_fetch
+from smart_fetch import cli_utils, lifecycle, ndjson, resources, timing
 
 
 def export_url(fhir_url: str, group: str) -> str:
@@ -64,8 +64,8 @@ class BulkExportLogWriter:
                 # The bulk logging spec says we can add whatever other keys we want,
                 # but does not encourage a namespace to separate them or anything.
                 # We use a sunder prefix, just in case the spec wants to add new keys itself.
-                row["_client"] = "smart-extract"
-                row["_clientVersion"] = smart_extract.__version__
+                row["_client"] = "smart-fetch"
+                row["_clientVersion"] = smart_fetch.__version__
             json.dump(row, f)
             f.write("\n")
 

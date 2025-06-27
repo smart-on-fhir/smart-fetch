@@ -4,8 +4,8 @@ import json
 import os
 import sys
 
-import smart_extract
-from smart_extract import cli_utils, timing
+import smart_fetch
+from smart_fetch import cli_utils, timing
 
 
 class MetadataKind(enum.StrEnum):
@@ -37,7 +37,7 @@ class Metadata:
         return {
             "kind": self._kind,
             "timestamp": timing.now().isoformat(),
-            "version": smart_extract.__version__,
+            "version": smart_fetch.__version__,
         }
 
     def _read(self) -> dict:
