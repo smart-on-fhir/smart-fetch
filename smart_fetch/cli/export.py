@@ -13,7 +13,7 @@ import cumulus_fhir_support as cfs
 import rich
 import rich.progress
 
-from smart_extract import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks, timing
+from smart_fetch import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks, timing
 
 
 class ExportMode(enum.StrEnum):

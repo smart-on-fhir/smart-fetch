@@ -7,7 +7,7 @@ from unittest import mock
 import ddt
 import httpx
 
-from smart_extract import lifecycle, resources
+from smart_fetch import lifecycle, resources
 from tests import utils
 
 
@@ -42,7 +42,7 @@ class BulkTests(utils.TestCase):
                         "exportId": f"{self.dlserver}/exports/1",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "kickoff",
-                        "_client": "smart-extract",
+                        "_client": "smart-fetch",
                         "_clientVersion": "1!0.0.0",
                         "eventDetail": {
                             "exportUrl": f"{self.url}/Group/group1/$export?"
@@ -330,7 +330,7 @@ class BulkTests(utils.TestCase):
                         "exportId": "1234",  # did not have time to get a status URL
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "kickoff",
-                        "_client": "smart-extract",
+                        "_client": "smart-fetch",
                         "_clientVersion": "1!0.0.0",
                         "eventDetail": {
                             "exportUrl": f"{self.url}/Group/group1/$export?"

@@ -6,7 +6,7 @@ from unittest import mock
 import ddt
 import httpx
 
-from smart_extract import cli_utils, lifecycle, resources
+from smart_fetch import cli_utils, lifecycle, resources
 from tests import utils
 
 
@@ -517,7 +517,7 @@ class ExportTests(utils.TestCase):
 
         self.set_resource_route(respond)
 
-        mocker = mock.patch("smart_extract.hydrate_utils.process", side_effect=RuntimeError)
+        mocker = mock.patch("smart_fetch.hydrate_utils.process", side_effect=RuntimeError)
         self.addCleanup(mocker.stop)
         mocker.start()
 
@@ -619,9 +619,7 @@ class ExportTests(utils.TestCase):
     async def test_finds_prev_workdir_to_resume(self):
         """Confirm we grab the right old folder to resume"""
         # Make all exports fail until further notice
-        mocker = mock.patch(
-            "smart_extract.bulk_utils.BulkExporter.export", side_effect=RuntimeError
-        )
+        mocker = mock.patch("smart_fetch.bulk_utils.BulkExporter.export", side_effect=RuntimeError)
         self.addCleanup(mocker.stop)
         mocker.start()
 
@@ -758,9 +756,7 @@ class ExportTests(utils.TestCase):
     async def test_finds_prev_workdir_to_resume_with_nicknames(self):
         """Confirm we grab the right old folder to resume when using nicknames"""
         # Make all exports fail until further notice
-        mocker = mock.patch(
-            "smart_extract.bulk_utils.BulkExporter.export", side_effect=RuntimeError
-        )
+        mocker = mock.patch("smart_fetch.bulk_utils.BulkExporter.export", side_effect=RuntimeError)
         self.addCleanup(mocker.stop)
         mocker.start()
 

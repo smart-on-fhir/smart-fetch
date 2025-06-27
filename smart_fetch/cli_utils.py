@@ -8,7 +8,7 @@ from collections.abc import Iterable
 import cumulus_fhir_support as cfs
 import rich.progress
 
-from smart_extract import resources
+from smart_fetch import resources
 
 # RESOURCE SELECTION
 

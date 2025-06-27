@@ -6,7 +6,7 @@ from functools import partial
 import cumulus_fhir_support as cfs
 import rich.progress
 
-from smart_extract import hydrate_utils, resources
+from smart_fetch import hydrate_utils, resources
 
 
 def parse_mimetypes(mimetypes: str | None) -> set[str]:

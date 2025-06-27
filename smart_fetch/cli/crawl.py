@@ -4,7 +4,7 @@ import argparse
 
 import rich
 
-from smart_extract import cli_utils, crawl_utils
+from smart_fetch import cli_utils, crawl_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:

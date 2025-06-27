@@ -1,7 +1,7 @@
 import cumulus_fhir_support as cfs
 import rich.progress
 
-from smart_extract import hydrate_utils, resources
+from smart_fetch import hydrate_utils, resources
 
 
 async def _download_med(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:

@@ -11,7 +11,7 @@ import cumulus_fhir_support as cfs
 import httpx
 import rich.progress
 
-from smart_extract import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
+from smart_fetch import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
 
 def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: datetime.datetime):

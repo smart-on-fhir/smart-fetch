@@ -5,8 +5,8 @@ from unittest import mock
 
 import ddt
 
-from smart_extract import cli_utils, lifecycle, resources
-from smart_extract.cli import main
+from smart_fetch import cli_utils, lifecycle, resources
+from smart_fetch.cli import main
 from tests import utils
 
 
