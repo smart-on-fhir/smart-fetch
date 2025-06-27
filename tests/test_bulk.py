@@ -7,8 +7,7 @@ from unittest import mock
 import ddt
 import httpx
 
-import smart_extract
-from smart_extract import lifecycle, resources, timing
+from smart_extract import lifecycle, resources
 from tests import utils
 
 
@@ -41,7 +40,7 @@ class BulkTests(utils.TestCase):
                 "log.ndjson": [
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "kickoff",
                         "_client": "smart-extract",
                         "_clientVersion": "1!0.0.0",
@@ -60,18 +59,18 @@ class BulkTests(utils.TestCase):
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "status_complete",
                         "eventDetail": {
-                            "transactionTime": timing.now().astimezone().isoformat(),
+                            "transactionTime": utils.TRANSACTION_TIME,
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "status_page_complete",
                         "eventDetail": {
-                            "transactionTime": timing.now().isoformat(),
+                            "transactionTime": utils.TRANSACTION_TIME,
                             "outputFileCount": 1,
                             "deletedFileCount": 1,
                             "errorFileCount": 1,
@@ -79,10 +78,10 @@ class BulkTests(utils.TestCase):
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "manifest_complete",
                         "eventDetail": {
-                            "transactionTime": timing.now().isoformat(),
+                            "transactionTime": utils.TRANSACTION_TIME,
                             "totalOutputFileCount": 1,
                             "totalDeletedFileCount": 1,
                             "totalErrorFileCount": 1,
@@ -91,67 +90,67 @@ class BulkTests(utils.TestCase):
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/output/0",
+                            "fileUrl": f"{self.dlserver}/output/1.0",
                             "itemType": "output",
                             "resourceType": "Patient",
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/output/0",
+                            "fileUrl": f"{self.dlserver}/output/1.0",
                             "resourceCount": 1,
                             "fileSize": 41,
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/error/0",
+                            "fileUrl": f"{self.dlserver}/error/1.0",
                             "itemType": "error",
                             "resourceType": "OperationOutcome",
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/error/0",
+                            "fileUrl": f"{self.dlserver}/error/1.0",
                             "resourceCount": 1,
                             "fileSize": 50,
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_request",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/deleted/0",
+                            "fileUrl": f"{self.dlserver}/deleted/1.0",
                             "itemType": "deleted",
                             "resourceType": "Bundle",
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "download_complete",
                         "eventDetail": {
-                            "fileUrl": f"{self.dlserver}/deleted/0",
+                            "fileUrl": f"{self.dlserver}/deleted/1.0",
                             "resourceCount": 1,
                             "fileSize": 95,
                         },
                     },
                     {
                         "exportId": f"{self.dlserver}/exports/1",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "export_complete",
                         "eventDetail": {
                             "files": 3,
@@ -162,18 +161,21 @@ class BulkTests(utils.TestCase):
                         },
                     },
                 ],
-                f"{resources.PATIENT}.000.ndjson.gz": [pat1],
+                f"{resources.PATIENT}.001.ndjson.gz": [pat1],
                 "error": {
-                    f"{resources.OPERATION_OUTCOME}.000.ndjson.gz": [err1],
+                    f"{resources.OPERATION_OUTCOME}.001.ndjson.gz": [err1],
                 },
                 "deleted": {
-                    f"{resources.BUNDLE}.000.ndjson.gz": [del1],
+                    f"{resources.BUNDLE}.001.ndjson.gz": [del1],
                 },
                 ".metadata": {
                     "kind": "output",
-                    "timestamp": timing.now().isoformat(),
-                    "version": smart_extract.__version__,
-                    "done": [resources.PATIENT],
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": {resources.PATIENT: utils.TRANSACTION_TIME},
+                    "filters": {resources.PATIENT: []},
+                    "since": None,
+                    "sinceMode": None,
                 },
             }
         )
@@ -213,6 +215,51 @@ class BulkTests(utils.TestCase):
 
         await self.cli(
             "bulk", self.folder, "--group=group1", "--since=2022-01-05", "--since-mode=created"
+        )
+
+        # Confirm that we wrote out the right "since" metadata value (not encoded in the filters)
+        self.assert_folder(
+            {
+                ".metadata": {
+                    "done": {
+                        "AllergyIntolerance": utils.TRANSACTION_TIME,
+                        "Condition": utils.TRANSACTION_TIME,
+                        "Device": utils.TRANSACTION_TIME,
+                        "DiagnosticReport": utils.TRANSACTION_TIME,
+                        "DocumentReference": utils.TRANSACTION_TIME,
+                        "Encounter": utils.TRANSACTION_TIME,
+                        "Immunization": utils.TRANSACTION_TIME,
+                        "MedicationRequest": utils.TRANSACTION_TIME,
+                        "Observation": utils.TRANSACTION_TIME,
+                        "Patient": utils.TRANSACTION_TIME,
+                        "Procedure": utils.TRANSACTION_TIME,
+                        "ServiceRequest": utils.TRANSACTION_TIME,
+                    },
+                    "filters": {
+                        "AllergyIntolerance": [],
+                        "Condition": [],
+                        "Device": [],
+                        "DiagnosticReport": [],
+                        "DocumentReference": [],
+                        "Encounter": [],
+                        "Immunization": [],
+                        "MedicationRequest": [],
+                        "Observation": [
+                            "category=social-history,vital-signs,imaging,laboratory,survey,exam,"
+                            "procedure,therapy,activity"
+                        ],
+                        "Patient": [],
+                        "Procedure": [],
+                        "ServiceRequest": [],
+                    },
+                    "kind": "output",
+                    "since": "2022-01-05",
+                    "sinceMode": "created",
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                },
+                "log.ndjson": None,
+            }
         )
 
     async def test_custom_type_filter(self):
@@ -277,10 +324,11 @@ class BulkTests(utils.TestCase):
 
         self.assert_folder(
             {
+                ".metadata": None,
                 "log.ndjson": [
                     {
                         "exportId": "1234",  # did not have time to get a status URL
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "kickoff",
                         "_client": "smart-extract",
                         "_clientVersion": "1!0.0.0",
@@ -314,7 +362,7 @@ class BulkTests(utils.TestCase):
         self.mock_bulk("group1", output=[httpx.Response(200, stream=exploding_stream())])
 
         with self.assertRaisesRegex(
-            SystemExit, "Error downloading 'http://example.invalid/dl/output/0': oops"
+            SystemExit, "Error downloading 'http://example.invalid/dl/output/1.0': oops"
         ):
             await self.cli("bulk", self.folder, "--group=group1")
 
@@ -392,3 +440,23 @@ class BulkTests(utils.TestCase):
         metadata.mark_done(resources.DEVICE)
         metadata.mark_done(resources.PROCEDURE)
         await self.cli("bulk", self.folder, f"--type={resources.DEVICE},{resources.PROCEDURE}")
+
+    async def test_bogus_transaction_time(self):
+        """Confirm we gracefully handle a bad server transaction time"""
+        self.mock_bulk(transaction_time="blarg")
+        await self.cli("bulk", self.folder, f"--type={resources.DEVICE}")
+
+        self.assert_folder(
+            {
+                ".metadata": {
+                    "done": {resources.DEVICE: utils.FROZEN_TIMESTAMP},  # <- current time used
+                    "kind": "output",
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "filters": {resources.DEVICE: []},
+                    "since": None,
+                    "sinceMode": None,
+                },
+                "log.ndjson": None,
+            }
+        )

@@ -49,12 +49,6 @@ async def export_main(args: argparse.Namespace) -> None:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
-        if since_mode == cli_utils.SinceMode.CREATED:
-            filters = cli_utils.add_since_filter(filters, args.since, since_mode)
-            args.since = None
-        # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
-        # it with _lastUpdated, because _since has extra logic around older resources of patients
-        # added to the group after _since.
 
         await bulk_utils.perform_bulk(
             bulk_client=bulk_client,
@@ -63,6 +57,7 @@ async def export_main(args: argparse.Namespace) -> None:
             group=args.group,
             workdir=workdir,
             since=args.since,
+            since_mode=since_mode,
             resume=args.resume,
         )
 
@@ -74,4 +69,4 @@ async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> No
     async with bulk_client:
         exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)
         await exporter.cancel()
-        logging.info("Export cancelled.")
+        logging.warning("Export cancelled.")

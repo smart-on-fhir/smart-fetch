@@ -303,6 +303,9 @@ class BulkExporter:
             prefer_url_resources=prefer_url_resources,
         )
 
+        # Will be filled out by export()
+        self.transaction_time: datetime.datetime | None = None
+
     @staticmethod
     def combine_filters(
         filters: cli_utils.Filters | None, *, resources: set[str], server_type: cfs.ServerType
@@ -350,7 +353,7 @@ class BulkExporter:
         return [
             quote(f"{res_type}?{single_filter}")
             for res_type in sorted(resources)
-            for single_filter in filters[res_type]
+            for single_filter in sorted(filters[res_type])
         ]
 
     @staticmethod
@@ -380,7 +383,7 @@ class BulkExporter:
         if combined_filters:
             query.setdefault("_typeFilter", []).extend(combined_filters)
         if since:
-            query["_since"] = since
+            query["_since"] = [since]
 
         # Combine repeated query params into a single comma-delimited params.
         # The spec says servers SHALL support repeated params (and even prefers them, claiming
@@ -426,10 +429,10 @@ class BulkExporter:
         if self._resume:
             poll_location = self._resume
             self._log.export_id = poll_location
-            logging.info("Resuming bulk FHIR export… (all other export arguments ignored)")
+            logging.warning("Resuming bulk FHIR export… (all other export arguments ignored)")
         else:
             poll_location = await self._kick_off()
-            logging.info("Starting bulk FHIR export…")
+            logging.warning("Starting bulk FHIR export…")
 
         # Request status report, until export is done
         response = await self._request_with_delay_status(
@@ -442,8 +445,15 @@ class BulkExporter:
         # Finished! We're done waiting and can download all the files
         response_json = response.json()
 
+        try:
+            raw_transaction_time = response_json.get("transactionTime")
+            self.transaction_time = datetime.datetime.fromisoformat(raw_transaction_time)
+        except ValueError as exc:
+            logging.error(f"Could not parse transactionTime: {exc}")
+            self.transaction_time = timing.now()
+
         # Download all the files
-        logging.info("Bulk FHIR export finished, now downloading resources…")
+        logging.warning("Bulk FHIR export finished, now downloading resources…")
         await self._download_all_ndjson_files(response_json, "output")
         await self._download_all_ndjson_files(response_json, "error")
         await self._download_all_ndjson_files(response_json, "deleted")
@@ -537,7 +547,7 @@ class BulkExporter:
             response = await self._request_with_retries(*args, rich_text=status_box, **kwargs)
 
         if status_box.plain:
-            logging.info(  # pragma: no cover
+            logging.warning(  # pragma: no cover
                 f"  Waited for a total of {cli_utils.human_time_offset(self._total_wait_time)}"
             )
 
@@ -668,7 +678,7 @@ class BulkExporter:
         resource_counts = {}  # how many of each resource we've seen
         coroutines = []
         for file in files:
-            count = resource_counts.get(file["type"], -1) + 1
+            count = resource_counts.get(file["type"], 0) + 1
             resource_counts[file["type"]] = count
             filename = f"{file['type']}.{count:03}.ndjson.gz"
             coroutines.append(
@@ -717,7 +727,7 @@ class BulkExporter:
 
         rel_filename = os.path.relpath(filename, self._destination)
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
-        logging.info(f"  Downloaded {rel_filename} ({human_size})")
+        logging.warning(f"  Downloaded {rel_filename} ({human_size})")
 
 
 async def perform_bulk(
@@ -728,17 +738,26 @@ async def perform_bulk(
     group: str,
     workdir: str,
     since: str | None,
+    since_mode: cli_utils.SinceMode,
     resume: str | None,
     finish_callback: Callable[[str], Awaitable[None]] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
+    metadata.note_context(filters=filters, since=since, since_mode=since_mode)
+
+    if since_mode == cli_utils.SinceMode.CREATED:
+        filters = cli_utils.add_since_filter(filters, since, since_mode)
+        since = None
+    # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
+    # it with _lastUpdated, because _since has extra logic around older resources of patients
+    # added to the group after _since.
 
     # See which resources we can skip
     already_done = set()
     for res_type in filters:
         if metadata.is_done(res_type):
-            logging.info(f"Skipping {res_type}, already done.")
+            logging.warning(f"Skipping {res_type}, already done.")
             already_done.add(res_type)
     res_types = set(filters) - already_done
 
@@ -754,7 +773,7 @@ async def perform_bulk(
         )
         await exporter.export()
         for res_type in res_types:
-            metadata.mark_done(res_type)
+            metadata.mark_done(res_type, exporter.transaction_time)
 
     for res_type in filters:  # Run on all requested res types
         if finish_callback:

@@ -170,14 +170,14 @@ async def process(
 
     metadata = lifecycle.OutputMetadata(workdir)
     if metadata.is_done(task_name):
-        logging.info(f"Skipping {task_name}, already done.")
+        logging.warning(f"Skipping {task_name}, already done.")
         return None
 
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
 
     if not found_files:
-        logging.info(f"Skipping {task_name}, no {input_type} resources found.")
+        logging.warning(f"Skipping {task_name}, no {input_type} resources found.")
         return None
 
     # See what is already present

@@ -70,9 +70,9 @@ smart-extract export \
   /tmp/export
 
 ls -l /tmp/export
-# 238ec0e72fb1fd8dc9c4c0aa6a92459f/
-# Encounter.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Encounter.000.ndjson.gz
-# Patient.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Patient.000.ndjson.gz
+# 001.2025-06-26/
+# Encounter.001.ndjson.gz -> 001.2025-06-26/Encounter.001.ndjson.gz
+# Patient.001.ndjson.gz -> 001.2025-06-26/Patient.001.ndjson.gz
 
 # Second export with a --since date, a new resource, and a nickname for the export
 smart-extract export \
@@ -83,11 +83,11 @@ smart-extract export \
   /tmp/export
 
 ls -l /tmp/export
-# 238ec0e72fb1fd8dc9c4c0aa6a92459f/
-# second-run/
-# Condition.000.ndjson.gz -> second-run/Condition.000.ndjson.gz
-# Encounter.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Encounter.000.ndjson.gz
-# Encounter.001.ndjson.gz -> second-run/Encounter.000.ndjson.gz
-# Patient.000.ndjson.gz -> 238ec0e72fb1fd8dc9c4c0aa6a92459f/Patient.000.ndjson.gz
-# Patient.001.ndjson.gz -> second-run/Patient.000.ndjson.gz
+# 001.2025-06-26/
+# 002.second-run/
+# Condition.001.ndjson.gz -> 002.second-run/Condition.001.ndjson.gz
+# Encounter.001.ndjson.gz -> 001.2025-06-26/Encounter.001.ndjson.gz
+# Encounter.002.ndjson.gz -> 002.second-run/Encounter.001.ndjson.gz
+# Patient.001.ndjson.gz -> 001.2025-06-26/Patient.001.ndjson.gz
+# Patient.002.ndjson.gz -> 002.second-run/Patient.001.ndjson.gz
 ```

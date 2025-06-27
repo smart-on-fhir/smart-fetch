@@ -45,8 +45,8 @@ class CommandLineTests(utils.TestCase):
         self.assert_folder(
             {
                 "log.ndjson": None,
-                f"{resources.CONDITION}.000.ndjson.gz": None,
-                f"{resources.PATIENT}.000.ndjson.gz": None,
+                f"{resources.CONDITION}.001.ndjson.gz": None,
+                f"{resources.PATIENT}.001.ndjson.gz": None,
                 ".metadata": None,
             }
         )
@@ -103,7 +103,7 @@ class CommandLineTests(utils.TestCase):
         )
         await self.cli("export", self.folder, f"--config={config.name}")
 
-    async def test_wrong_metadata(self):
+    async def test_wrong_metadata_kind(self):
         metadata = lifecycle.OutputMetadata(self.folder)
         metadata.mark_done(resources.CONDITION)
         with self.assertRaisesRegex(SystemExit, "is not a managed folder, but an output folder"):
@@ -114,6 +114,73 @@ class CommandLineTests(utils.TestCase):
         metadata.note_context(fhir_url=self.url, group="group1")
         with self.assertRaisesRegex(SystemExit, "is not an output folder, but a managed folder"):
             await self.cli("bulk", self.folder)
+
+    async def test_wrong_metadata_context(self):
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.note_context(
+            filters={resources.CONDITION: {"code=1234"}},
+            since="2013-10-30",
+            since_mode=cli_utils.SinceMode.CREATED,
+        )
+
+        # Wrong type filter
+        with self.assertRaises(SystemExit) as cm:
+            await self.cli("bulk", self.folder, f"--type={resources.CONDITION}")
+        self.assertEqual(
+            str(cm.exception),
+            f"""Folder {self.folder} is for a different set of types and/or filters. Expected:
+  Condition (no filter)
+
+but found:
+  Condition?code=1234""",
+        )
+
+        # Wrong types
+        with self.assertRaises(SystemExit) as cm:
+            await self.cli(
+                "bulk",
+                self.folder,
+                f"--type={resources.CONDITION},{resources.DEVICE}",
+                f"--type-filter={resources.CONDITION}?code=1234",
+            )
+        self.assertEqual(
+            str(cm.exception),
+            f"""Folder {self.folder} is for a different set of types and/or filters. Expected:
+  Condition?code=1234
+  Device (no filter)
+
+but found:
+  Condition?code=1234""",
+        )
+
+        # Wrong since
+        with self.assertRaisesRegex(
+            SystemExit,
+            f"Folder {self.folder} is for a different --since time. "
+            "Expected 2020-03-23 but found 2013-10-30.",
+        ):
+            await self.cli(
+                "bulk",
+                self.folder,
+                "--since=2020-03-23",
+                f"--type={resources.CONDITION}",
+                f"--type-filter={resources.CONDITION}?code=1234",
+            )
+
+        # Wrong since mode
+        with self.assertRaisesRegex(
+            SystemExit,
+            f"Folder {self.folder} is for a different --since-mode. "
+            "Expected 'updated' but found 'created'.",
+        ):
+            await self.cli(
+                "bulk",
+                self.folder,
+                "--since=2013-10-30",
+                "--since-mode=updated",
+                f"--type={resources.CONDITION}",
+                f"--type-filter={resources.CONDITION}?code=1234",
+            )
 
     async def test_no_fhir_url(self):
         with self.assertRaisesRegex(SystemExit, "--fhir-url is required"):

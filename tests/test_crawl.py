@@ -4,8 +4,7 @@ import os
 import ddt
 import httpx
 
-import smart_extract
-from smart_extract import resources, timing
+from smart_extract import resources
 from tests import utils
 
 
@@ -46,14 +45,17 @@ class CrawlTests(utils.TestCase):
             {
                 ".metadata": {
                     "kind": "output",
-                    "timestamp": timing.now().isoformat(),
-                    "version": smart_extract.__version__,
-                    "done": [resources.DEVICE],
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": {resources.DEVICE: utils.FROZEN_TIMESTAMP},
+                    "filters": {resources.DEVICE: []},
+                    "since": None,
+                    "sinceMode": None,
                 },
                 "log.ndjson": [
                     {
                         "exportId": "fake-log",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "kickoff",
                         "eventDetail": {
                             "exportUrl": f"{self.url}/Group/{expected_group}/$export",
@@ -67,20 +69,20 @@ class CrawlTests(utils.TestCase):
                             "responseHeaders": {},
                         },
                         "_client": "smart-extract",
-                        "_clientVersion": "1!0.0.0",
+                        "_clientVersion": utils.version,
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "status_complete",
-                        "eventDetail": {"transactionTime": timing.now().isoformat()},
+                        "eventDetail": {"transactionTime": utils.FROZEN_TIMESTAMP},
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "status_page_complete",
                         "eventDetail": {
-                            "transactionTime": timing.now().isoformat(),
+                            "transactionTime": utils.FROZEN_TIMESTAMP,
                             "outputFileCount": 0,
                             "deletedFileCount": 0,
                             "errorFileCount": 0,
@@ -88,10 +90,10 @@ class CrawlTests(utils.TestCase):
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "manifest_complete",
                         "eventDetail": {
-                            "transactionTime": timing.now().isoformat(),
+                            "transactionTime": utils.FROZEN_TIMESTAMP,
                             "totalOutputFileCount": 0,
                             "totalDeletedFileCount": 0,
                             "totalErrorFileCount": 0,
@@ -100,7 +102,7 @@ class CrawlTests(utils.TestCase):
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": timing.now().isoformat(),
+                        "timestamp": utils.FROZEN_TIMESTAMP,
                         "eventId": "export_complete",
                         "eventDetail": {
                             "files": 0,
@@ -178,8 +180,8 @@ class CrawlTests(utils.TestCase):
             {
                 ".metadata": None,
                 "log.ndjson": None,
-                f"{resources.PATIENT}.000.ndjson.gz": [pat1],
-                f"{resources.PATIENT}.001.ndjson.gz": [pat2],
+                f"{resources.PATIENT}.001.ndjson.gz": [pat1],
+                f"{resources.PATIENT}.002.ndjson.gz": [pat2],
             }
         )
 
@@ -257,6 +259,10 @@ class CrawlTests(utils.TestCase):
 
         obs1 = [{"resourceType": resources.OBSERVATION, "id": "obs1"}]
 
+        expected_filter_metadata = [
+            "&".join(f"{key}={val}" for key, val in params.items()) for params in query_params
+        ]
+
         def respond(request: httpx.Request, res_type: str) -> httpx.Response:
             if res_type == resources.OBSERVATION:
                 for queries in query_params:
@@ -274,7 +280,15 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": None,
+                ".metadata": {
+                    "done": {resources.OBSERVATION: utils.FROZEN_TIMESTAMP},
+                    "filters": {resources.OBSERVATION: expected_filter_metadata},
+                    "kind": "output",
+                    "since": None,
+                    "sinceMode": None,
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                },
                 "log.ndjson": None,
                 f"{resources.PATIENT}.ndjson.gz": None,
                 f"{resources.OBSERVATION}.ndjson.gz": obs1,
@@ -345,7 +359,15 @@ class CrawlTests(utils.TestCase):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
         with open(f"{self.folder}/.metadata", "w", encoding="utf8") as f:
-            json.dump({"done": [resources.DEVICE, resources.PATIENT]}, f)
+            json.dump(
+                {
+                    "done": {
+                        resources.DEVICE: utils.FROZEN_TIMESTAMP,
+                        resources.PATIENT: utils.FROZEN_TIMESTAMP,
+                    }
+                },
+                f,
+            )
 
         await self.cli(
             "crawl",
@@ -359,7 +381,7 @@ class CrawlTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": {"done": [resources.DEVICE, resources.PATIENT]},
+                ".metadata": None,
                 f"{resources.PATIENT}.ndjson.gz": None,
                 "log.ndjson": None,
             }
@@ -394,12 +416,34 @@ class CrawlTests(utils.TestCase):
 
         self.assertEqual(missing, [])
 
+        self.assert_folder(
+            {
+                ".metadata": {
+                    "kind": "output",
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": {
+                        resources.ENCOUNTER: utils.FROZEN_TIMESTAMP,
+                        resources.IMMUNIZATION: utils.FROZEN_TIMESTAMP,
+                    },
+                    "filters": {
+                        resources.ENCOUNTER: ["identifier=ENC1", "type=ADMS"],
+                        resources.IMMUNIZATION: [],
+                    },
+                    "since": "2022-01-05",
+                    "sinceMode": "updated",
+                },
+                f"{resources.PATIENT}.ndjson.gz": None,
+                "log.ndjson": None,
+            }
+        )
+
     async def test_since_created(self):
         """Test --since-mode=created"""
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
         with open(f"{self.folder}/.metadata", "w", encoding="utf8") as f:
-            json.dump({"done": [resources.PATIENT]}, f)
+            json.dump({"done": {resources.PATIENT: utils.FROZEN_TIMESTAMP}}, f)
 
         params = {
             resources.ALLERGY_INTOLERANCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],

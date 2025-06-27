@@ -42,13 +42,14 @@ async def crawl_main(args: argparse.Namespace) -> None:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types)
         filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since_mode, rest_client.server_type)
-        filters = cli_utils.add_since_filter(filters, args.since, since_mode)
         workdir = args.folder
         source_dir = args.source_dir or workdir
 
         await crawl_utils.perform_crawl(
             fhir_url=args.fhir_url,
             filters=filters,
+            since=args.since,
+            since_mode=since_mode,
             source_dir=source_dir,
             workdir=workdir,
             rest_client=rest_client,
