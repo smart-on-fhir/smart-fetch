@@ -69,4 +69,3 @@ async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> No
     async with bulk_client:
         exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)
         await exporter.cancel()
-        logging.warning("Export cancelled.")

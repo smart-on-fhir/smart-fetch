@@ -38,6 +38,8 @@ async def main(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     await args.func(args)
 
+    rich.get_console().print("✨ Done ✨")
+
 
 def main_cli():
     asyncio.run(main(sys.argv[1:]))  # pragma: no cover
