@@ -19,12 +19,6 @@ class HydrateObsMemberTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": {
-                    "kind": "output",
-                    "timestamp": utils.FROZEN_TIMESTAMP,
-                    "version": utils.version,
-                    "done": {"obs-members": utils.FROZEN_TIMESTAMP},
-                },
                 f"{resources.OBSERVATION}.ndjson.gz": obs,
                 f"{resources.OBSERVATION}.members.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a1"},
@@ -100,7 +94,6 @@ class HydrateObsMemberTests(utils.TestCase):
                         "id": "d",
                     },
                 ],
-                ".metadata": None,
             }
         )
 
@@ -118,12 +111,6 @@ class HydrateObsDxrTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": {
-                    "kind": "output",
-                    "timestamp": utils.FROZEN_TIMESTAMP,
-                    "version": utils.version,
-                    "done": {"dxr-results": utils.FROZEN_TIMESTAMP},
-                },
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 f"{resources.OBSERVATION}.results.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a"},
@@ -153,7 +140,6 @@ class HydrateObsDxrTests(utils.TestCase):
                 "elsewhere": {
                     f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": dxr,
                 },
-                ".metadata": None,
                 f"{resources.OBSERVATION}.results.ndjson.gz": [
                     {"resourceType": resources.OBSERVATION, "id": "a"},
                 ],

@@ -524,9 +524,11 @@ class ExportTests(utils.TestCase):
         if export_mode == "crawl":
             suffix = "ndjson.gz"
             res_time = utils.FROZEN_TIMESTAMP
+            extra_files = {"Patient.001.ndjson.gz": "001.2021-09-14/Patient.001.ndjson.gz"}
         else:
             suffix = "001.ndjson.gz"
             res_time = utils.TRANSACTION_TIME
+            extra_files = {}
 
         # First interrupted run
         with self.assertRaises(RuntimeError):
@@ -556,8 +558,8 @@ class ExportTests(utils.TestCase):
                     f"{resources.PATIENT}.001.ndjson.gz": [pat1],
                     f"{resources.DOCUMENT_REFERENCE}.{suffix}": [doc1],
                 },
-                "Patient.001.ndjson.gz": f"001.2021-09-14/{resources.PATIENT}.001.ndjson.gz",
                 ".metadata": None,
+                **extra_files,
             }
         )
 
@@ -577,7 +579,6 @@ class ExportTests(utils.TestCase):
                         "done": {
                             resources.DOCUMENT_REFERENCE: res_time,
                             resources.PATIENT: utils.TRANSACTION_TIME,
-                            "doc-inline": utils.FROZEN_TIMESTAMP,
                         },
                         "filters": {resources.DOCUMENT_REFERENCE: [], resources.PATIENT: []},
                         "since": None,

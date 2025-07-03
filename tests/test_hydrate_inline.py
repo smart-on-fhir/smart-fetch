@@ -93,7 +93,6 @@ class HydrateDocInlineTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": None,
                 "extra.jsonl": [
                     {
                         "resourceType": resources.DOCUMENT_REFERENCE,
@@ -216,7 +215,6 @@ class HydrateDocInlineTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": None,
                 f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": [
                     {
                         "resourceType": resources.DOCUMENT_REFERENCE,
@@ -273,7 +271,6 @@ class HydrateDxrInlineTests(utils.TestCase):
 
         self.assert_folder(
             {
-                ".metadata": None,
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": [
                     {
                         "resourceType": resources.DIAGNOSTIC_REPORT,

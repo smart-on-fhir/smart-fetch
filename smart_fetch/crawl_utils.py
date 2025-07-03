@@ -179,6 +179,7 @@ async def gather_patients(
                 bulk_utils.export_url(fhir_url, group),
                 workdir,
                 type_filter=filters,
+                metadata=metadata,
             )
             await exporter.export()
             await finish_wrapper(

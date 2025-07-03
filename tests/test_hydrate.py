@@ -5,7 +5,7 @@ from unittest import mock
 import ddt
 import httpx
 
-from smart_fetch import lifecycle, resources
+from smart_fetch import resources
 from tests import utils
 
 
@@ -49,7 +49,6 @@ class HydrateTests(utils.TestCase):
                 f"{resources.MEDICATION}.ndjson.gz": [
                     {"resourceType": resources.MEDICATION, "id": "good"},
                 ],
-                ".metadata": None,
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
             }
         )
@@ -80,7 +79,6 @@ class HydrateTests(utils.TestCase):
                     {"resourceType": resources.MEDICATION, "id": "1"},
                     {"resourceType": resources.MEDICATION, "id": "2"},
                 ],
-                ".metadata": None,
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
             }
         )
@@ -89,32 +87,6 @@ class HydrateTests(utils.TestCase):
         """Test that we gracefully skip the task when missing input sources"""
         await self.cli("hydrate", self.folder, "--hydration-tasks=obs-members")
         self.assert_folder({})
-
-    async def test_skip_done(self):
-        """Test that we gracefully skip the task when it's been done already"""
-        self.write_res(
-            resources.MEDICATION_REQUEST,
-            [
-                {"medicationReference": {"reference": "Medication/1"}},
-                {"medicationReference": {"reference": "Medication/2"}},
-            ],
-        )
-        metadata = lifecycle.OutputMetadata(self.folder)
-        metadata.mark_done("meds")
-
-        # We'll complain about non-mocked network calls if we try to get meds
-        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
-        self.assert_folder(
-            {
-                ".metadata": {
-                    "kind": "output",
-                    "timestamp": utils.FROZEN_TIMESTAMP,
-                    "version": utils.version,
-                    "done": {"meds": utils.FROZEN_TIMESTAMP},
-                },
-                f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
-            }
-        )
 
     @ddt.data(
         ("help", 0),

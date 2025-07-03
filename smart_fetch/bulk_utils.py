@@ -10,7 +10,7 @@ import sys
 import typing
 import urllib.parse
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from functools import partial
 
 import cumulus_fhir_support as cfs
@@ -266,7 +266,7 @@ class BulkExporter:
         *,
         since: str | None = None,
         type_filter: cli_utils.Filters | None = None,
-        resume: str | None = None,
+        metadata: lifecycle.OutputMetadata,
         prefer_url_resources: bool = False,
     ):
         """
@@ -278,7 +278,7 @@ class BulkExporter:
         :param destination: a local folder to store all the files
         :param since: start date for export
         :param type_filter: search filter for export (_typeFilter)
-        :param resume: a polling status URL from a previous expor
+        :param metadata: metadata object to pull resume information from
         :param prefer_url_resources: if the URL includes _type, ignore the provided resources
         """
         super().__init__()
@@ -286,13 +286,7 @@ class BulkExporter:
         self._destination = destination
         self._total_wait_time = 0  # in seconds, across all our requests
         self._log: BulkExportLogWriter | None = None
-
-        self._resume = resume
-        if self._resume and ":" not in self._resume:
-            # Decode URL first (we normally encode the URL for ease of copy-paste in the
-            # terminal). We check if we need to first, to also support accepting resume URLs
-            # that we didn't generate.
-            self._resume = urllib.parse.unquote(self._resume)
+        self._metadata = metadata
 
         self.export_url = self._format_kickoff_url(
             url,
@@ -397,7 +391,7 @@ class BulkExporter:
         return urllib.parse.urlunsplit(parsed)
 
     async def cancel(self) -> None:
-        await self._delete_export(self._resume)
+        await self._delete_export(self._metadata.get_bulk_status_url())
 
     async def export(self) -> None:
         """
@@ -426,12 +420,15 @@ class BulkExporter:
     async def _internal_export(self):
         self._log = BulkExportLogWriter(self._destination)
 
-        if self._resume:
-            poll_location = self._resume
+        rich.get_console().rule()
+
+        if self._metadata.get_bulk_status_url():
+            poll_location = self._metadata.get_bulk_status_url()
             self._log.export_id = poll_location
-            logging.warning("Resuming bulk FHIR export… (all other export arguments ignored)")
+            logging.warning("Resuming bulk FHIR export…")
         else:
             poll_location = await self._kick_off()
+            self._metadata.set_bulk_status_url(poll_location)
             logging.warning("Starting bulk FHIR export…")
 
         # Request status report, until export is done
@@ -464,6 +461,7 @@ class BulkExporter:
         # call. If we had an issue talking to the server (like http errors), we want to leave the
         # files up there, so the user could try to manually recover.
         await self._delete_export(poll_location)
+        self._metadata.set_bulk_status_url(None)
 
         # Were there any server-side errors during the export?
         error_texts, warning_texts = self._gather_all_messages()
@@ -502,21 +500,6 @@ class BulkExporter:
         self._log.export_id = poll_location
 
         self._log.kickoff(self.export_url, self._client.capabilities, response)
-
-        rich.get_console().print()
-        rich.get_console().print(
-            "If interrupted, try again but add the following argument to resume the export:"
-        )
-        rich.get_console().print(
-            # Quote the poll location here only so that it's easier to copy & paste the whole
-            # argument in one double-click. Colons are often used as separators in word-
-            # highlighting algorithms.
-            f"--resume={urllib.parse.quote(poll_location)}",
-            style="bold",
-            highlight=False,
-            soft_wrap=True,
-        )
-        rich.get_console().print()
 
         return poll_location
 
@@ -739,8 +722,6 @@ async def perform_bulk(
     workdir: str,
     since: str | None,
     since_mode: cli_utils.SinceMode,
-    resume: str | None,
-    finish_callback: Callable[[str], Awaitable[None]] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
@@ -755,10 +736,11 @@ async def perform_bulk(
 
     # See which resources we can skip
     already_done = set()
-    for res_type in filters:
-        if metadata.is_done(res_type):
-            logging.warning(f"Skipping {res_type}, already done.")
-            already_done.add(res_type)
+    if not metadata.get_bulk_status_url():
+        for res_type in filters:
+            if metadata.is_done(res_type):
+                logging.warning(f"Skipping {res_type}, already done.")
+                already_done.add(res_type)
     res_types = set(filters) - already_done
 
     if res_types:
@@ -769,12 +751,8 @@ async def perform_bulk(
             workdir,
             since=since,
             type_filter=filters,
-            resume=resume,
+            metadata=metadata,
         )
         await exporter.export()
         for res_type in res_types:
             metadata.mark_done(res_type, exporter.transaction_time)
-
-    for res_type in filters:  # Run on all requested res types
-        if finish_callback:
-            await finish_callback(res_type)
