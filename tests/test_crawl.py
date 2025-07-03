@@ -526,3 +526,221 @@ class CrawlTests(utils.TestCase):
                 "--mrn-system=my-system",
                 f"--type={resources.PATIENT}",
             )
+
+    @ddt.data(
+        # 2020 is before our frozen time of 2021
+        ({"meta": {"lastUpdated": "2020-01-01T10:00:00-10"}}, "2020-01-01T10:00:00-10:00"),
+        ({"period": {"start": "2020"}}, "2020-01-01T00:00:00+00:00"),
+        ({"period": {"end": "2020-01"}}, "2020-01-01T00:00:00+00:00"),
+        ({"period": {"start": "2020-01-01"}}, "2020-01-01T00:00:00+00:00"),
+        # 2022 is after our frozen time of 2021 - it took a year to finish exporting!
+        ({"period": {"end": "2022-01-01"}}, utils.FROZEN_TIMESTAMP),
+    )
+    @ddt.unpack
+    async def test_transaction_time(self, enc_fields, expected_time):
+        """Confirm we write out an older date if the server only has old data"""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.write_res(resources.PATIENT, [pat1])
+
+        params = {
+            resources.ALLERGY_INTOLERANCE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {
+                        "resourceType": resources.ALLERGY_INTOLERANCE,
+                        "id": "1",
+                        "recordedDate": "bogus",
+                    }
+                ]
+            },
+            resources.CONDITION: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.CONDITION, "id": "1", "recordedDate": "2000"}
+                ]
+            },
+            resources.DIAGNOSTIC_REPORT: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.DIAGNOSTIC_REPORT, "id": "1", "issued": "2001"}
+                ]
+            },
+            resources.DOCUMENT_REFERENCE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.DOCUMENT_REFERENCE, "id": "1", "date": "2002"}
+                ]
+            },
+            resources.ENCOUNTER: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.ENCOUNTER, "id": "1", **enc_fields}
+                ]
+            },
+            resources.IMMUNIZATION: {
+                httpx.QueryParams(patient="pat1"): [
+                    {
+                        "resourceType": resources.IMMUNIZATION,
+                        "id": "1",
+                        "occurrenceDateTime": "2003",
+                    }
+                ]
+            },
+            resources.MEDICATION_REQUEST: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.MEDICATION_REQUEST, "id": "1", "authoredOn": "2004"}
+                ]
+            },
+            resources.OBSERVATION: {
+                httpx.QueryParams(patient="pat1", category=utils.DEFAULT_OBS_CATEGORIES): [
+                    {"resourceType": resources.OBSERVATION, "id": "1", "effectiveDateTime": "2005"},
+                    {"resourceType": resources.OBSERVATION, "id": "1", "effectiveInstant": "2006"},
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "1",
+                        "effectivePeriod": {"start": "2007"},
+                    },
+                    {
+                        "resourceType": resources.OBSERVATION,
+                        "id": "1",
+                        "effectivePeriod": {"end": "2008"},
+                    },
+                ]
+            },
+            resources.PROCEDURE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.PROCEDURE, "id": "1", "performedDateTime": "2009"},
+                    {
+                        "resourceType": resources.PROCEDURE,
+                        "id": "1",
+                        "performedPeriod": {"start": "2010"},
+                    },
+                    {
+                        "resourceType": resources.PROCEDURE,
+                        "id": "1",
+                        "performedPeriod": {"end": "2011"},
+                    },
+                ]
+            },
+            resources.SERVICE_REQUEST: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.SERVICE_REQUEST, "id": "1", "authoredOn": "2012"},
+                ]
+            },
+        }
+        missing = self.set_resource_search_queries(params)
+
+        await self.cli(
+            "crawl",
+            self.folder,
+            f"--type={','.join(resources.CREATED_SEARCH_FIELDS)}",
+            "--group-nickname=foo",
+        )
+
+        self.assertEqual(missing, [])
+
+        expected_log_transaction_time = "2000-01-01T00:00:00+00:00"
+        self.assert_folder(
+            {
+                ".metadata": {
+                    "kind": "output",
+                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "version": utils.version,
+                    "done": {
+                        resources.ALLERGY_INTOLERANCE: utils.FROZEN_TIMESTAMP,  # fallback
+                        resources.CONDITION: "2000-01-01T00:00:00+00:00",
+                        resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+00:00",
+                        resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+00:00",
+                        resources.ENCOUNTER: expected_time,
+                        resources.IMMUNIZATION: "2003-01-01T00:00:00+00:00",
+                        resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+00:00",
+                        resources.OBSERVATION: "2008-01-01T00:00:00+00:00",
+                        resources.PROCEDURE: "2011-01-01T00:00:00+00:00",
+                        resources.SERVICE_REQUEST: "2012-01-01T00:00:00+00:00",
+                    },
+                    "filters": {
+                        resources.ALLERGY_INTOLERANCE: [],
+                        resources.CONDITION: [],
+                        resources.DIAGNOSTIC_REPORT: [],
+                        resources.DOCUMENT_REFERENCE: [],
+                        resources.ENCOUNTER: [],
+                        resources.IMMUNIZATION: [],
+                        resources.MEDICATION_REQUEST: [],
+                        resources.OBSERVATION: [f"category={utils.DEFAULT_OBS_CATEGORIES}"],
+                        resources.PROCEDURE: [],
+                        resources.SERVICE_REQUEST: [],
+                    },
+                    "since": None,
+                    "sinceMode": None,
+                },
+                f"{resources.ALLERGY_INTOLERANCE}.ndjson.gz": None,
+                f"{resources.CONDITION}.ndjson.gz": None,
+                f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": None,
+                f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": None,
+                f"{resources.ENCOUNTER}.ndjson.gz": None,
+                f"{resources.IMMUNIZATION}.ndjson.gz": None,
+                f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
+                f"{resources.OBSERVATION}.ndjson.gz": None,
+                f"{resources.PATIENT}.ndjson.gz": None,
+                f"{resources.PROCEDURE}.ndjson.gz": None,
+                f"{resources.SERVICE_REQUEST}.ndjson.gz": None,
+                # Check the log to confirm that we use the earliest resource transaction time
+                # as the overall transactionTime.
+                "log.ndjson": [
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "eventId": "kickoff",
+                        "eventDetail": {
+                            "exportUrl": f"{self.url}/Group/foo/$export",
+                            "softwareName": None,
+                            "softwareVersion": None,
+                            "softwareReleaseDate": None,
+                            "fhirVersion": None,
+                            "requestParameters": {},
+                            "errorCode": None,
+                            "errorBody": None,
+                            "responseHeaders": {},
+                        },
+                        "_client": "smart-fetch",
+                        "_clientVersion": utils.version,
+                    },
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "eventId": "status_complete",
+                        "eventDetail": {"transactionTime": expected_log_transaction_time},
+                    },
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "eventId": "status_page_complete",
+                        "eventDetail": {
+                            "transactionTime": expected_log_transaction_time,
+                            "outputFileCount": 0,
+                            "deletedFileCount": 0,
+                            "errorFileCount": 0,
+                        },
+                    },
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "eventId": "manifest_complete",
+                        "eventDetail": {
+                            "transactionTime": expected_log_transaction_time,
+                            "totalOutputFileCount": 0,
+                            "totalDeletedFileCount": 0,
+                            "totalErrorFileCount": 0,
+                            "totalManifests": 1,
+                        },
+                    },
+                    {
+                        "exportId": "fake-log",
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "eventId": "export_complete",
+                        "eventDetail": {
+                            "files": 0,
+                            "resources": 0,
+                            "bytes": 0,
+                            "attachments": None,
+                            "duration": 0,
+                        },
+                    },
+                ],
+            }
+        )

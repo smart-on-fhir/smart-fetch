@@ -446,7 +446,7 @@ class BulkExporter:
         response_json = response.json()
 
         try:
-            raw_transaction_time = response_json.get("transactionTime")
+            raw_transaction_time = response_json.get("transactionTime")  # "instant" type
             self.transaction_time = datetime.datetime.fromisoformat(raw_transaction_time)
         except ValueError as exc:
             logging.error(f"Could not parse transactionTime: {exc}")

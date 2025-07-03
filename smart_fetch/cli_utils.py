@@ -130,13 +130,23 @@ def parse_type_filters(
     return filters
 
 
-def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
+def calculate_since_mode(
+    since: str | None, since_mode: SinceMode, server_type: cfs.ServerType
+) -> SinceMode:
     """Converts "auto" into created or updated based on whether the server supports created."""
     if not since_mode or since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
         # and greatest edits.
-        return SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
+        if server_type == cfs.ServerType.EPIC:
+            since_mode = SinceMode.CREATED
+            if since:  # only talk to the user about this if they actually are using a mode
+                rich.get_console().print(
+                    "Epic server detected. Defaulting to 'created' instead of 'updated' since mode."
+                )
+        else:
+            since_mode = SinceMode.UPDATED
+
     return since_mode
 
 
@@ -171,19 +181,8 @@ def add_since_filter(
             filters[res_type] = {new_param}
 
     if since_mode == SinceMode.CREATED:
-        # There's no meta.created field, so we do the best we can for each resource.
-        add_filter(resources.ALLERGY_INTOLERANCE, "date")
-        add_filter(resources.CONDITION, "recorded-date")
-        # Skip DEVICE since it has no admin date to search on
-        add_filter(resources.DIAGNOSTIC_REPORT, "issued")
-        add_filter(resources.DOCUMENT_REFERENCE, "date")
-        add_filter(resources.ENCOUNTER, "date")  # clinical date, has no admin date
-        add_filter(resources.IMMUNIZATION, "date")  # clinical date, can't search on `recorded`
-        add_filter(resources.MEDICATION_REQUEST, "authoredon")
-        add_filter(resources.OBSERVATION, "date")  # clinical date, can't search on `issued`
-        # Skip PATIENT since it has no admin date to search on
-        add_filter(resources.PROCEDURE, "date")  # clinical date, has no admin date
-        add_filter(resources.SERVICE_REQUEST, "authored")
+        for res_type, field in resources.CREATED_SEARCH_FIELDS.items():
+            add_filter(res_type, field)
     else:  # UPDATED mode
         for res_type in filters:
             add_filter(res_type, "_lastUpdated")
