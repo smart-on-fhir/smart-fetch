@@ -29,9 +29,7 @@ def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: da
     log = bulk_utils.BulkExportLogWriter(folder)
     log.export_id = "fake-log"
     log.kickoff(url, {}, httpx.Response(202))
-    log.status_complete(
-        httpx.Response(200, json={"transactionTime": transaction_time.astimezone().isoformat()})
-    )
+    log.status_complete(httpx.Response(200, json={"transactionTime": transaction_time.isoformat()}))
     log.export_complete()
 
 
@@ -75,15 +73,21 @@ async def perform_crawl(
 
     filters = cli_utils.add_since_filter(filters, since, since_mode)
 
+    # `transaction_times` holds the date we will send to mark_done() when done with each resource,
+    # to mark the equivalent of Bulk Export's transactionTime - the last moment that the export
+    # data covers. We will record the latest update/creation date we find for all resources, and
+    # take the lower of that time and when we started the export. This way, if the server has stale
+    # data (like it's a infrequently updated replica server), we will appropriately record an older
+    # transaction time for the exported data set.
+    transaction_times: dict[str, datetime.datetime] = {}
+
     processor = iter_utils.ResourceProcessor(
         workdir,
         "Crawling",
-        callback=partial(process, rest_client, id_pool, workdir),
-        finish_callback=partial(finish_wrapper, metadata, finish_callback),
+        callback=partial(process_resource, rest_client, id_pool, workdir, transaction_times),
+        finish_callback=partial(finish_wrapper, metadata, finish_callback, transaction_times),
         append=False,
     )
-
-    transaction_time = timing.now()
 
     # Before crawling, we have to decide if we need to do anything special with patients,
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
@@ -129,7 +133,8 @@ async def perform_crawl(
     if processor.sources:
         await processor.run()
 
-    create_fake_log(workdir, fhir_url, group_name, transaction_time)
+    if log_time := metadata.get_earliest_done_date():
+        create_fake_log(workdir, fhir_url, group_name, log_time)
 
 
 async def gather_patients(
@@ -177,19 +182,31 @@ async def gather_patients(
             )
             await exporter.export()
             await finish_wrapper(
-                metadata, finish_callback, resources.PATIENT, timestamp=exporter.transaction_time
+                metadata,
+                finish_callback,
+                {},
+                resources.PATIENT,
+                timestamp=exporter.transaction_time,
             )
 
 
 async def finish_wrapper(
     metadata: lifecycle.OutputMetadata,
     custom_finish: Callable[[str], Awaitable[None]] | None,
+    transaction_times: dict[str, datetime.datetime],
     res_type: str,
     *,
     progress: rich.progress.Progress | None = None,
     timestamp: datetime.datetime,
 ) -> None:
-    metadata.mark_done(res_type, timestamp)
+    # If `timestamp` (which is when we started crawling) is earlier than our latest found date,
+    # use it as our transaction time instead (this way we ensure we don't miss any resources that
+    # got created during our crawl, at the cost of getting some duplicate resources next time we
+    # crawl using this transaction time as a --since value).
+    if res_type not in transaction_times or transaction_times[res_type] > timestamp:
+        transaction_times[res_type] = timestamp
+
+    metadata.mark_done(res_type, transaction_times[res_type])
     if custom_finish:
         await custom_finish(res_type, progress=progress)
 
@@ -253,10 +270,19 @@ def _log_error(folder: str, resource: dict) -> None:
         error_writer.write(resource)
 
 
-async def process(
+def update_transaction_time(
+    transaction_times: dict[str, datetime.datetime], res_type: str, val: str | None
+) -> None:
+    if parsed := timing.parse_datetime(val):
+        if res_type not in transaction_times or transaction_times[res_type] < parsed:
+            transaction_times[res_type] = parsed
+
+
+async def process_resource(
     client,
     id_pool: dict[str, set[str]],
     folder: str,
+    transaction_times: dict[str, datetime.datetime],
     res_type: str,
     writer: ndjson.NdjsonWriter,
     url: str,
@@ -272,5 +298,9 @@ async def process(
             if resource["id"] in res_pool:
                 continue
             res_pool.add(resource["id"])
+
+        # See if we have a later updated/created date than we've seen so far.
+        update_transaction_time(transaction_times, res_type, resources.get_updated_date(resource))
+        update_transaction_time(transaction_times, res_type, resources.get_created_date(resource))
 
         writer.write(resource)

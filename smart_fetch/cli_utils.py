@@ -171,19 +171,8 @@ def add_since_filter(
             filters[res_type] = {new_param}
 
     if since_mode == SinceMode.CREATED:
-        # There's no meta.created field, so we do the best we can for each resource.
-        add_filter(resources.ALLERGY_INTOLERANCE, "date")
-        add_filter(resources.CONDITION, "recorded-date")
-        # Skip DEVICE since it has no admin date to search on
-        add_filter(resources.DIAGNOSTIC_REPORT, "issued")
-        add_filter(resources.DOCUMENT_REFERENCE, "date")
-        add_filter(resources.ENCOUNTER, "date")  # clinical date, has no admin date
-        add_filter(resources.IMMUNIZATION, "date")  # clinical date, can't search on `recorded`
-        add_filter(resources.MEDICATION_REQUEST, "authoredon")
-        add_filter(resources.OBSERVATION, "date")  # clinical date, can't search on `issued`
-        # Skip PATIENT since it has no admin date to search on
-        add_filter(resources.PROCEDURE, "date")  # clinical date, has no admin date
-        add_filter(resources.SERVICE_REQUEST, "authored")
+        for res_type, field in resources.CREATED_SEARCH_FIELDS.items():
+            add_filter(res_type, field)
     else:  # UPDATED mode
         for res_type in filters:
             add_filter(res_type, "_lastUpdated")

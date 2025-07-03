@@ -169,6 +169,11 @@ class OutputMetadata(Metadata):
         done[tag] = timestamp.isoformat()
         self._write()
 
+    def get_earliest_done_date(self) -> datetime.datetime | None:
+        if done := self._contents.get("done"):
+            return min(datetime.datetime.fromisoformat(time) for time in done.values())
+        return None
+
 
 class ManagedMetadata(Metadata):
     def __init__(self, folder: str):

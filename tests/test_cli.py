@@ -247,3 +247,7 @@ but found:
     @ddt.unpack
     def test_unit_human_file_size(self, size, expected_string):
         self.assertEqual(cli_utils.human_file_size(size), expected_string)
+
+    def test_unit_metadata_no_earliest_done(self):
+        """Confirm we return None if there is no earliest done date"""
+        self.assertIsNone(lifecycle.OutputMetadata(self.folder).get_earliest_done_date())
