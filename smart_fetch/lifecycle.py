@@ -174,6 +174,16 @@ class OutputMetadata(Metadata):
             return min(datetime.datetime.fromisoformat(time) for time in done.values())
         return None
 
+    def set_bulk_status_url(self, status_url: str | None) -> None:
+        if status_url:
+            self._contents["bulk-status"] = status_url
+        else:
+            del self._contents["bulk-status"]
+        self._write()
+
+    def get_bulk_status_url(self) -> str | None:
+        return self._contents.get("bulk-status")
+
 
 class ManagedMetadata(Metadata):
     def __init__(self, folder: str):

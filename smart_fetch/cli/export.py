@@ -91,7 +91,6 @@ async def export_main(args: argparse.Namespace) -> None:
                 workdir=workdir,
                 since=since,
                 since_mode=since_mode,
-                resume=None,  # FIXME
                 finish_callback=partial(finish_resource, rest_client, workdir, open_client=True),
             )
         else:
