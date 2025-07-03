@@ -10,7 +10,7 @@ import sys
 import typing
 import urllib.parse
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from functools import partial
 
 import cumulus_fhir_support as cfs
@@ -722,7 +722,6 @@ async def perform_bulk(
     workdir: str,
     since: str | None,
     since_mode: cli_utils.SinceMode,
-    finish_callback: Callable[[str], Awaitable[None]] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
@@ -757,7 +756,3 @@ async def perform_bulk(
         await exporter.export()
         for res_type in res_types:
             metadata.mark_done(res_type, exporter.transaction_time)
-
-    for res_type in filters:  # Run on all requested res types
-        if finish_callback:
-            await finish_callback(res_type)

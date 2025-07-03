@@ -1,6 +1,5 @@
 import contextlib
 import io
-import urllib.parse
 from collections.abc import AsyncIterator
 from unittest import mock
 

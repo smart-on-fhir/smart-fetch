@@ -9,7 +9,7 @@ import cumulus_fhir_support as cfs
 import rich.progress
 import rich.table
 
-from smart_fetch import iter_utils, lifecycle, ndjson
+from smart_fetch import iter_utils, ndjson
 
 
 class TaskResultReason(enum.Enum):
@@ -168,11 +168,6 @@ async def process(
 
     rich.get_console().rule()
 
-    metadata = lifecycle.OutputMetadata(workdir)
-    if metadata.is_done(task_name):
-        logging.warning(f"Skipping {task_name}, already done.")
-        return None
-
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
 
@@ -202,8 +197,6 @@ async def process(
         total_lines = ndjson.read_local_line_count(res_file)
         processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
     await processor.run()
-
-    metadata.mark_done(task_name)
 
     return stats
 
