@@ -1,7 +1,6 @@
 """Do a standalone bulk export from an EHR"""
 
 import argparse
-import logging
 import sys
 
 import cumulus_fhir_support as cfs
@@ -20,7 +19,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--since-mode",
         choices=list(cli_utils.SinceMode),
-        help="how to interpret --since",
+        default=cli_utils.SinceMode.AUTO,
+        help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
     parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")
     parser.add_argument(
@@ -48,7 +48,9 @@ async def export_main(args: argparse.Namespace) -> None:
     async with bulk_client:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(args.since_mode, bulk_client.server_type)
+        since_mode = cli_utils.calculate_since_mode(
+            args.since, args.since_mode, bulk_client.server_type
+        )
 
         await bulk_utils.perform_bulk(
             bulk_client=bulk_client,

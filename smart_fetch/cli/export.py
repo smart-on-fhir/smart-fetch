@@ -32,6 +32,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         "--export-mode",
         metavar="MODE",
         choices=list(ExportMode),
+        default=ExportMode.AUTO,
         help="how to export data (default is bulk if server supports it well)",
     )
     parser.add_argument(
@@ -43,7 +44,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--since-mode",
         choices=list(cli_utils.SinceMode),
-        help="how to interpret --since",
+        default=cli_utils.SinceMode.AUTO,
+        help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
 
     cli_utils.add_auth(parser)
@@ -67,7 +69,7 @@ async def export_main(args: argparse.Namespace) -> None:
     async with client:
         source_dir = args.folder
         filters = cli_utils.parse_type_filters(client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(args.since_mode, client.server_type)
+        since_mode = cli_utils.calculate_since_mode(args.since, args.since_mode, client.server_type)
         since = calculate_since(
             source_dir, filters=filters, since=args.since, since_mode=since_mode
         )
@@ -114,7 +116,13 @@ def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) 
     if not export_mode or export_mode == ExportMode.AUTO:
         # Epic's bulk export implementation is slow (it hits a live server, rather than a
         # shadow server). We prefer crawling it for now.
-        return ExportMode.CRAWL if server_type == cfs.ServerType.EPIC else ExportMode.BULK
+        if server_type == cfs.ServerType.EPIC:
+            export_mode = ExportMode.CRAWL
+            rich.get_console().print(
+                "Epic server detected. Defaulting to a 'crawl' instead of a 'bulk' export."
+            )
+        else:
+            export_mode = ExportMode.BULK
     return export_mode
 
 

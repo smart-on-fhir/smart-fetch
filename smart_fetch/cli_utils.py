@@ -130,13 +130,23 @@ def parse_type_filters(
     return filters
 
 
-def calculate_since_mode(since_mode: SinceMode, server_type: cfs.ServerType) -> SinceMode:
+def calculate_since_mode(
+    since: str | None, since_mode: SinceMode, server_type: cfs.ServerType
+) -> SinceMode:
     """Converts "auto" into created or updated based on whether the server supports created."""
     if not since_mode or since_mode == SinceMode.AUTO:
         # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
         # Otherwise, prefer to grab any resource updated since this time, to get all the latest
         # and greatest edits.
-        return SinceMode.CREATED if server_type == cfs.ServerType.EPIC else SinceMode.UPDATED
+        if server_type == cfs.ServerType.EPIC:
+            since_mode = SinceMode.CREATED
+            if since:  # only talk to the user about this if they actually are using a mode
+                rich.get_console().print(
+                    "Epic server detected. Defaulting to 'created' instead of 'updated' since mode."
+                )
+        else:
+            since_mode = SinceMode.UPDATED
+
     return since_mode
 
 

@@ -15,7 +15,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--since-mode",
         choices=list(cli_utils.SinceMode),
-        help="how to interpret --since",
+        default=cli_utils.SinceMode.AUTO,
+        help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
 
     group = cli_utils.add_cohort_selection(parser)
@@ -41,7 +42,9 @@ async def crawl_main(args: argparse.Namespace) -> None:
     async with rest_client:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types)
         filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(args.since_mode, rest_client.server_type)
+        since_mode = cli_utils.calculate_since_mode(
+            args.since, args.since_mode, rest_client.server_type
+        )
         workdir = args.folder
         source_dir = args.source_dir or workdir
 
