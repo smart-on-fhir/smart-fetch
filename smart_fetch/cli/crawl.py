@@ -62,3 +62,5 @@ async def crawl_main(args: argparse.Namespace) -> None:
             mrn_file=args.mrn_file,
             mrn_system=args.mrn_system,
         )
+
+    cli_utils.print_done()

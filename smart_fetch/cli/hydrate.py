@@ -61,3 +61,5 @@ async def hydrate_main(args: argparse.Namespace) -> None:
                 await tasks.all_tasks[task_name][2](
                     client, args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
                 )
+
+    cli_utils.print_done()

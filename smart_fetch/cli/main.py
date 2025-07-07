@@ -7,7 +7,7 @@ import sys
 
 import rich.logging
 
-from smart_fetch.cli import bulk, crawl, export, hydrate
+from smart_fetch.cli import bulk, crawl, export, hydrate, single
 
 
 def define_parser() -> argparse.ArgumentParser:
@@ -21,6 +21,7 @@ def define_parser() -> argparse.ArgumentParser:
         subparsers.add_parser("crawl", help="run a crawl (REST alternative to bulk export)")
     )
     hydrate.make_subparser(subparsers.add_parser("hydrate", help="add to already-exported data"))
+    single.make_subparser(subparsers.add_parser("single", help="request a single resource"))
 
     return parser
 
@@ -37,9 +38,6 @@ async def main(argv: list[str]) -> None:
     parser = define_parser()
     args = parser.parse_args(argv)
     await args.func(args)
-
-    rich.get_console().rule()
-    rich.get_console().print("✨ Done ✨")
 
 
 def main_cli():

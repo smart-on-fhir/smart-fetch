@@ -110,6 +110,8 @@ async def export_main(args: argparse.Namespace) -> None:
                 finish_callback=partial(finish_resource, rest_client, workdir),
             )
 
+    cli_utils.print_done()
+
 
 def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) -> ExportMode:
     if not export_mode or export_mode == ExportMode.AUTO:

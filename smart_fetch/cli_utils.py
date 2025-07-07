@@ -376,3 +376,8 @@ def human_time_offset(seconds: int) -> str:
 
     hours = minutes / 60
     return f"{_pretty_float(hours)}h"
+
+
+def print_done() -> None:
+    rich.get_console().rule()
+    rich.print("✨ Done ✨")

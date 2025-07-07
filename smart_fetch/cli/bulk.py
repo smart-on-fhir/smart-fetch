@@ -59,6 +59,8 @@ async def export_main(args: argparse.Namespace) -> None:
             since_mode=since_mode,
         )
 
+    cli_utils.print_done()
+
 
 async def cancel_bulk(bulk_client: cfs.FhirClient, workdir: str) -> None:
     metadata = lifecycle.OutputMetadata(workdir)
