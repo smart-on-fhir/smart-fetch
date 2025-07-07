@@ -1,6 +1,5 @@
 import contextlib
 import io
-import urllib.parse
 from collections.abc import AsyncIterator
 from unittest import mock
 
@@ -397,21 +396,20 @@ class BulkTests(utils.TestCase):
 
     async def test_resume(self):
         self.mock_bulk("group1", skip_kickoff=True)
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.set_bulk_status_url(f"{self.dlserver}/exports/1")
         # No complaint about missing kickoff, we just go straight to status checking
-        await self.cli("bulk", self.folder, f"--resume={self.dlserver}/exports/1")
-
-    async def test_resume_quoted(self):
-        self.mock_bulk("group1", skip_kickoff=True)
-        quoted = urllib.parse.quote(f"{self.dlserver}/exports/1")
-        await self.cli("bulk", self.folder, "--resume", quoted)
+        await self.cli("bulk", self.folder)
 
     async def test_cancel(self):
         self.mock_bulk("group1", skip_kickoff=True, skip_status=True)
-        await self.cli("bulk", self.folder, f"--resume={self.dlserver}/exports/1", "--cancel")
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.set_bulk_status_url(f"{self.dlserver}/exports/1")
+        await self.cli("bulk", self.folder, "--cancel")
 
     async def test_cancel_no_resume(self):
         with self.assertRaisesRegex(
-            SystemExit, "You provided --cancel without a --resume URL, but you must provide both."
+            SystemExit, "You provided --cancel but no in-progress bulk export was found in"
         ):
             await self.cli("bulk", self.folder, "--cancel")
 

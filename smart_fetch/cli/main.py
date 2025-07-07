@@ -38,6 +38,7 @@ async def main(argv: list[str]) -> None:
     args = parser.parse_args(argv)
     await args.func(args)
 
+    rich.get_console().rule()
     rich.get_console().print("✨ Done ✨")
 
 

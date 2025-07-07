@@ -6,7 +6,7 @@ import sys
 import cumulus_fhir_support as cfs
 import rich
 
-from smart_fetch import bulk_utils, cli_utils
+from smart_fetch import bulk_utils, cli_utils, lifecycle
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -22,10 +22,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         default=cli_utils.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
-    parser.add_argument("--resume", metavar="URL", help="polling status URL from a previous export")
-    parser.add_argument(
-        "--cancel", action="store_true", help="cancel an interrupted export, use with --resume"
-    )
+    parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
 
     cli_utils.add_auth(parser)
     cli_utils.add_type_selection(parser)
@@ -37,13 +34,13 @@ async def export_main(args: argparse.Namespace) -> None:
     rich.get_console().rule()
 
     _rest_client, bulk_client = cli_utils.prepare(args)
+    workdir = args.folder
 
     if args.cancel:
-        await cancel_bulk(bulk_client, args.resume)
+        await cancel_bulk(bulk_client, workdir)
         return
 
     res_types = cli_utils.parse_resource_selection(args.type)
-    workdir = args.folder
 
     async with bulk_client:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
@@ -60,14 +57,15 @@ async def export_main(args: argparse.Namespace) -> None:
             workdir=workdir,
             since=args.since,
             since_mode=since_mode,
-            resume=args.resume,
         )
 
 
-async def cancel_bulk(bulk_client: cfs.FhirClient, resume_url: str | None) -> None:
-    if not resume_url:
-        sys.exit("You provided --cancel without a --resume URL, but you must provide both.")
+async def cancel_bulk(bulk_client: cfs.FhirClient, workdir: str) -> None:
+    metadata = lifecycle.OutputMetadata(workdir)
+
+    if not metadata.get_bulk_status_url():
+        sys.exit(f"You provided --cancel but no in-progress bulk export was found in {workdir}.")
 
     async with bulk_client:
-        exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", resume=resume_url)
+        exporter = bulk_utils.BulkExporter(bulk_client, set(), "", "", metadata=metadata)
         await exporter.cancel()

@@ -91,9 +91,8 @@ async def export_main(args: argparse.Namespace) -> None:
                 workdir=workdir,
                 since=since,
                 since_mode=since_mode,
-                resume=None,  # FIXME
-                finish_callback=partial(finish_resource, rest_client, workdir, open_client=True),
             )
+            await finish_resource(rest_client, workdir, set(filters), open_client=True)
         else:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
@@ -211,15 +210,19 @@ def list_workdirs(source_dir: str) -> dict[str, tuple[int, str]]:
 async def finish_resource(
     client: cfs.FhirClient,
     workdir: str,
-    res_type: str,
+    res_types: str | set[str],
     *,
     open_client: bool = False,
     progress: rich.progress.Progress | None = None,
 ):
+    if isinstance(res_types, str):
+        res_types = {res_types}
+
     async def run_hydration_tasks():
         done_types = set()
-        loop_types = {res_type}
+        loop_types = res_types
         while loop_types:
+            done_types |= loop_types
             next_loop_types = set()
             for task_name, task_info in tasks.all_tasks.items():
                 input_type, output_type, task_func = task_info
@@ -235,7 +238,6 @@ async def finish_resource(
                     # resources, as needed
                     next_loop_types.add(output_type)
 
-            done_types |= loop_types
             loop_types = next_loop_types
 
     if open_client:
@@ -244,7 +246,8 @@ async def finish_resource(
     else:
         await run_hydration_tasks()
 
-    make_links(workdir, res_type)
+    for res_type in res_types:
+        make_links(workdir, res_type)
 
 
 def make_links(workdir: str, res_type: str) -> None:
