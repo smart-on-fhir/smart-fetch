@@ -42,9 +42,7 @@ class NdjsonWriter:
         # lazily create the file, to avoid 0-line ndjson files
         self._ensure_file()
 
-        # Specify separators for the most compact (no whitespace) representation saves disk space.
-        json.dump(obj, self._file, separators=(",", ":"))
-        self._file.write("\n")
+        self._file.write(compact_json(obj) + "\n")
 
 
 def read_local_line_count(path) -> int:
@@ -63,3 +61,9 @@ def read_local_line_count(path) -> int:
     if buf and buf[-1] != ord("\n"):  # catch a final line without a trailing newline
         count += 1
     return count
+
+
+def compact_json(obj: dict) -> str:
+    """Formats JSON with no whitespace"""
+    # Specify separators for the most compact (no whitespace) representation saves disk space.
+    return json.dumps(obj, separators=(",", ":"))

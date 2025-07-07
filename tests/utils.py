@@ -1,5 +1,7 @@
+import contextlib
 import datetime
 import gzip
+import io
 import json
 import os
 import pathlib
@@ -110,6 +112,14 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         default_args = ["--fhir-url", self.url]
         with self.server:
             await main.main([str(arg) for arg in args] + default_args)
+
+    async def capture_cli(self, *args) -> tuple[bytes, str]:
+        stdout = io.TextIOWrapper(io.BytesIO())
+        stderr = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            with contextlib.redirect_stderr(stderr):
+                await self.cli(*args)
+        return stdout.buffer.getvalue(), stderr.getvalue()
 
     def write_res(self, res_type: str, resources: list[dict], subfolder: str | None = None) -> None:
         if subfolder:
