@@ -33,9 +33,9 @@ fhir-url = "https://ehr.example/"
 group = "Group1"
 ```
 
-## Inline JWKS Keys
+## Inline SMART Keys
 
-You may have a JWKS file that you normally point to on the command line,
+You may have a SMART key file that you normally point to on the command line,
 like so: `--smart-key keys.jwks`.
 
 When using a config file, you can either continue pointing to the external file or inline the keys
