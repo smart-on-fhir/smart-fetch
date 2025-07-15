@@ -258,8 +258,9 @@ def add_auth(parser: argparse.ArgumentParser):
 # GENERAL
 
 
-def add_general(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("--config", "-c", metavar="PATH", help="config file")
+def add_general(parser: argparse.ArgumentParser, root: bool = False) -> None:
+    default = None if root else argparse.SUPPRESS
+    parser.add_argument("--config", "-c", metavar="PATH", help="config file", default=default)
 
 
 def load_config(args) -> None:

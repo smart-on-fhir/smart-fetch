@@ -7,14 +7,20 @@ import sys
 
 import rich.logging
 
+from smart_fetch import cli_utils
 from smart_fetch.cli import bulk, crawl, export, hydrate, single
 
 
 def define_parser() -> argparse.ArgumentParser:
     """Fills out an argument parser with all the CLI options."""
     parser = argparse.ArgumentParser()
+    cli_utils.add_general(parser, root=True)
 
-    subparsers = parser.add_subparsers()
+    subparsers = parser.add_subparsers(
+        description="if you are unsure which you want, start with the high-level 'export' command",
+        metavar="subcommand",
+        required=True,
+    )
     export.make_subparser(subparsers.add_parser("export", help="run a managed export"))
     bulk.make_subparser(subparsers.add_parser("bulk", help="run a bulk export"))
     crawl.make_subparser(
