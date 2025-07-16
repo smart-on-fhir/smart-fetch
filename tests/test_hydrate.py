@@ -42,7 +42,7 @@ class HydrateTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
+        await self.cli("hydrate", self.folder, "--tasks=meds")
 
         self.assert_folder(
             {
@@ -71,7 +71,7 @@ class HydrateTests(utils.TestCase):
                 assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
+        await self.cli("hydrate", self.folder, "--tasks=meds")
 
         self.assert_folder(
             {
@@ -85,7 +85,7 @@ class HydrateTests(utils.TestCase):
 
     async def test_no_input(self):
         """Test that we gracefully skip the task when missing input sources"""
-        await self.cli("hydrate", self.folder, "--hydration-tasks=obs-members")
+        await self.cli("hydrate", self.folder, "--tasks=obs-members")
         self.assert_folder({})
 
     @ddt.data(
@@ -97,7 +97,7 @@ class HydrateTests(utils.TestCase):
         stdout = io.StringIO()
         with self.assertRaises(SystemExit) as cm:
             with contextlib.redirect_stdout(stdout):
-                await self.cli("hydrate", self.folder, f"--hydration-tasks={arg}")
+                await self.cli("hydrate", self.folder, f"--tasks={arg}")
         self.assertEqual(cm.exception.code, exit_code)
         self.assertIn("These hydration tasks are supported:", stdout.getvalue())
 
@@ -126,4 +126,4 @@ class HydrateTests(utils.TestCase):
 
         with self.assertRaisesRegex(SystemExit, "oops"):
             with mock.patch("smart_fetch.hydrate_utils.download_reference", new=slow_explode):
-                await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
+                await self.cli("hydrate", self.folder, "--tasks=meds")
