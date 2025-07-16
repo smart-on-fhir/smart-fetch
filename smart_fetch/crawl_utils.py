@@ -197,7 +197,6 @@ async def finish_wrapper(
     transaction_times: dict[str, datetime.datetime],
     res_type: str,
     *,
-    progress: rich.progress.Progress | None = None,
     timestamp: datetime.datetime,
 ) -> None:
     # If `timestamp` (which is when we started crawling) is earlier than our latest found date,
@@ -209,7 +208,7 @@ async def finish_wrapper(
 
     metadata.mark_done(res_type, transaction_times[res_type])
     if custom_finish:
-        await custom_finish(res_type, progress=progress)
+        await custom_finish(res_type)
 
 
 def read_patient_ids(folder: str) -> set[str]:

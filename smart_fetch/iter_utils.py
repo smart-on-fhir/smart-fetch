@@ -97,14 +97,10 @@ class ResourceProcessor:
         callback: Callable[[str, ndjson.NdjsonWriter, Item], Awaitable[None]],
         finish_callback: Callable[[str], Awaitable[None]] | None = None,
         append: bool = True,
-        progress: rich.progress.Progress | None = None,
     ):
         self.sources: dict[str, list[_SourceDetails]] = {}
         self._callback = callback
         self._finish_callback = finish_callback
-        self._open_progress = not progress
-        self._progress = progress or cli_utils.make_progress_bar()
-        self._progress_task = None
         self._folder = folder
         self._desc = desc
         self._append = append
@@ -122,39 +118,35 @@ class ResourceProcessor:
         self.sources.setdefault(res_type, []).append(source)
 
     async def run(self):
-        if self._open_progress:
-            with self._progress:
-                await self._run_sources()
-        else:
-            await self._run_sources()
-
-    async def _run_sources(self):
         for res_type, sources in self.sources.items():
-            res_total = sum(src.total for src in sources)
-            self._progress_task = self._progress.add_task(
-                f"{self._desc} {res_type}s…", total=res_total
-            )
             timestamp = timing.now()
 
-            for source in sources:
-                writer = ndjson.NdjsonWriter(source.output_file, append=self._append)
-                with writer:
-                    await peek_ahead_processor(
-                        source.iterable,
-                        partial(self._process_wrapper, writer, res_type),
-                        peek_at=cfs.FhirClient.MAX_CONNECTIONS * 2,
-                    )
+            with cli_utils.make_progress_bar() as progress:
+                res_total = sum(src.total for src in sources)
+                task = progress.add_task(f"{self._desc} {res_type}s…", total=res_total)
+
+                for source in sources:
+                    writer = ndjson.NdjsonWriter(source.output_file, append=self._append)
+                    with writer:
+                        await peek_ahead_processor(
+                            source.iterable,
+                            partial(self._process_wrapper, writer, res_type, progress, task),
+                            peek_at=cfs.FhirClient.MAX_CONNECTIONS * 2,
+                        )
 
             if self._finish_callback:
-                # Note: might fire more than once for same res_type, if there are multiple
-                # sources. We can add some disambiguation in the future, if we need that.
-                await self._finish_callback(res_type, timestamp=timestamp, progress=self._progress)
+                await self._finish_callback(res_type, timestamp=timestamp)
 
         # Reset sources, so we can be run again
         self.sources = {}
 
     async def _process_wrapper(
-        self, writer: ndjson.NdjsonWriter, res_type: str, item: Item
+        self,
+        writer: ndjson.NdjsonWriter,
+        res_type: str,
+        progress: rich.progress.Progress,
+        task: rich.progress.TaskID,
+        item: Item,
     ) -> None:
         await self._callback(res_type, writer, item)
-        self._progress.update(self._progress_task, advance=1)
+        progress.update(task, advance=1)
