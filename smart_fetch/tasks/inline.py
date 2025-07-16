@@ -4,7 +4,6 @@ import hashlib
 from functools import partial
 
 import cumulus_fhir_support as cfs
-import rich.progress
 
 from smart_fetch import hydrate_utils, resources
 

@@ -9,7 +9,6 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
-import rich.progress
 
 from smart_fetch import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
