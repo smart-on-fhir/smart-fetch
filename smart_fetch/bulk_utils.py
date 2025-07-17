@@ -442,11 +442,10 @@ class BulkExporter:
         # Finished! We're done waiting and can download all the files
         response_json = response.json()
 
-        try:
-            raw_transaction_time = response_json.get("transactionTime")  # "instant" type
-            self.transaction_time = datetime.datetime.fromisoformat(raw_transaction_time)
-        except ValueError as exc:
-            logging.error(f"Could not parse transactionTime: {exc}")
+        raw_transaction_time = response_json.get("transactionTime")  # "instant" type
+        self.transaction_time = timing.parse_datetime(raw_transaction_time)
+        if self.transaction_time is None:
+            logging.error(f"Could not parse transactionTime: {raw_transaction_time}")
             self.transaction_time = timing.now()
 
         # Download all the files
@@ -722,10 +721,21 @@ async def perform_bulk(
     workdir: str,
     since: str | None,
     since_mode: cli_utils.SinceMode,
+    since_detailed: dict[str, datetime.datetime | None] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
     metadata.note_context(filters=filters, since=since, since_mode=since_mode)
+
+    # Coalesce a complicated set of since values down to just one - the oldest
+    if since_detailed:
+        if any(val is None for val in since_detailed.values()):
+            since = None
+        else:
+            since = min(val for val in since_detailed.values()).isoformat()
+
+    if since:
+        rich.print(f"Using since value of '{since}'.")
 
     if since_mode == cli_utils.SinceMode.CREATED:
         filters = cli_utils.add_since_filter(filters, since, since_mode)

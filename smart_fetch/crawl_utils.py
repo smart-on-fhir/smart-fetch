@@ -9,6 +9,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
+import rich
 
 from smart_fetch import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
 
@@ -47,6 +48,7 @@ async def perform_crawl(
     mrn_file: str | None,
     mrn_system: str | None,
     finish_callback: Callable[[str], Awaitable[None]] | None = None,
+    since_detailed: dict[str, datetime.datetime | None] | None = None,
 ) -> None:
     # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
     # avoid writing out duplicates, in the situations where we have multiple search streams
@@ -70,7 +72,14 @@ async def perform_crawl(
     metadata = lifecycle.OutputMetadata(workdir)
     metadata.note_context(filters=filters, since=since, since_mode=since_mode)
 
-    filters = cli_utils.add_since_filter(filters, since, since_mode)
+    if since_detailed:
+        for res_type, timestamp in sorted(since_detailed.items()):
+            if timestamp:
+                rich.print(f"Using since value of '{timestamp.isoformat()}' for {res_type}.")
+    else:
+        rich.print(f"Using since value of '{since}'.")
+
+    filters = cli_utils.add_since_filter(filters, since_detailed or since, since_mode)
 
     # `transaction_times` holds the date we will send to mark_done() when done with each resource,
     # to mark the equivalent of Bulk Export's transactionTime - the last moment that the export
@@ -229,7 +238,9 @@ async def resource_urls(res_type, query_prefix, ids, filters) -> AsyncIterable[s
 
 async def crawl_bundle_chain(client: cfs.FhirClient, url: str) -> AsyncIterable[dict]:
     try:
-        response = await client.request("GET", url)
+        # Specially handle plus signs because the HTTP spec is whack and they'll be converted to
+        # spaces unless we encode them manually here.
+        response = await client.request("GET", url.replace("+", "%2B"))
     except cfs.NetworkError as exc:
         try:
             resource = exc.response and exc.response.json()

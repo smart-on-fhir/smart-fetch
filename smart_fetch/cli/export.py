@@ -1,6 +1,7 @@
 """Do a managed export workflow"""
 
 import argparse
+import datetime
 import enum
 import glob
 import logging
@@ -70,17 +71,22 @@ async def export_main(args: argparse.Namespace) -> None:
         source_dir = args.folder
         filters = cli_utils.parse_type_filters(client.server_type, res_types, args.type_filter)
         since_mode = cli_utils.calculate_since_mode(args.since, args.since_mode, client.server_type)
-        since = calculate_since(
-            source_dir, filters=filters, since=args.since, since_mode=since_mode
-        )
 
         subdir = find_workdir(
-            source_dir, filters=filters, since=since, since_mode=since_mode, nickname=args.nickname
+            source_dir,
+            filters=filters,
+            since=args.since,
+            since_mode=since_mode,
+            nickname=args.nickname,
         )
         workdir = os.path.join(source_dir, subdir)
 
         metadata = lifecycle.ManagedMetadata(source_dir)
         metadata.note_context(fhir_url=args.fhir_url, group=args.group)
+
+        since_detailed = calculate_detailed_since(
+            source_dir, filters=filters, since=args.since, since_mode=since_mode
+        )
 
         if export_mode == ExportMode.BULK:
             await bulk_utils.perform_bulk(
@@ -89,16 +95,18 @@ async def export_main(args: argparse.Namespace) -> None:
                 filters=filters,
                 group=args.group,
                 workdir=workdir,
-                since=since,
+                since=args.since,
                 since_mode=since_mode,
+                since_detailed=since_detailed,
             )
             await finish_resource(rest_client, workdir, set(filters), open_client=True)
         else:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
                 filters=filters,
-                since=since,
+                since=args.since,
                 since_mode=since_mode,
+                since_detailed=since_detailed,
                 source_dir=source_dir,
                 workdir=workdir,
                 rest_client=rest_client,
@@ -128,16 +136,16 @@ def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) 
     return export_mode
 
 
-def calculate_since(
+def calculate_detailed_since(
     source_dir: str,
     *,
     filters: cli_utils.Filters,
     since: str | None,
     since_mode: cli_utils.SinceMode,
-) -> str | None:
+) -> dict[str, datetime.datetime | None] | None:
     # Early exit if we don't need to calculate anything
-    if since != "auto":
-        return since
+    if since != cli_utils.SinceMode.AUTO:
+        return None
 
     max_dones = {}  # the newest "done" value for each resource we're interested in
     for folder in list_workdirs(source_dir):
@@ -153,10 +161,11 @@ def calculate_since(
             "Try without a --since parameter, or provide a specific timestamp."
         )
 
-    # Now grab the oldest "done" value of all our target resources and use that.
-    timestamp = min(max_dones.values()).isoformat()
-    logging.warning(f"Using since value of {timestamp}.")
-    return timestamp
+    # Fill in some None for any resources we didn't find a previous date for
+    for res_type in filters:
+        max_dones.setdefault(res_type, None)
+
+    return max_dones
 
 
 def find_workdir(
