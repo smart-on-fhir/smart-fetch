@@ -11,8 +11,8 @@ from smart_fetch import cli_utils, tasks
 def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("folder", metavar="OUTPUT_DIR")
     parser.add_argument(
-        "--hydration-tasks",
-        metavar="TASK",
+        "--tasks",
+        metavar="NAMES",
         help="which hydration tasks to run "
         "(comma separated, defaults to 'all', use 'help' to see list)",
     )
@@ -42,7 +42,7 @@ def print_help():
 async def hydrate_main(args: argparse.Namespace) -> None:
     """Hydrate some data."""
     client, _bulk_client = cli_utils.prepare(args)
-    cli_tasks = set(args.hydration_tasks.split(",")) if args.hydration_tasks else {"all"}
+    cli_tasks = set(args.tasks.split(",")) if args.tasks else {"all"}
 
     if "help" in cli_tasks:
         print_help()
@@ -58,6 +58,7 @@ async def hydrate_main(args: argparse.Namespace) -> None:
     async with client:
         for task_name in tasks.all_tasks:
             if task_name in cli_tasks or "all" in cli_tasks:
+                rich.get_console().rule()
                 await tasks.all_tasks[task_name][2](
                     client, args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
                 )

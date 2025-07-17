@@ -120,7 +120,8 @@ def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) 
         if server_type == cfs.ServerType.EPIC:
             export_mode = ExportMode.CRAWL
             rich.get_console().print(
-                "Epic server detected. Defaulting to a 'crawl' instead of a 'bulk' export."
+                "Epic server detected. Defaulting to a 'crawl' instead of a 'bulk' export for "
+                "non-Patient resources."
             )
         else:
             export_mode = ExportMode.BULK
@@ -215,12 +216,12 @@ async def finish_resource(
     res_types: str | set[str],
     *,
     open_client: bool = False,
-    progress: rich.progress.Progress | None = None,
 ):
     if isinstance(res_types, str):
         res_types = {res_types}
 
     async def run_hydration_tasks():
+        first = True
         done_types = set()
         loop_types = res_types
         while loop_types:
@@ -231,9 +232,15 @@ async def finish_resource(
                 if input_type not in loop_types:
                     continue
 
+                if first:
+                    rich.get_console().rule()
+                    first = False
+
                 # We don't provide a source_dir, because we want the hydration to only affect
                 # this most recent export subfolder, not other exports.
-                await task_func(client, workdir, progress=progress)
+                await task_func(client, workdir)
+
+                rich.get_console().rule()
 
                 if output_type not in done_types:
                     # We wrote a new type out - we should iterate again to hydrate the new

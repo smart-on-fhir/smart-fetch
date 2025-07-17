@@ -89,7 +89,7 @@ class HydrateDocInlineTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--hydration-tasks=doc-inline")
+        await self.cli("hydrate", self.folder, "--tasks=doc-inline")
 
         self.assert_folder(
             {
@@ -209,7 +209,7 @@ class HydrateDocInlineTests(utils.TestCase):
         await self.cli(
             "hydrate",
             self.folder,
-            "--hydration-tasks=doc-inline",
+            "--tasks=doc-inline",
             "--mimetypes=tEXt/Custom1,application/custom2",
         )
 
@@ -267,7 +267,7 @@ class HydrateDxrInlineTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--hydration-tasks=dxr-inline")
+        await self.cli("hydrate", self.folder, "--tasks=dxr-inline")
 
         self.assert_folder(
             {

@@ -4,7 +4,6 @@ import hashlib
 from functools import partial
 
 import cumulus_fhir_support as cfs
-import rich.progress
 
 from smart_fetch import hydrate_utils, resources
 
@@ -30,7 +29,6 @@ async def _inline_task(
     input_type: str,
     workdir: str,
     mimetypes: str | None = None,
-    progress: rich.progress.Progress | None = None,
 ) -> None:
     mimetypes = parse_mimetypes(mimetypes)
     stats = await hydrate_utils.process(
@@ -41,7 +39,6 @@ async def _inline_task(
         input_type=input_type,
         callback=partial(_inline_resource, mimetypes),
         append=False,
-        progress=progress,
     )
     if stats:
         stats.print("inlined", f"{input_type}s", "Attachments")
@@ -51,7 +48,6 @@ async def task_doc_inline(
     client: cfs.FhirClient,
     workdir: str,
     mimetypes: str | None = None,
-    progress: rich.progress.Progress | None = None,
     **kwargs,
 ):
     await _inline_task(
@@ -60,7 +56,6 @@ async def task_doc_inline(
         workdir=workdir,
         input_type=resources.DOCUMENT_REFERENCE,
         mimetypes=mimetypes,
-        progress=progress,
     )
 
 
@@ -68,7 +63,6 @@ async def task_dxr_inline(
     client: cfs.FhirClient,
     workdir: str,
     mimetypes: str | None = None,
-    progress: rich.progress.Progress | None = None,
     **kwargs,
 ):
     await _inline_task(
@@ -77,7 +71,6 @@ async def task_dxr_inline(
         workdir=workdir,
         input_type=resources.DIAGNOSTIC_REPORT,
         mimetypes=mimetypes,
-        progress=progress,
     )
 
 

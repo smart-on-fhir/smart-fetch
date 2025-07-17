@@ -144,7 +144,6 @@ async def process(
     append: bool = True,
     file_slug: str | None = None,
     callback: Callable,
-    progress: rich.progress.Progress | None = None,
 ) -> TaskStats | None:
     """
     Reads resources from a folder, and calls `callback` on each one.
@@ -166,8 +165,6 @@ async def process(
         # Cannot use a separate source dir when re-writing resources, so enforce that here
         source_dir = workdir
 
-    rich.get_console().rule()
-
     # Calculate total progress needed
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
 
@@ -184,9 +181,7 @@ async def process(
     # Iterate through inputs
     stats = TaskStats()
     writer = partial(_write, callback, client, downloaded_ids, stats)
-    processor = iter_utils.ResourceProcessor(
-        workdir, desc, writer, append=append, progress=progress
-    )
+    processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         if not append:
             output_file = res_file

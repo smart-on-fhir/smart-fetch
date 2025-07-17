@@ -11,7 +11,7 @@ class HydrateMedsTests(utils.TestCase):
         ]
         self.write_res(resources.MEDICATION_REQUEST, med_reqs)
         self.set_basic_resource_route()
-        await self.cli("hydrate", self.folder, "--hydration-tasks=meds")
+        await self.cli("hydrate", self.folder, "--tasks=meds")
 
         self.assert_folder(
             {
