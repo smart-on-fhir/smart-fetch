@@ -99,14 +99,29 @@ class OutputMetadata(Metadata):
     def has_same_context(
         self, *, filters: cli_utils.Filters, since: str | None, since_mode: cli_utils.SinceMode
     ) -> bool:
-        """Determines if this folder is the same exact context (filters and since)"""
+        """
+        Determines if this folder is the same exact context (filters and since).
+
+        Note that we don't check what sort of export type this was.
+        In theory, the user can swap between bulk and crawl as desired.
+        """
         ordered_filters = {res: sorted(params) for res, params in filters.items()}
         found_filters = self._contents.get("filters")
         found_since = self._contents.get("since")
         found_since_mode = self._contents.get("sinceMode")
+
+        since_match = found_since == since
+        if since_match and since == cli_utils.SinceMode.AUTO:
+            # OK we have to be careful here. We want to allow resuming a previous auto export.
+            # But we also want to start a new auto export as needed. So the logic is: "if any
+            # of the resources of a previous auto export aren't done, it's a match, and we'll
+            # resume - otherwise reject a match, and we'll make a new one"
+            found_done = self._contents.get("done", {})
+            since_match = any(res_type not in found_done for res_type in filters)
+
         return (
             found_filters == ordered_filters
-            and found_since == since
+            and since_match
             and (not since or found_since_mode == since_mode)
         )
 

@@ -64,3 +64,31 @@ A reviewer will be looking for things like:
 
 Once approved, you can merge your PR yourself as long as the other GitHub tests pass.
 Congratulations, and thank you!
+
+## Design Explanations
+
+### Dates
+
+There are two main kinds of dates internally: "since" dates and transaction times.
+These interact a little bit, but are different ideas.
+
+A "since" date is a date given by the user (or calculated for them) that we give to the server,
+and the server only returns resources later than that date.
+
+A transaction time is the time up to which an export is "valid" or "complete".
+This is a concept taken from bulk exports (but we also apply it to crawls).
+The server will return all resources up to that transaction time,
+and should not (but may) include resources after that transaction time.
+
+For bulk exports, the server gives us the transaction time.
+For crawls, we calculate one from the data.
+
+Transaction times are stored in metadata files,
+so that when a future `--since=auto` export happens,
+SMART Fetch can go back and use a previous transaction time as the new "since" date.
+
+Bulk exports use a single date for the entire export.
+But crawls keep track of a unique transaction time per-resource.
+They do this because (a) they can and that gives us more flexibility but also
+(b) if one export is rarely created and the last one was created last month,
+we don't want to end up using that one data as the "since" date for all the other resources.

@@ -834,121 +834,111 @@ class ExportTests(utils.TestCase):
 
         # Now... Run some --since=auto exports, and we should be seeing the right since values.
 
+        async def assert_since(since, *args):
+            stdout, _stderr = await self.capture_cli(
+                "export",
+                self.folder,
+                f"--type={resources.CONDITION}",
+                "--since=auto",
+                *args,
+            )
+            self.assertIn(f"Using since value of '{since}'.".encode(), stdout)
+
         # First one is for code 1234 which will base off the 3rd example above (because that was
         # an "OR" search, it's a valid match).
         self.mock_bulk(
             params={
                 "_type": resources.CONDITION,
-                "_since": "2003-03-03T00:00:00",
+                "_since": "2003-03-03T00:00:00+00:00",
                 "_typeFilter": f"{resources.CONDITION}?code=1234",
             },
         )
-        await self.cli(
-            "export",
-            self.folder,
-            f"--type={resources.CONDITION}",
-            f"--type-filter={resources.CONDITION}?code=1234",
-            "--since=auto",
+        await assert_since(
+            "2003-03-03T00:00:00+00:00", f"--type-filter={resources.CONDITION}?code=1234"
         )
 
         # Same thing for 5678
         self.mock_bulk(
             params={
                 "_type": resources.CONDITION,
-                "_since": "2003-03-03T00:00:00",
+                "_since": "2003-03-03T00:00:00+00:00",
                 "_typeFilter": f"{resources.CONDITION}?code=5678",
             },
         )
-        await self.cli(
-            "export",
-            self.folder,
-            f"--type={resources.CONDITION}",
-            f"--type-filter={resources.CONDITION}?code=5678",
-            "--since=auto",
+        await assert_since(
+            "2003-03-03T00:00:00+00:00", f"--type-filter={resources.CONDITION}?code=5678"
         )
 
         # And try an unfiltered search, which should be based off the 1st export above.
         self.mock_bulk(
-            params={"_type": resources.CONDITION, "_since": "2001-01-01T00:00:00"},
+            params={"_type": resources.CONDITION, "_since": "2001-01-01T00:00:00+00:00"},
             transaction_time="2004-04-04",
         )
-        await self.cli("export", self.folder, f"--type={resources.CONDITION}", "--since=auto")
+        await assert_since("2001-01-01T00:00:00+00:00")
 
         # And ANOTHER unfiltered search, which should be based off the export right above.
-        self.mock_bulk(params={"_type": resources.CONDITION, "_since": "2004-04-04T00:00:00"})
-        await self.cli("export", self.folder, f"--type={resources.CONDITION}", "--since=auto")
+        self.mock_bulk(params={"_type": resources.CONDITION, "_since": "2004-04-04T00:00:00+00:00"})
+        await assert_since("2004-04-04T00:00:00+00:00")
 
         # And ANOTHER unfiltered search, with a different mode. Should go back to first search.
         self.mock_bulk(
             params={
                 "_type": resources.CONDITION,
-                "_typeFilter": "Condition?recorded-date=gt2001-01-01T00:00:00",
+                "_typeFilter": "Condition?recorded-date=gt2001-01-01T00:00:00+00:00",
             }
         )
-        await self.cli(
-            "export",
-            self.folder,
-            f"--type={resources.CONDITION}",
-            "--since=auto",
-            "--since-mode=created",
-            "--nickname=created-mode",
+        await assert_since(
+            "2001-01-01T00:00:00+00:00", "--since-mode=created", "--nickname=created-mode"
         )
 
-        self.assert_folder(
-            {
-                "001.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "002.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "003.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "004.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "005.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "006.2021-09-14": {
-                    # Just sample one of these metadata files, to confirm we record the "since" date
-                    ".metadata": {
-                        "done": {resources.CONDITION: "2004-04-04T00:00:00"},
-                        "filters": {resources.CONDITION: []},
-                        "since": "2001-01-01T00:00:00",
-                        "sinceMode": "updated",
-                        "kind": "output",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
-                        "version": utils.version,
-                    },
-                    "log.ndjson": None,
-                },
-                "007.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                },
-                "008.created-mode": {
-                    # Confirm we went back to the original export when using a new mode
-                    ".metadata": {
-                        "done": {resources.CONDITION: utils.TRANSACTION_TIME},
-                        "filters": {resources.CONDITION: []},
-                        "since": "2001-01-01T00:00:00",
-                        "sinceMode": "created",
-                        "kind": "output",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
-                        "version": utils.version,
-                    },
-                    "log.ndjson": None,
-                },
-                ".metadata": None,
-            }
+        # And one export that includes a new resource, which will trigger a lack of since value.
+        self.mock_bulk(params={"_type": "Condition,Device"})
+        stdout, _stderr = await self.capture_cli(
+            "export",
+            self.folder,
+            "--type=Condition,Device",
+            "--since=auto",
         )
+        self.assertNotIn(b"Using since value of", stdout)
+
+    async def test_crawl_since_auto(self):
+        """Confirm we use individual since dates for each resource type"""
+        # Do some initial (empty) exports, marking each with a different transaction time.
+        self.mock_bulk(
+            params={"_type": f"{resources.CONDITION},{resources.PATIENT}"},
+            output=[{"resourceType": resources.PATIENT, "id": "pat1"}],
+            transaction_time="2001-01-01",
+        )
+        await self.cli("export", self.folder, "--type=Condition,Patient")
+
+        self.mock_bulk(
+            params={"_type": f"{resources.ENCOUNTER}"},
+            transaction_time="2002-02-02",
+        )
+        await self.cli("export", self.folder, f"--type={resources.ENCOUNTER}")
+
+        # Now... Run a --since=auto export, and we should be seeing different since values.
+
+        params = {
+            resources.CONDITION: {
+                httpx.QueryParams(patient="pat1", _lastUpdated="gt2001-01-01T00:00:00+00:00"): []
+            },
+            resources.ENCOUNTER: {
+                httpx.QueryParams(patient="pat1", _lastUpdated="gt2002-02-02T00:00:00+00:00"): []
+            },
+            resources.PROCEDURE: {httpx.QueryParams(patient="pat1"): []},
+        }
+        self.set_resource_search_queries(params)
+
+        stdout, _stderr = await self.capture_cli(
+            "export",
+            self.folder,
+            f"--type={resources.CONDITION},{resources.ENCOUNTER},{resources.PROCEDURE}",
+            "--since=auto",
+            "--export-mode=crawl",
+        )
+        self.assertIn(b"Using since value of '2001-01-01T00:00:00+00:00' for Condition.", stdout)
+        self.assertIn(b"Using since value of '2002-02-02T00:00:00+00:00' for Encounter.", stdout)
 
     async def test_since_auto_not_found(self):
         """Confirm bail if we can't find a previous since target"""

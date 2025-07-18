@@ -1,4 +1,5 @@
 import argparse
+import datetime
 import enum
 import logging
 import sys
@@ -152,7 +153,7 @@ def calculate_since_mode(
 
 def add_since_filter(
     filters: Filters,
-    since: str | None,
+    since: str | dict[str, datetime.datetime | None] | None,
     since_mode: SinceMode,
 ) -> Filters:
     """
@@ -174,7 +175,15 @@ def add_since_filter(
     def add_filter(res_type: str, field: str) -> None:
         if res_type not in filters:
             return
-        new_param = f"{field}=gt{since}"
+
+        if isinstance(since, str):
+            res_since = since
+        elif not since.get(res_type):
+            return
+        else:
+            res_since = since[res_type].isoformat()
+        new_param = f"{field}=gt{res_since}"
+
         if filters[res_type]:
             filters[res_type] = {f"{params}&{new_param}" for params in filters[res_type]}
         else:
