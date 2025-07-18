@@ -528,11 +528,11 @@ class CrawlTests(utils.TestCase):
             )
 
     @ddt.data(
-        # 2020 is before our frozen time of 2021
-        ({"meta": {"lastUpdated": "2020-01-01T10:00:00-10"}}, "2020-01-01T10:00:00-10:00"),
-        ({"period": {"start": "2020"}}, "2020-01-01T00:00:00+00:00"),
-        ({"period": {"end": "2020-01"}}, "2020-01-01T00:00:00+00:00"),
-        ({"period": {"start": "2020-01-01"}}, "2020-01-01T00:00:00+00:00"),
+        # 2020 is before our frozen time of 2021 (and test leap second while here)
+        ({"meta": {"lastUpdated": "2020-01-01T10:00:60-10"}}, "2020-01-01T10:00:59-10:00"),
+        ({"period": {"start": "2020"}}, "2020-01-01T00:00:00+14:00"),
+        ({"period": {"end": "2020-01"}}, "2020-01-01T00:00:00+14:00"),
+        ({"period": {"start": "2020-01-01"}}, "2020-01-01T00:00:00+14:00"),
         # 2022 is after our frozen time of 2021 - it took a year to finish exporting!
         ({"period": {"end": "2022-01-01"}}, utils.FROZEN_TIMESTAMP),
     )
@@ -634,7 +634,7 @@ class CrawlTests(utils.TestCase):
 
         self.assertEqual(missing, [])
 
-        expected_log_transaction_time = "2000-01-01T00:00:00+00:00"
+        expected_log_transaction_time = "2000-01-01T00:00:00+14:00"
         self.assert_folder(
             {
                 ".metadata": {
@@ -643,15 +643,15 @@ class CrawlTests(utils.TestCase):
                     "version": utils.version,
                     "done": {
                         resources.ALLERGY_INTOLERANCE: utils.FROZEN_TIMESTAMP,  # fallback
-                        resources.CONDITION: "2000-01-01T00:00:00+00:00",
-                        resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+00:00",
-                        resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+00:00",
+                        resources.CONDITION: "2000-01-01T00:00:00+14:00",
+                        resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+14:00",
+                        resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+14:00",
                         resources.ENCOUNTER: expected_time,
-                        resources.IMMUNIZATION: "2003-01-01T00:00:00+00:00",
-                        resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+00:00",
-                        resources.OBSERVATION: "2008-01-01T00:00:00+00:00",
-                        resources.PROCEDURE: "2011-01-01T00:00:00+00:00",
-                        resources.SERVICE_REQUEST: "2012-01-01T00:00:00+00:00",
+                        resources.IMMUNIZATION: "2003-01-01T00:00:00+14:00",
+                        resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+14:00",
+                        resources.OBSERVATION: "2008-01-01T00:00:00+14:00",
+                        resources.PROCEDURE: "2011-01-01T00:00:00+14:00",
+                        resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
                     },
                     "filters": {
                         resources.ALLERGY_INTOLERANCE: [],

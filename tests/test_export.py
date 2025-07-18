@@ -799,7 +799,7 @@ class ExportTests(utils.TestCase):
         # Do some initial (empty) exports, marking each with a different transaction time.
         self.mock_bulk(
             params={"_type": f"{resources.CONDITION},{resources.ENCOUNTER}"},
-            transaction_time="2001-01-01",
+            transaction_time="2001-01-01T00:00:00+00:00",
         )
         await self.cli("export", self.folder, f"--type={resources.CONDITION},{resources.ENCOUNTER}")
 
@@ -808,7 +808,7 @@ class ExportTests(utils.TestCase):
                 "_type": resources.CONDITION,
                 "_typeFilter": f"{resources.CONDITION}?code=1234",
             },
-            transaction_time="2002-02-02",
+            transaction_time="2002-02-02T00:00:00+00:00",
         )
         await self.cli(
             "export",
@@ -822,7 +822,7 @@ class ExportTests(utils.TestCase):
                 "_type": resources.CONDITION,
                 "_typeFilter": f"{resources.CONDITION}?code=1234,{resources.CONDITION}?code=5678",
             },
-            transaction_time="2003-03-03",
+            transaction_time="2003-03-03T00:00:00+00:00",
         )
         await self.cli(
             "export",
@@ -872,7 +872,7 @@ class ExportTests(utils.TestCase):
         # And try an unfiltered search, which should be based off the 1st export above.
         self.mock_bulk(
             params={"_type": resources.CONDITION, "_since": "2001-01-01T00:00:00+00:00"},
-            transaction_time="2004-04-04",
+            transaction_time="2004-04-04T00:00:00+00:00",
         )
         await assert_since("2001-01-01T00:00:00+00:00")
 
@@ -907,13 +907,13 @@ class ExportTests(utils.TestCase):
         self.mock_bulk(
             params={"_type": f"{resources.CONDITION},{resources.PATIENT}"},
             output=[{"resourceType": resources.PATIENT, "id": "pat1"}],
-            transaction_time="2001-01-01",
+            transaction_time="2001-01-01T00:00:00+00:00",
         )
         await self.cli("export", self.folder, "--type=Condition,Patient")
 
         self.mock_bulk(
             params={"_type": f"{resources.ENCOUNTER}"},
-            transaction_time="2002-02-02",
+            transaction_time="2002-02-02T00:00:00+00:00",
         )
         await self.cli("export", self.folder, f"--type={resources.ENCOUNTER}")
 
