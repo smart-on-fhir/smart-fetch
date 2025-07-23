@@ -5,7 +5,7 @@ import os
 import sys
 
 import smart_fetch
-from smart_fetch import cli_utils, timing
+from smart_fetch import filtering, timing
 
 
 class MetadataKind(enum.StrEnum):
@@ -63,14 +63,13 @@ class OutputMetadata(Metadata):
     def __init__(self, folder: str):
         super().__init__(folder, MetadataKind.OUTPUT)
 
-    def note_context(
-        self, *, filters: cli_utils.Filters, since: str | None, since_mode: cli_utils.SinceMode
-    ) -> None:
-        ordered_filters = {res: sorted(params) for res, params in filters.items()}
+    def note_context(self, filters: filtering.Filters) -> None:
+        filter_params = filters.params(with_since=False)
+        ordered_filters = {res: sorted(params) for res, params in filter_params.items()}
         if "filters" not in self._contents:
             self._contents["filters"] = ordered_filters
-            self._contents["since"] = since
-            self._contents["sinceMode"] = str(since_mode) if since else None
+            self._contents["since"] = filters.since
+            self._contents["sinceMode"] = filters.since_mode and str(filters.since_mode)
             self._write()
             return
 
@@ -83,51 +82,48 @@ class OutputMetadata(Metadata):
             )
 
         found_since = self._contents.get("since")
-        if found_since != since:
+        if found_since != filters.since:
             sys.exit(
                 f"Folder {self._folder} is for a different --since time. "
-                f"Expected {since} but found {found_since}."
+                f"Expected {filters.since} but found {found_since}."
             )
 
         found_since_mode = self._contents.get("sinceMode")
-        if since and found_since_mode != since_mode:
+        if filters.since and found_since_mode != filters.since_mode:
             sys.exit(
                 f"Folder {self._folder} is for a different --since-mode. "
-                f"Expected '{since_mode}' but found '{found_since_mode}'."
+                f"Expected '{filters.since_mode}' but found '{found_since_mode}'."
             )
 
-    def has_same_context(
-        self, *, filters: cli_utils.Filters, since: str | None, since_mode: cli_utils.SinceMode
-    ) -> bool:
+    def has_same_context(self, *, filters: filtering.Filters) -> bool:
         """
         Determines if this folder is the same exact context (filters and since).
 
         Note that we don't check what sort of export type this was.
         In theory, the user can swap between bulk and crawl as desired.
         """
-        ordered_filters = {res: sorted(params) for res, params in filters.items()}
+        filter_params = filters.params(with_since=False)
+        ordered_filters = {res: sorted(params) for res, params in filter_params.items()}
         found_filters = self._contents.get("filters")
         found_since = self._contents.get("since")
         found_since_mode = self._contents.get("sinceMode")
 
-        since_match = found_since == since
-        if since_match and since == cli_utils.SinceMode.AUTO:
+        since_match = found_since == filters.since
+        if since_match and filters.since == filtering.SinceMode.AUTO:
             # OK we have to be careful here. We want to allow resuming a previous auto export.
             # But we also want to start a new auto export as needed. So the logic is: "if any
             # of the resources of a previous auto export aren't done, it's a match, and we'll
             # resume - otherwise reject a match, and we'll make a new one"
             found_done = self._contents.get("done", {})
-            since_match = any(res_type not in found_done for res_type in filters)
+            since_match = any(res_type not in found_done for res_type in filter_params)
 
         return (
             found_filters == ordered_filters
             and since_match
-            and (not since or found_since_mode == since_mode)
+            and (not filters.since or found_since_mode == filters.since_mode)
         )
 
-    def get_matching_timestamps(
-        self, filters: cli_utils.Filters, since_mode: str
-    ) -> dict[str, datetime.datetime]:
+    def get_matching_timestamps(self, filters: filtering.Filters) -> dict[str, datetime.datetime]:
         """
         Tells if we have a superset of any resources from `filters`
 
@@ -135,21 +131,24 @@ class OutputMetadata(Metadata):
 
         This is used to find previous export timestamps to calculate a new automatic "since" value.
         """
+        filter_params = filters.params(with_since=False)
         matches = {}
 
         # We only match on the same type of "since"
-        if self._contents.get("sinceMode") and self._contents.get("sinceMode") != since_mode:
+        found_since_mode = self._contents.get("sinceMode")
+        if found_since_mode and found_since_mode != filters.since_mode:
             return matches
 
         for res_type, params_list in self._contents.get("filters", {}).items():
-            if res_type not in filters:
+            if res_type not in filter_params:
                 continue
 
+            res_params = filter_params[res_type]
             found_params = set(params_list)
-            both_empty = not filters[res_type] and not found_params
+            both_empty = not res_params and not found_params
             # We look for a subset here, because multiple type filters is an OR - so if we searched
             # for A OR B before, but now are looking for previous A timestamps, that's a match.
-            target_is_subset = filters[res_type] and filters[res_type].issubset(found_params)
+            target_is_subset = res_params and res_params.issubset(found_params)
             if both_empty or target_is_subset:
                 # OK this folder is a valid match for our current set of filters.
                 # Let's find the timestamps.

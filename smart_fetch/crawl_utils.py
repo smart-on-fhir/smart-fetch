@@ -9,9 +9,16 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
-import rich
 
-from smart_fetch import bulk_utils, cli_utils, iter_utils, lifecycle, ndjson, resources, timing
+from smart_fetch import (
+    bulk_utils,
+    filtering,
+    iter_utils,
+    lifecycle,
+    ndjson,
+    resources,
+    timing,
+)
 
 
 def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: datetime.datetime):
@@ -36,9 +43,7 @@ def create_fake_log(folder: str, fhir_url: str, group: str, transaction_time: da
 async def perform_crawl(
     *,
     fhir_url: str,
-    filters: cli_utils.Filters,
-    since: str | None,
-    since_mode: cli_utils.SinceMode,
+    filters: filtering.Filters,
     source_dir: str,
     workdir: str,
     rest_client: cfs.FhirClient,
@@ -48,17 +53,7 @@ async def perform_crawl(
     mrn_file: str | None,
     mrn_system: str | None,
     finish_callback: Callable[[str], Awaitable[None]] | None = None,
-    since_detailed: dict[str, datetime.datetime | None] | None = None,
 ) -> None:
-    # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
-    # avoid writing out duplicates, in the situations where we have multiple search streams
-    # per resource (which can happen when we have multiple type filters OR'd together).
-    # A pool is only defined if multiple filters exist for it, to save memory.
-    id_pool = {}
-    for res_type in filters:
-        if len(filters[res_type]) > 1:
-            id_pool[res_type] = set()
-
     if group_nickname:
         group_name = group_nickname
     elif group is not None:
@@ -70,16 +65,19 @@ async def perform_crawl(
 
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
-    metadata.note_context(filters=filters, since=since, since_mode=since_mode)
+    metadata.note_context(filters=filters)
 
-    if since_detailed:
-        for res_type, timestamp in sorted(since_detailed.items()):
-            if timestamp:
-                rich.print(f"Using since value of '{timestamp.isoformat()}' for {res_type}.")
-    else:
-        rich.print(f"Using since value of '{since}'.")
+    filter_params = filters.params()
+    filters.print_since()
 
-    filters = cli_utils.add_since_filter(filters, since_detailed or since, since_mode)
+    # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
+    # avoid writing out duplicates, in the situations where we have multiple search streams
+    # per resource (which can happen when we have multiple type filters OR'd together).
+    # A pool is only defined if multiple filters exist for it, to save memory.
+    id_pool = {}
+    for res_type in filter_params:
+        if len(filter_params[res_type]) > 1:
+            id_pool[res_type] = set()
 
     # `transaction_times` holds the date we will send to mark_done() when done with each resource,
     # to mark the equivalent of Bulk Export's transactionTime - the last moment that the export
@@ -99,7 +97,7 @@ async def perform_crawl(
 
     # Before crawling, we have to decide if we need to do anything special with patients,
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
-    if resources.PATIENT in filters:
+    if resources.PATIENT in filter_params:
         if metadata.is_done(resources.PATIENT):
             logging.warning(f"Skipping {resources.PATIENT}, already done.")
             if finish_callback:
@@ -117,7 +115,7 @@ async def perform_crawl(
                 metadata=metadata,
                 finish_callback=finish_callback,
             )
-        del filters[resources.PATIENT]
+        del filter_params[resources.PATIENT]
         patient_ids = read_patient_ids(workdir)
     else:
         patient_ids = read_patient_ids(source_dir)
@@ -128,14 +126,16 @@ async def perform_crawl(
             "or export patients in this crawl too."
         )
 
-    for res_type in filters:
+    for res_type in filter_params:
         if metadata.is_done(res_type):
             logging.warning(f"Skipping {res_type}, already done.")
             if finish_callback:
                 await finish_callback(res_type)
             continue
         processor.add_source(
-            res_type, resource_urls(res_type, "patient=", patient_ids, filters), len(patient_ids)
+            res_type,
+            resource_urls(res_type, "patient=", patient_ids, filter_params),
+            len(patient_ids),
         )
 
     if processor.sources:
@@ -149,7 +149,7 @@ async def gather_patients(
     *,
     bulk_client,
     processor,
-    filters,
+    filters: filtering.Filters,
     workdir: str,
     mrn_file: str | None,
     mrn_system: str | None,
@@ -172,7 +172,7 @@ async def gather_patients(
 
         processor.add_source(
             resources.PATIENT,
-            resource_urls(resources.PATIENT, f"identifier={mrn_system}|", mrns, filters),
+            resource_urls(resources.PATIENT, f"identifier={mrn_system}|", mrns, filters.params()),
             len(mrns),
         )
         await processor.run()
@@ -186,7 +186,8 @@ async def gather_patients(
                 {resources.PATIENT},
                 bulk_utils.export_url(fhir_url, group),
                 workdir,
-                type_filter=filters,
+                since=filters.get_bulk_since(),
+                type_filter=filters.params(bulk=True),
                 metadata=metadata,
             )
             await exporter.export()

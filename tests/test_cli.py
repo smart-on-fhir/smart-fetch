@@ -5,7 +5,7 @@ from unittest import mock
 
 import ddt
 
-from smart_fetch import cli_utils, lifecycle, resources
+from smart_fetch import cli_utils, filtering, lifecycle, resources
 from smart_fetch.cli import main
 from tests import utils
 
@@ -118,9 +118,12 @@ class CommandLineTests(utils.TestCase):
     async def test_wrong_metadata_context(self):
         metadata = lifecycle.OutputMetadata(self.folder)
         metadata.note_context(
-            filters={resources.CONDITION: {"code=1234"}},
-            since="2013-10-30",
-            since_mode=cli_utils.SinceMode.CREATED,
+            filtering.Filters(
+                ["Condition"],
+                type_filters=["Condition?code=1234"],
+                since="2013-10-30",
+                since_mode=filtering.SinceMode.CREATED,
+            )
         )
 
         # Wrong type filter

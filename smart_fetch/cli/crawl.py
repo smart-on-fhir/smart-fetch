@@ -4,7 +4,7 @@ import argparse
 
 import rich
 
-from smart_fetch import cli_utils, crawl_utils
+from smart_fetch import cli_utils, crawl_utils, filtering
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -14,8 +14,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
     parser.add_argument(
         "--since-mode",
-        choices=list(cli_utils.SinceMode),
-        default=cli_utils.SinceMode.AUTO,
+        choices=list(filtering.SinceMode),
+        default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
 
@@ -41,9 +41,12 @@ async def crawl_main(args: argparse.Namespace) -> None:
 
     async with rest_client:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types)
-        filters = cli_utils.parse_type_filters(rest_client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(
-            args.since, args.since_mode, rest_client.server_type
+        filters = filtering.Filters(
+            res_types,
+            server_type=rest_client.server_type,
+            type_filters=args.type_filter,
+            since=args.since,
+            since_mode=args.since_mode,
         )
         workdir = args.folder
         source_dir = args.source_dir or workdir
@@ -51,8 +54,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
         await crawl_utils.perform_crawl(
             fhir_url=args.fhir_url,
             filters=filters,
-            since=args.since,
-            since_mode=since_mode,
             source_dir=source_dir,
             workdir=workdir,
             rest_client=rest_client,

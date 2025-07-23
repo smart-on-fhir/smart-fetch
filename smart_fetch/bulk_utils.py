@@ -19,7 +19,7 @@ import rich.live
 import rich.text
 
 import smart_fetch
-from smart_fetch import cli_utils, lifecycle, ndjson, resources, timing
+from smart_fetch import cli_utils, filtering, lifecycle, ndjson, resources, timing
 
 
 def export_url(fhir_url: str, group: str) -> str:
@@ -265,7 +265,7 @@ class BulkExporter:
         destination: str,
         *,
         since: str | None = None,
-        type_filter: cli_utils.Filters | None = None,
+        type_filter: filtering.TypeFilters | None = None,
         metadata: lifecycle.OutputMetadata,
         prefer_url_resources: bool = False,
     ):
@@ -302,7 +302,7 @@ class BulkExporter:
 
     @staticmethod
     def combine_filters(
-        filters: cli_utils.Filters | None, *, resources: set[str], server_type: cfs.ServerType
+        filters: filtering.TypeFilters | None, *, resources: set[str], server_type: cfs.ServerType
     ) -> list[str]:
         if filters is None:
             return []
@@ -357,7 +357,7 @@ class BulkExporter:
         server_type: cfs.ServerType,
         resources: set[str],
         since: str | None,
-        type_filter: cli_utils.Filters | None,
+        type_filter: filtering.TypeFilters | None,
         prefer_url_resources: bool,
     ) -> str:
         parsed = urllib.parse.urlsplit(url)
@@ -716,42 +716,25 @@ async def perform_bulk(
     *,
     fhir_url: str,
     bulk_client: cfs.FhirClient,
-    filters: cli_utils.Filters,
+    filters: filtering.Filters,
     group: str,
     workdir: str,
-    since: str | None,
-    since_mode: cli_utils.SinceMode,
-    since_detailed: dict[str, datetime.datetime | None] | None = None,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
-    metadata.note_context(filters=filters, since=since, since_mode=since_mode)
+    metadata.note_context(filters)
 
-    # Coalesce a complicated set of since values down to just one - the oldest
-    if since_detailed:
-        if any(val is None for val in since_detailed.values()):
-            since = None
-        else:
-            since = min(val for val in since_detailed.values()).isoformat()
-
-    if since:
-        rich.print(f"Using since value of '{since}'.")
-
-    if since_mode == cli_utils.SinceMode.CREATED:
-        filters = cli_utils.add_since_filter(filters, since, since_mode)
-        since = None
-    # else if SinceMode.UPDATED, we use Bulk Export's _since param, which is better than faking
-    # it with _lastUpdated, because _since has extra logic around older resources of patients
-    # added to the group after _since.
+    type_filters = filters.params(bulk=True)
+    filters.print_since(bulk=True)
 
     # See which resources we can skip
     already_done = set()
     if not metadata.get_bulk_status_url():
-        for res_type in filters:
+        for res_type in type_filters:
             if metadata.is_done(res_type):
                 logging.warning(f"Skipping {res_type}, already done.")
                 already_done.add(res_type)
-    res_types = set(filters) - already_done
+    res_types = set(type_filters) - already_done
 
     if res_types:
         exporter = BulkExporter(
@@ -759,8 +742,8 @@ async def perform_bulk(
             res_types,
             export_url(fhir_url, group),
             workdir,
-            since=since,
-            type_filter=filters,
+            since=filters.get_bulk_since(),
+            type_filter=type_filters,
             metadata=metadata,
         )
         await exporter.export()

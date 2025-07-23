@@ -1,10 +1,7 @@
 import argparse
-import datetime
-import enum
 import logging
 import sys
 import tomllib
-from collections.abc import Iterable
 
 import cumulus_fhir_support as cfs
 import rich.progress
@@ -19,16 +16,6 @@ ALLOWED_TYPES = {
     *resources.PATIENT_TYPES,
 }
 ALLOWED_CASE_MAP: dict[str, str] = {res_type.casefold(): res_type for res_type in ALLOWED_TYPES}
-
-# Each covered resource type is present, with an empty set by default.
-# If there are filters in the set, those should be applied to the resource type.
-Filters = dict[str, set[str]]
-
-
-class SinceMode(enum.StrEnum):
-    AUTO = enum.auto()
-    UPDATED = enum.auto()
-    CREATED = enum.auto()
 
 
 def add_type_selection(parser: argparse.ArgumentParser) -> None:
@@ -99,104 +86,6 @@ def parse_resource_selection(types: str) -> list[str]:
 
     # Keep our internal preferred order by iterating on PATIENT_TYPES, not lower_types
     return [pat_type for pat_type in resources.PATIENT_TYPES if pat_type.casefold() in lower_types]
-
-
-def parse_type_filters(
-    server_type: cfs.ServerType, res_types: Iterable[str], type_filters: list[str] | None
-) -> Filters:
-    """Parses the incoming --type-filter arguments and adds in default filters."""
-    # First, break out what the user provided on the CLI
-    filters = {}
-    for res_type in res_types:
-        filters[res_type] = set()
-
-    for type_filter in type_filters or []:
-        if "?" not in type_filter:
-            sys.exit("Type filter arguments must be in the format 'Resource?params'.")
-        res_type, params = type_filter.split("?", 1)
-        if res_type not in filters:
-            sys.exit(f"Type filter for {res_type} but that type is not included in --type.")
-        filters[res_type].add(params)
-
-    if filters.get(resources.OBSERVATION) == set():
-        # Add some basic default filters for Observation, because the volume of Observations gets
-        # overwhelming quickly. So we limit to the nine basic US Core categories.
-        categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
-        if server_type != cfs.ServerType.EPIC:
-            # As of June 2025, Epic does not support these types and will error out
-            categories += ",procedure,therapy,activity"
-
-        filters[resources.OBSERVATION] = {categories}
-
-    return filters
-
-
-def calculate_since_mode(
-    since: str | None, since_mode: SinceMode, server_type: cfs.ServerType
-) -> SinceMode:
-    """Converts "auto" into created or updated based on whether the server supports created."""
-    if not since_mode or since_mode == SinceMode.AUTO:
-        # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
-        # Otherwise, prefer to grab any resource updated since this time, to get all the latest
-        # and greatest edits.
-        if server_type == cfs.ServerType.EPIC:
-            since_mode = SinceMode.CREATED
-            if since:  # only talk to the user about this if they actually are using a mode
-                rich.get_console().print(
-                    "Epic server detected. Defaulting to 'created' instead of 'updated' since mode."
-                )
-        else:
-            since_mode = SinceMode.UPDATED
-
-    return since_mode
-
-
-def add_since_filter(
-    filters: Filters,
-    since: str | dict[str, datetime.datetime | None] | None,
-    since_mode: SinceMode,
-) -> Filters:
-    """
-    Modifies `filters` by adding parameters to search for resources "since" a certain time.
-
-    This is not bulk export's _since parameter, but rather a way to emulate it.
-
-    The "updated" mode fakes _since by just searching for _lastUpdated.
-
-    The "created" mode fakes _since by searching for per-resource fields (when they are available)
-    for a date that is as close to creation date as possible. This is necessary for servers that
-    don't offer a meta.lastUpdated field (like Epic).
-
-    Returns the modified filters object.
-    """
-    if not since:
-        return filters
-
-    def add_filter(res_type: str, field: str) -> None:
-        if res_type not in filters:
-            return
-
-        if isinstance(since, str):
-            res_since = since
-        elif not since.get(res_type):
-            return
-        else:
-            res_since = since[res_type].isoformat()
-        new_param = f"{field}=gt{res_since}"
-
-        if filters[res_type]:
-            filters[res_type] = {f"{params}&{new_param}" for params in filters[res_type]}
-        else:
-            filters[res_type] = {new_param}
-
-    if since_mode == SinceMode.CREATED:
-        for res_type, field in resources.CREATED_SEARCH_FIELDS.items():
-            add_filter(res_type, field)
-    else:  # UPDATED mode
-        for res_type in filters:
-            add_filter(res_type, "_lastUpdated")
-
-    return filters
 
 
 # COHORT SELECTION
