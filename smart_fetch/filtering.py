@@ -29,7 +29,21 @@ class Filters:
         since: str | None = None,
         since_mode: SinceMode | None = None,
     ):
-        """Parses the incoming --type-filter arguments and adds in default filters."""
+        """
+        Create a Filters object to store all the slicing and dicing information for an export.
+
+        This parses the incoming --type-filter arguments and adds in default filters.
+
+        The provided arguments will be stored as object properties, so that you can simply pass
+        this object around for complete filtering information.
+
+        Args:
+            res_types: collection of resources types to export
+            type_filters: bulk-export-style type filter queries like Patient?active=true
+            server_type: the detected server type, if known
+            since: a datetime string (or "auto")
+            since_mode: whether to get resources since creation or update (or "auto")
+        """
         self.server_type = server_type
         self.since = since
         self.since_mode = self._calculate_since_mode(since_mode) if since else None
