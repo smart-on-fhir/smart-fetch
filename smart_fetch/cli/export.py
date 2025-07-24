@@ -14,7 +14,7 @@ import cumulus_fhir_support as cfs
 import rich
 import rich.progress
 
-from smart_fetch import bulk_utils, cli_utils, crawl_utils, lifecycle, tasks, timing
+from smart_fetch import bulk_utils, cli_utils, crawl_utils, filtering, lifecycle, tasks, timing
 
 
 class ExportMode(enum.StrEnum):
@@ -44,8 +44,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--since-mode",
-        choices=list(cli_utils.SinceMode),
-        default=cli_utils.SinceMode.AUTO,
+        choices=list(filtering.SinceMode),
+        default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
 
@@ -69,24 +69,20 @@ async def export_main(args: argparse.Namespace) -> None:
 
     async with client:
         source_dir = args.folder
-        filters = cli_utils.parse_type_filters(client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(args.since, args.since_mode, client.server_type)
-
-        subdir = find_workdir(
-            source_dir,
-            filters=filters,
+        filters = filtering.Filters(
+            res_types,
+            server_type=client.server_type,
+            type_filters=args.type_filter,
             since=args.since,
-            since_mode=since_mode,
-            nickname=args.nickname,
+            since_mode=args.since_mode,
         )
+        filters.detailed_since = calculate_detailed_since(source_dir, filters=filters)
+
+        subdir = find_workdir(source_dir, filters=filters, nickname=args.nickname)
         workdir = os.path.join(source_dir, subdir)
 
         metadata = lifecycle.ManagedMetadata(source_dir)
         metadata.note_context(fhir_url=args.fhir_url, group=args.group)
-
-        since_detailed = calculate_detailed_since(
-            source_dir, filters=filters, since=args.since, since_mode=since_mode
-        )
 
         if export_mode == ExportMode.BULK:
             await bulk_utils.perform_bulk(
@@ -95,18 +91,12 @@ async def export_main(args: argparse.Namespace) -> None:
                 filters=filters,
                 group=args.group,
                 workdir=workdir,
-                since=args.since,
-                since_mode=since_mode,
-                since_detailed=since_detailed,
             )
-            await finish_resource(rest_client, workdir, set(filters), open_client=True)
+            await finish_resource(rest_client, workdir, filters.resources(), open_client=True)
         else:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
                 filters=filters,
-                since=args.since,
-                since_mode=since_mode,
-                since_detailed=since_detailed,
                 source_dir=source_dir,
                 workdir=workdir,
                 rest_client=rest_client,
@@ -139,18 +129,16 @@ def calculate_export_mode(export_mode: ExportMode, server_type: cfs.ServerType) 
 def calculate_detailed_since(
     source_dir: str,
     *,
-    filters: cli_utils.Filters,
-    since: str | None,
-    since_mode: cli_utils.SinceMode,
+    filters: filtering.Filters,
 ) -> dict[str, datetime.datetime | None] | None:
     # Early exit if we don't need to calculate anything
-    if since != cli_utils.SinceMode.AUTO:
+    if filters.since != filtering.SinceMode.AUTO:
         return None
 
     max_dones = {}  # the newest "done" value for each resource we're interested in
     for folder in list_workdirs(source_dir):
         metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
-        matches = metadata.get_matching_timestamps(filters, since_mode)
+        matches = metadata.get_matching_timestamps(filters)
         for res_type, timestamp in matches.items():
             if res_type not in max_dones or max_dones[res_type] < timestamp:
                 max_dones[res_type] = timestamp
@@ -162,7 +150,7 @@ def calculate_detailed_since(
         )
 
     # Fill in some None for any resources we didn't find a previous date for
-    for res_type in filters:
+    for res_type in filters.resources():
         max_dones.setdefault(res_type, None)
 
     return max_dones
@@ -171,9 +159,7 @@ def calculate_detailed_since(
 def find_workdir(
     source_dir: str,
     *,
-    filters: cli_utils.Filters,
-    since: str | None,
-    since_mode: cli_utils.SinceMode,
+    filters: filtering.Filters,
     nickname: str | None,
 ) -> str:
     # First, scan the workdirs to find the highest num and see if there's an exact nickname match.
@@ -189,7 +175,7 @@ def find_workdir(
     # Didn't find exact nickname match. Can we find the same context?
     for folder in list_workdirs(source_dir):
         metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
-        if metadata.has_same_context(filters=filters, since=since, since_mode=since_mode):
+        if metadata.has_same_context(filters=filters):
             logging.warning(f"Re-using existing subfolder '{folder}' with similar arguments.")
             return folder
 

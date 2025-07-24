@@ -34,6 +34,17 @@ pip install .[tests]
 pytest
 ```
 
+### Writing your patch
+
+We roughly follow the Google's
+[Python style guide](https://google.github.io/styleguide/pyguide.html),
+so please try to follow it too.
+It's mostly similar to other style guides,
+but some notable aspects are:
+- imports should generally be at the module level, not for individual functions
+  (i.e. `import asyncio` not `from asyncio import sleep`)
+- docstrings with documented arguments have their own format
+
 ### How to show us the patch
 
 Open a new GitHub PR and one of the maintainers will notice it and comment.

@@ -6,7 +6,7 @@ from unittest import mock
 import ddt
 import httpx
 
-from smart_fetch import cli_utils, lifecycle, resources
+from smart_fetch import filtering, lifecycle, resources
 from tests import utils
 
 
@@ -458,7 +458,7 @@ class ExportTests(utils.TestCase):
 
         metadata = lifecycle.OutputMetadata(workdir)
         metadata.note_context(
-            filters={resources.PATIENT: set()}, since=None, since_mode=cli_utils.SinceMode.UPDATED
+            filtering.Filters(["Patient"], since_mode=filtering.SinceMode.UPDATED)
         )
 
         # Non gzipped is ignored
@@ -842,7 +842,7 @@ class ExportTests(utils.TestCase):
                 "--since=auto",
                 *args,
             )
-            self.assertIn(f"Using since value of '{since}'.".encode(), stdout)
+            self.assertIn(f"Using since value of '{since}'".encode(), stdout)
 
         # First one is for code 1234 which will base off the 3rd example above (because that was
         # an "OR" search, it's a valid match).

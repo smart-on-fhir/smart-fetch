@@ -6,7 +6,7 @@ import sys
 import cumulus_fhir_support as cfs
 import rich
 
-from smart_fetch import bulk_utils, cli_utils, lifecycle
+from smart_fetch import bulk_utils, cli_utils, filtering, lifecycle
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -18,8 +18,8 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--since", metavar="TIMESTAMP", help="only get data since this date")
     parser.add_argument(
         "--since-mode",
-        choices=list(cli_utils.SinceMode),
-        default=cli_utils.SinceMode.AUTO,
+        choices=list(filtering.SinceMode),
+        default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
     parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
@@ -44,9 +44,12 @@ async def export_main(args: argparse.Namespace) -> None:
 
     async with bulk_client:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
-        filters = cli_utils.parse_type_filters(bulk_client.server_type, res_types, args.type_filter)
-        since_mode = cli_utils.calculate_since_mode(
-            args.since, args.since_mode, bulk_client.server_type
+        filters = filtering.Filters(
+            res_types,
+            server_type=bulk_client.server_type,
+            type_filters=args.type_filter,
+            since=args.since,
+            since_mode=args.since_mode,
         )
 
         await bulk_utils.perform_bulk(
@@ -55,8 +58,6 @@ async def export_main(args: argparse.Namespace) -> None:
             filters=filters,
             group=args.group,
             workdir=workdir,
-            since=args.since,
-            since_mode=since_mode,
         )
 
     cli_utils.print_done()
