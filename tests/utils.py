@@ -7,6 +7,7 @@ import os
 import pathlib
 import tempfile
 import unittest
+from collections.abc import Callable
 
 import httpx
 import respx
@@ -52,7 +53,35 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         self.dlserver = "http://example.invalid/dl"
 
         self.server = respx.MockRouter(assert_all_called=False, base_url=self.url)
-        self.server.get("metadata").respond(200, json={})
+
+        self.metadata = {
+            "rest": [
+                {
+                    "mode": "server",
+                    "resource": [
+                        {"type": resources.ALLERGY_INTOLERANCE, "searchParam": [{"name": "date"}]},
+                        {"type": resources.CONDITION, "searchParam": [{"name": "recorded-date"}]},
+                        {"type": resources.DEVICE},
+                        {"type": resources.DIAGNOSTIC_REPORT, "searchParam": [{"name": "issued"}]},
+                        {"type": resources.DOCUMENT_REFERENCE, "searchParam": [{"name": "date"}]},
+                        {"type": resources.ENCOUNTER},
+                        {"type": resources.IMMUNIZATION},
+                        {
+                            "type": resources.MEDICATION_REQUEST,
+                            "searchParam": [{"name": "authoredon"}],
+                        },
+                        {
+                            "type": resources.OBSERVATION,
+                            "searchParam": [{"name": "category"}, {"name": "issued"}],
+                        },
+                        {"type": resources.PATIENT, "searchParam": [{"name": "_lastUpdated"}]},
+                        {"type": resources.PROCEDURE},
+                        {"type": resources.SERVICE_REQUEST, "searchParam": [{"name": "authored"}]},
+                    ],
+                },
+            ],
+        }
+        self.server.get("metadata").respond(200, json=self.metadata)
 
     def tmp_file(self, **kwargs):
         tmp = tempfile.NamedTemporaryFile("wt", delete=False, **kwargs)
@@ -77,7 +106,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         route.side_effect = callback
 
     def set_resource_search_queries(
-        self, all_results: dict[str, list[httpx.QueryParams] | dict[httpx.QueryParams, list[dict]]]
+        self,
+        all_results: dict[str, list[httpx.QueryParams] | dict[httpx.QueryParams, list[dict]]],
+        callback: Callable[[httpx.Request, str], None] | None = None,
     ):
         all_params = []
         for params in all_results.values():
@@ -87,6 +118,8 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                 all_params.extend(params.keys())
 
         def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            if callback:
+                callback(request, res_type)
             res_results = all_results.get(res_type, [])
             if request.url.params in res_results:
                 all_params.remove(request.url.params)
@@ -104,7 +137,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
 
         return all_params
 
-    def set_resource_search_route(self, callback):
+    def set_resource_search_route(self, callback: Callable[[httpx.Request, str], None]):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^$/?]+)[^/\$]*$")
         route.side_effect = callback
 

@@ -71,7 +71,7 @@ async def export_main(args: argparse.Namespace) -> None:
         source_dir = args.folder
         filters = filtering.Filters(
             res_types,
-            server_type=client.server_type,
+            client=client,
             type_filters=args.type_filter,
             since=args.since,
             since_mode=args.since_mode,

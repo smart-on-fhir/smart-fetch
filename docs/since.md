@@ -34,11 +34,11 @@ But that's OK!
 If you pass in `--since-mode=created`, SMART Fetch will use an alternative "since" check.
 
 Instead of using a "when was this resource last updated" check, it will use a
-"when was this resource created" check.
+"when was this resource created" check, for resources that have a "created" timestamp field.
 
 {: .note }
-Created mode is the default "since" mode for Epic servers,
-because Epic does not support `meta.lastUpdated`.
+Created mode is the default for servers that don't
+declare support for the `_lastUpdated` search field (Epic is a notable example).
 
 ### Limitations
 

@@ -25,7 +25,7 @@ class Filters:
         res_types: Iterable[str],
         *,
         type_filters: list[str] | None = None,
-        server_type: cfs.ServerType = cfs.ServerType.UNKNOWN,
+        client: cfs.FhirClient | None = None,
         since: str | None = None,
         since_mode: SinceMode | None = None,
     ):
@@ -40,11 +40,12 @@ class Filters:
         Args:
             res_types: collection of resources types to export
             type_filters: bulk-export-style type filter queries like Patient?active=true
-            server_type: the detected server type, if known
+            client: the client in use to talk to the server (must be in an open session)
             since: a datetime string (or "auto")
             since_mode: whether to get resources since creation or update (or "auto")
         """
-        self.server_type = server_type
+        self._client = client
+        self.server_type = client.server_type if client else cfs.ServerType.UNKNOWN
         self.since = since
         self.since_mode = self._calculate_since_mode(since_mode) if since else None
         self.detailed_since: dict[str, datetime.datetime | None] | None = None
@@ -67,7 +68,7 @@ class Filters:
             # Add some basic default filters for Observation, because the volume of Observations
             # gets overwhelming quickly. So we limit to the nine basic US Core categories.
             categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"
-            if server_type != cfs.ServerType.EPIC:
+            if self.server_type != cfs.ServerType.EPIC:
                 # As of June 2025, Epic does not support these types and will error out
                 categories += ",procedure,therapy,activity"
 
@@ -96,7 +97,8 @@ class Filters:
 
         if self.since_mode == SinceMode.CREATED:
             for res_type, field in resources.CREATED_SEARCH_FIELDS.items():
-                self._add_filter(filters, res_type, field)
+                if self._is_search_field_supported(res_type, field):
+                    self._add_filter(filters, res_type, field)
         elif not bulk:  # UPDATED mode, non bulk
             for res_type in filters:
                 self._add_filter(filters, res_type, "_lastUpdated")
@@ -152,15 +154,35 @@ class Filters:
     def _calculate_since_mode(self, since_mode: SinceMode | None) -> SinceMode:
         """Converts "auto" into created or updated based on whether the server supports created."""
         if not since_mode or since_mode == SinceMode.AUTO:
-            # Epic does not support meta.lastUpdated, so we have to fall back to created time here.
-            # Otherwise, prefer to grab any resource updated since this time, to get all the latest
-            # and greatest edits.
-            if self.server_type == cfs.ServerType.EPIC:
+            # Normally, we prefer to grab any resource updated since XXX time, to get all the latest
+            # and greatest edits. But if the server doesn't support meta.lastUpdated (like Epic),
+            # we fall back to created time. Check for searching on Patient?_lastUpdated as a proxy
+            # for all - assuming that all resources have it too and that bulk export has _since.
+            if self._is_search_field_supported(resources.PATIENT, "_lastUpdated"):
+                return SinceMode.UPDATED
+            else:
                 rich.print(
-                    "Epic server detected. Defaulting to 'created' instead of 'updated' since mode."
+                    "Server doesn't support 'updated' since mode, defaulting to 'created' instead."
                 )
                 return SinceMode.CREATED
-            else:
-                return SinceMode.UPDATED
 
         return since_mode
+
+    def _is_search_field_supported(self, res_type: str, field: str) -> bool:
+        for rest in self._client.capabilities.get("rest", []):
+            if rest.get("mode") == "server":
+                break
+        else:
+            return False
+
+        for resource in rest.get("resource", []):
+            if resource.get("type") == res_type:
+                break
+        else:
+            return False
+
+        for param in resource.get("searchParam", []):
+            if param.get("name") == field:
+                return True
+
+        return False

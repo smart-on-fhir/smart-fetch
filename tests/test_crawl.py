@@ -1,3 +1,4 @@
+import datetime
 import json
 import os
 
@@ -272,7 +273,7 @@ class CrawlTests(utils.TestCase):
             assert False, f"Invalid request: {request.url.params}"
 
         self.set_resource_search_route(respond)
-        self.server.get("metadata").respond(200, json=metadata)
+        self.server.get("metadata").respond(200, json=self.metadata | metadata)
 
         await self.cli("crawl", self.folder, "--type", resources.OBSERVATION, *cli_args)
 
@@ -453,8 +454,8 @@ class CrawlTests(utils.TestCase):
             resources.DEVICE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.DIAGNOSTIC_REPORT: [httpx.QueryParams(patient="pat1", issued="gt2022-01-05")],
             resources.DOCUMENT_REFERENCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
-            resources.ENCOUNTER: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
-            resources.IMMUNIZATION: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.ENCOUNTER: [httpx.QueryParams(patient="pat1")],  # no extra param
+            resources.IMMUNIZATION: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.MEDICATION_REQUEST: [
                 httpx.QueryParams(patient="pat1", authoredon="gt2022-01-05")
             ],
@@ -463,10 +464,10 @@ class CrawlTests(utils.TestCase):
                     patient="pat1",
                     category="social-history,vital-signs,imaging,laboratory,survey,exam,"
                     "procedure,therapy,activity",
-                    date="gt2022-01-05",
+                    issued="gt2022-01-05",
                 ),
             ],
-            resources.PROCEDURE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.PROCEDURE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.SERVICE_REQUEST: [httpx.QueryParams(patient="pat1", authored="gt2022-01-05")],
         }
 
@@ -482,23 +483,37 @@ class CrawlTests(utils.TestCase):
 
         self.assertEqual(missing, [])
 
-    async def test_since_epic_uses_created(self):
-        """Confirm that Epic servers get the correct since mode by default"""
+    async def test_since_no_last_updated_uses_created(self):
+        """Confirm that non-last-updated servers get the correct since mode by default"""
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
 
-        # We'll end up seeing date= instead of _lastUpdated= because of Epic
-        params = {resources.ENCOUNTER: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")]}
+        # We'll end up seeing date= instead of _lastUpdated= because of server metadata
+        params = {
+            resources.DOCUMENT_REFERENCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")]
+        }
 
         missing = self.set_resource_search_queries(params)
-        self.server.get("metadata").respond(200, json={"software": {"name": "Epic"}})
+
+        # Set metadata for just docref.date (but importantly, not _lastUpdated
+        metadata = {
+            "rest": [
+                {
+                    "mode": "server",
+                    "resource": [
+                        {"type": resources.DOCUMENT_REFERENCE, "searchParam": [{"name": "date"}]},
+                    ],
+                },
+            ],
+        }
+        self.server.get("metadata").respond(200, json=metadata)
 
         await self.cli(
             "crawl",
             self.folder,
             "--group=my-group",
             "--since=2022-01-05",
-            f"--type={resources.ENCOUNTER}",
+            f"--type={resources.DOCUMENT_REFERENCE}",
         )
 
         self.assertEqual(missing, [])
@@ -530,14 +545,31 @@ class CrawlTests(utils.TestCase):
     @ddt.data(
         # 2020 is before our frozen time of 2021 (and test leap second while here)
         ({"meta": {"lastUpdated": "2020-01-01T10:00:60-10"}}, "2020-01-01T10:00:59-10:00"),
-        ({"period": {"start": "2020"}}, "2020-01-01T00:00:00+14:00"),
-        ({"period": {"end": "2020-01"}}, "2020-01-01T00:00:00+14:00"),
-        ({"period": {"start": "2020-01-01"}}, "2020-01-01T00:00:00+14:00"),
-        # 2022 is after our frozen time of 2021 - it took a year to finish exporting!
-        ({"period": {"end": "2022-01-01"}}, utils.FROZEN_TIMESTAMP),
+        ({"recordedDate": "2020"}, "2020-01-01T00:00:00+14:00"),
+        ({"recordedDate": "2020-01"}, "2020-01-01T00:00:00+14:00"),
+        ({"recordedDate": "2020-01-01"}, "2020-01-01T00:00:00+14:00"),
+        # No date gets us the fallback time
+        ({}, (utils.FROZEN_DATETIME + datetime.timedelta(minutes=2)).astimezone().isoformat()),
+        # Confirm that while we throw away newer dates (like 2022), we still track other older
+        # dates in the source data.
+        (
+            {"meta": {"lastUpdated": "2019-10-01T00:00:00Z"}, "recordedDate": "2022-01-01"},
+            "2019-10-01T00:00:00+00:00",
+        ),
+        # Confirm that we prefer our fallback transaction date of "when the crawl started" if
+        # we get dates during the crawl (but not in future - we ignore those, as seen above).
+        (
+            {
+                "meta": {"lastUpdated": "2019-10-01T00:00:00Z"},
+                "recordedDate": (
+                    utils.FROZEN_DATETIME + datetime.timedelta(minutes=2, seconds=1)
+                ).isoformat(),
+            },
+            (utils.FROZEN_DATETIME + datetime.timedelta(minutes=2)).astimezone().isoformat(),
+        ),
     )
     @ddt.unpack
-    async def test_transaction_time(self, enc_fields, expected_time):
+    async def test_transaction_time(self, con_fields, expected_time):
         """Confirm we write out an older date if the server only has old data"""
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.write_res(resources.PATIENT, [pat1])
@@ -554,8 +586,11 @@ class CrawlTests(utils.TestCase):
             },
             resources.CONDITION: {
                 httpx.QueryParams(patient="pat1"): [
-                    {"resourceType": resources.CONDITION, "id": "1", "recordedDate": "2000"}
+                    {"resourceType": resources.CONDITION, "id": "1", **con_fields}
                 ]
+            },
+            resources.DEVICE: {
+                httpx.QueryParams(patient="pat1"): [{"resourceType": resources.DEVICE, "id": "1"}]
             },
             resources.DIAGNOSTIC_REPORT: {
                 httpx.QueryParams(patient="pat1"): [
@@ -569,16 +604,12 @@ class CrawlTests(utils.TestCase):
             },
             resources.ENCOUNTER: {
                 httpx.QueryParams(patient="pat1"): [
-                    {"resourceType": resources.ENCOUNTER, "id": "1", **enc_fields}
+                    {"resourceType": resources.ENCOUNTER, "id": "1"}
                 ]
             },
             resources.IMMUNIZATION: {
                 httpx.QueryParams(patient="pat1"): [
-                    {
-                        "resourceType": resources.IMMUNIZATION,
-                        "id": "1",
-                        "occurrenceDateTime": "2003",
-                    }
+                    {"resourceType": resources.IMMUNIZATION, "id": "1", "recorded": "2003"}
                 ]
             },
             resources.MEDICATION_REQUEST: {
@@ -588,33 +619,12 @@ class CrawlTests(utils.TestCase):
             },
             resources.OBSERVATION: {
                 httpx.QueryParams(patient="pat1", category=utils.DEFAULT_OBS_CATEGORIES): [
-                    {"resourceType": resources.OBSERVATION, "id": "1", "effectiveDateTime": "2005"},
-                    {"resourceType": resources.OBSERVATION, "id": "1", "effectiveInstant": "2006"},
-                    {
-                        "resourceType": resources.OBSERVATION,
-                        "id": "1",
-                        "effectivePeriod": {"start": "2007"},
-                    },
-                    {
-                        "resourceType": resources.OBSERVATION,
-                        "id": "1",
-                        "effectivePeriod": {"end": "2008"},
-                    },
+                    {"resourceType": resources.OBSERVATION, "id": "1", "issued": "2005"},
                 ]
             },
             resources.PROCEDURE: {
                 httpx.QueryParams(patient="pat1"): [
-                    {"resourceType": resources.PROCEDURE, "id": "1", "performedDateTime": "2009"},
-                    {
-                        "resourceType": resources.PROCEDURE,
-                        "id": "1",
-                        "performedPeriod": {"start": "2010"},
-                    },
-                    {
-                        "resourceType": resources.PROCEDURE,
-                        "id": "1",
-                        "performedPeriod": {"end": "2011"},
-                    },
+                    {"resourceType": resources.PROCEDURE, "id": "1"},
                 ]
             },
             resources.SERVICE_REQUEST: {
@@ -623,39 +633,57 @@ class CrawlTests(utils.TestCase):
                 ]
             },
         }
-        missing = self.set_resource_search_queries(params)
+
+        # In order to tease apart how times get parsed and handled, we want to differentiate the
+        # "time of crawl start" which gets used as the fallback time and "now" during crawl, which
+        # gets used as an upper limit on parsed times (to ignore future timestamps that are in
+        # error). So once we start handling crawl requests, move time forward.
+        def move_time(*args):
+            # one minute forward
+            self.time_machine.shift(datetime.timedelta(minutes=1))
+
+        missing = self.set_resource_search_queries(params, callback=move_time)
 
         await self.cli(
             "crawl",
             self.folder,
-            f"--type={','.join(resources.CREATED_SEARCH_FIELDS)}",
+            f"--type={','.join(set(resources.PATIENT_TYPES) - {resources.PATIENT})}",
             "--group-nickname=foo",
         )
 
         self.assertEqual(missing, [])
 
-        expected_log_transaction_time = "2000-01-01T00:00:00+14:00"
+        def frozen_plus(minutes: int) -> str:
+            """Returns frozen time plus `minutes` as a timestamp"""
+            extra_time = utils.FROZEN_DATETIME + datetime.timedelta(minutes=minutes)
+            return extra_time.astimezone().isoformat()
+
+        final_timestamp = frozen_plus(11)
+
+        expected_log_transaction_time = "2001-01-01T00:00:00+14:00"
         self.assert_folder(
             {
                 ".metadata": {
                     "kind": "output",
-                    "timestamp": utils.FROZEN_TIMESTAMP,
+                    "timestamp": final_timestamp,
                     "version": utils.version,
                     "done": {
-                        resources.ALLERGY_INTOLERANCE: utils.FROZEN_TIMESTAMP,  # fallback
-                        resources.CONDITION: "2000-01-01T00:00:00+14:00",
+                        resources.ALLERGY_INTOLERANCE: frozen_plus(1),
+                        resources.CONDITION: expected_time,
+                        resources.DEVICE: frozen_plus(3),
                         resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+14:00",
                         resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+14:00",
-                        resources.ENCOUNTER: expected_time,
+                        resources.ENCOUNTER: frozen_plus(0),
                         resources.IMMUNIZATION: "2003-01-01T00:00:00+14:00",
                         resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+14:00",
-                        resources.OBSERVATION: "2008-01-01T00:00:00+14:00",
-                        resources.PROCEDURE: "2011-01-01T00:00:00+14:00",
+                        resources.OBSERVATION: "2005-01-01T00:00:00+14:00",
+                        resources.PROCEDURE: frozen_plus(9),
                         resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
                     },
                     "filters": {
                         resources.ALLERGY_INTOLERANCE: [],
                         resources.CONDITION: [],
+                        resources.DEVICE: [],
                         resources.DIAGNOSTIC_REPORT: [],
                         resources.DOCUMENT_REFERENCE: [],
                         resources.ENCOUNTER: [],
@@ -670,6 +698,7 @@ class CrawlTests(utils.TestCase):
                 },
                 f"{resources.ALLERGY_INTOLERANCE}.ndjson.gz": None,
                 f"{resources.CONDITION}.ndjson.gz": None,
+                f"{resources.DEVICE}.ndjson.gz": None,
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": None,
                 f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": None,
                 f"{resources.ENCOUNTER}.ndjson.gz": None,
@@ -684,7 +713,7 @@ class CrawlTests(utils.TestCase):
                 "log.ndjson": [
                     {
                         "exportId": "fake-log",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "timestamp": final_timestamp,
                         "eventId": "kickoff",
                         "eventDetail": {
                             "exportUrl": f"{self.url}/Group/foo/$export",
@@ -702,13 +731,13 @@ class CrawlTests(utils.TestCase):
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "timestamp": final_timestamp,
                         "eventId": "status_complete",
                         "eventDetail": {"transactionTime": expected_log_transaction_time},
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "timestamp": final_timestamp,
                         "eventId": "status_page_complete",
                         "eventDetail": {
                             "transactionTime": expected_log_transaction_time,
@@ -719,7 +748,7 @@ class CrawlTests(utils.TestCase):
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "timestamp": final_timestamp,
                         "eventId": "manifest_complete",
                         "eventDetail": {
                             "transactionTime": expected_log_transaction_time,
@@ -731,7 +760,7 @@ class CrawlTests(utils.TestCase):
                     },
                     {
                         "exportId": "fake-log",
-                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "timestamp": final_timestamp,
                         "eventId": "export_complete",
                         "eventDetail": {
                             "files": 0,
