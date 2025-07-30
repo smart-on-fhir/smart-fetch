@@ -46,7 +46,7 @@ async def export_main(args: argparse.Namespace) -> None:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         filters = filtering.Filters(
             res_types,
-            server_type=bulk_client.server_type,
+            client=bulk_client,
             type_filters=args.type_filter,
             since=args.since,
             since_mode=args.since_mode,

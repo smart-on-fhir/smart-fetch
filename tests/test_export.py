@@ -956,3 +956,50 @@ class ExportTests(utils.TestCase):
                 },
             }
         )
+
+    @ddt.data(
+        ({}, False),
+        ({"rest": [{"mode": "server", "resource": [{"type": "Condition"}]}]}, False),
+        (
+            {
+                "rest": [
+                    {
+                        "mode": "server",
+                        "resource": [
+                            {"type": "Condition", "searchParam": [{"name": "recorded-date"}]}
+                        ],
+                    }
+                ]
+            },
+            True,
+        ),
+        (
+            {
+                "rest": [
+                    {
+                        "mode": "server",
+                        "resource": [
+                            {"type": "Encounter", "searchParam": [{"name": "recorded-date"}]}
+                        ],
+                    }
+                ]
+            },
+            False,
+        ),
+    )
+    @ddt.unpack
+    async def test_created_mode_detects_search_fields(self, metadata, uses_time):
+        self.server.get("metadata").respond(200, json=metadata)
+
+        params = {"_type": "Condition"}
+        if uses_time:
+            params["_typeFilter"] = "Condition?recorded-date=gt2001-01-01T00:00:00Z"
+        self.mock_bulk(params=params)
+
+        await self.cli(
+            "export",
+            self.folder,
+            "--type=Condition",
+            "--since-mode=created",
+            "--since=2001-01-01T00:00:00Z",
+        )

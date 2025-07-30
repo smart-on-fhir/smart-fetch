@@ -194,12 +194,9 @@ class BulkTests(utils.TestCase):
             f"{resources.CONDITION}?recorded-date=gt2022-01-05",
             f"{resources.DIAGNOSTIC_REPORT}?issued=gt2022-01-05",
             f"{resources.DOCUMENT_REFERENCE}?date=gt2022-01-05",
-            f"{resources.ENCOUNTER}?date=gt2022-01-05",
-            f"{resources.IMMUNIZATION}?date=gt2022-01-05",
             f"{resources.MEDICATION_REQUEST}?authoredon=gt2022-01-05",
             f"{resources.OBSERVATION}?category=social-history,vital-signs,imaging,laboratory,"
-            f"survey,exam,procedure,therapy,activity&date=gt2022-01-05",
-            f"{resources.PROCEDURE}?date=gt2022-01-05",
+            f"survey,exam,procedure,therapy,activity&issued=gt2022-01-05",
             f"{resources.SERVICE_REQUEST}?authored=gt2022-01-05",
         ]
         type_filter = ",".join(f.replace(",", "%2C") for f in filters)

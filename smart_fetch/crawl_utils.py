@@ -227,7 +227,7 @@ async def finish_wrapper(
             rich.print(f"Count of new patients: {len(new):,}.")
         if deleted:
             _save_deleted_patients(workdir, deleted)
-            rich.print(f"Count of deleted patients: {len(deleted):,}")
+            rich.print(f"Count of deleted patients: {len(deleted):,}.")
 
     # If `timestamp` (which is when we started crawling) is earlier than our latest found date,
     # use it as our transaction time instead (this way we ensure we don't miss any resources that
@@ -328,6 +328,8 @@ def update_transaction_time(
     transaction_times: dict[str, datetime.datetime], res_type: str, val: str | None
 ) -> None:
     if parsed := timing.parse_datetime(val):
+        if parsed > datetime.datetime.now(datetime.UTC):
+            return  # exclude mistaken / typo dates that are in the future
         if res_type not in transaction_times or transaction_times[res_type] < parsed:
             transaction_times[res_type] = parsed
 
