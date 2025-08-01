@@ -549,7 +549,6 @@ class ExportTests(utils.TestCase):
                         },
                         "filters": {resources.DOCUMENT_REFERENCE: [], resources.PATIENT: []},
                         "since": None,
-                        "sinceMode": None,
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -582,7 +581,6 @@ class ExportTests(utils.TestCase):
                         },
                         "filters": {resources.DOCUMENT_REFERENCE: [], resources.PATIENT: []},
                         "since": None,
-                        "sinceMode": None,
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -617,142 +615,105 @@ class ExportTests(utils.TestCase):
             }
         )
 
-    async def test_finds_prev_workdir_to_resume(self):
+    @ddt.data(
+        # First (interrupted), Second (None means same arguments), Whether it should resume)
+        (["--type=Condition"], None, True),
+        (["--type=Condition"], ["--type=Device"], False),
+        (["--type=Condition"], ["--type=Condition,Device"], False),
+        (["--type=Condition,Device"], None, True),
+        (["--type=Condition,Device"], ["--type=Device"], False),
+        (["--type=Condition", "--since=2020-10-10"], None, True),
+        (
+            ["--type=Condition", "--since=2020-10-10"],
+            ["--type=Condition", "--since=2020-10-11"],
+            False,
+        ),
+        (
+            ["--type=Condition", "--since=2020-10-10"],
+            ["--type=Condition", "--since=2020-10-10", "--since-mode=created"],
+            False,
+        ),
+        (["--type=Condition", "--type-filter=Condition?code=1234"], None, True),
+        (
+            ["--type=Condition", "--type-filter=Condition?code=1234"],
+            [
+                "--type=Condition",
+                "--type-filter=Condition?code=1234",
+                "--type-filter=Condition?code=5678",
+            ],
+            False,
+        ),
+        (
+            ["--type=Condition", "--since=2020-10-10", "--type-filter=Condition?code=1234"],
+            None,
+            True,
+        ),
+        (
+            ["--type=Condition", "--since=2020-10-10", "--type-filter=Condition?code=1234"],
+            ["--type=Condition", "--since=2020-10-10", "--type-filter=Condition?code=5678"],
+            False,
+        ),
+    )
+    @ddt.unpack
+    async def test_finds_prev_workdir_to_resume(self, first, second, resumed):
         """Confirm we grab the right old folder to resume"""
-        # Make all exports fail until further notice
-        mocker = mock.patch("smart_fetch.bulk_utils.BulkExporter.export", side_effect=RuntimeError)
-        self.addCleanup(mocker.stop)
-        mocker.start()
+        # Make an initial red-herring export
+        self.mock_bulk()
+        await self.cli("export", self.folder, "--type=DocumentReference")
 
-        # Make lots of interrupted exports with different configs
-        with self.assertRaises(RuntimeError):
-            await self.cli("export", self.folder, f"--type={resources.CONDITION}")
-        with self.assertRaises(RuntimeError):
-            await self.cli(
-                "export", self.folder, f"--type={resources.CONDITION},{resources.DEVICE}"
-            )
-        with self.assertRaises(RuntimeError):
-            await self.cli(
-                "export", self.folder, f"--type={resources.CONDITION}", "--since=2020-10-10"
-            )
-        with self.assertRaises(RuntimeError):
-            await self.cli(
-                "export",
-                self.folder,
-                f"--type={resources.CONDITION}",
-                f"--type-filter={resources.CONDITION}?code=1234",
-            )
-        with self.assertRaises(RuntimeError):
-            await self.cli(
-                "export",
-                self.folder,
-                f"--type={resources.CONDITION}",
-                "--since=2020-10-10",
-                f"--type-filter={resources.CONDITION}?code=1234",
-            )
-
-        self.assert_folder(
-            {
-                "001.2021-09-14": {".metadata": None},
-                "002.2021-09-14": {".metadata": None},
-                "003.2021-09-14": {".metadata": None},
-                "004.2021-09-14": {".metadata": None},
-                "005.2021-09-14": {".metadata": None},
-                ".metadata": None,
-            }
-        )
-
-        # OK let's allow bulk again - let's mock all the options
-        mocker.stop()
-
-        con1 = {"resourceType": resources.CONDITION, "id": "con1"}
-        con2 = {"resourceType": resources.CONDITION, "id": "con2"}
-        con3 = {"resourceType": resources.CONDITION, "id": "con3"}
-        con4 = {"resourceType": resources.CONDITION, "id": "con4"}
-        con5 = {"resourceType": resources.CONDITION, "id": "con5"}
-        dev1 = {"resourceType": resources.DEVICE, "id": "dev1"}
-        self.mock_bulk(output=[dev1], params={"_type": resources.DEVICE})
-        self.mock_bulk(output=[con1], params={"_type": resources.CONDITION})
-        self.mock_bulk(output=[con2], params={"_type": f"{resources.CONDITION},{resources.DEVICE}"})
-        self.mock_bulk(output=[con3], params={"_type": resources.CONDITION, "_since": "2020-10-10"})
-        self.mock_bulk(
-            output=[con4],
-            params={
-                "_type": resources.CONDITION,
-                "_typeFilter": f"{resources.CONDITION}?code=1234",
-            },
-        )
-        self.mock_bulk(
-            output=[con5],
-            params={
-                "_type": resources.CONDITION,
-                "_typeFilter": f"{resources.CONDITION}?code=1234",
-                "_since": "2020-10-10",
-            },
-        )
-
-        # Now do all the same requests as before, which should resume each one (in mixed up order)
-        await self.cli("export", self.folder, f"--type={resources.CONDITION}", "--since=2020-10-10")
-        await self.cli("export", self.folder, f"--type={resources.CONDITION}")
-        await self.cli(
-            "export",
-            self.folder,
-            f"--type={resources.CONDITION}",
-            "--since=2020-10-10",
-            f"--type-filter={resources.CONDITION}?code=1234",
-        )
-        await self.cli("export", self.folder, f"--type={resources.CONDITION},{resources.DEVICE}")
-        await self.cli(
-            "export",
-            self.folder,
-            f"--type={resources.CONDITION}",
-            f"--type-filter={resources.CONDITION}?code=1234",
-        )
-
-        # This is a new one
-        await self.cli("export", self.folder, f"--type={resources.DEVICE}")
+        # Interrupt our first of two test exports
+        with (
+            mock.patch("smart_fetch.bulk_utils.BulkExporter.export", side_effect=RuntimeError),
+            self.assertRaises(RuntimeError),
+        ):
+            await self.cli("export", self.folder, *first)
 
         self.assert_folder(
             {
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
-                    f"{resources.CONDITION}.001.ndjson.gz": [con1],
                 },
-                "002.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    f"{resources.CONDITION}.001.ndjson.gz": [con2],
-                },
-                "003.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    f"{resources.CONDITION}.001.ndjson.gz": [con3],
-                },
-                "004.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    f"{resources.CONDITION}.001.ndjson.gz": [con4],
-                },
-                "005.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    f"{resources.CONDITION}.001.ndjson.gz": [con5],
-                },
-                "006.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    f"{resources.DEVICE}.001.ndjson.gz": [dev1],
-                },
+                "002.2021-09-14": {".metadata": None},
                 ".metadata": None,
-                "Condition.001.ndjson.gz": "003.2021-09-14/Condition.001.ndjson.gz",
-                "Condition.002.ndjson.gz": "001.2021-09-14/Condition.001.ndjson.gz",
-                "Condition.003.ndjson.gz": "005.2021-09-14/Condition.001.ndjson.gz",
-                "Condition.004.ndjson.gz": "002.2021-09-14/Condition.001.ndjson.gz",
-                "Condition.005.ndjson.gz": "004.2021-09-14/Condition.001.ndjson.gz",
-                "Device.001.ndjson.gz": "006.2021-09-14/Device.001.ndjson.gz",
             }
         )
+
+        # Now do our second test export, which might resume the previous export
+        second_args = first if second is None else second
+        await self.cli("export", self.folder, *second_args)
+
+        if resumed:
+            self.assert_folder(
+                {
+                    "001.2021-09-14": {
+                        ".metadata": None,
+                        "log.ndjson": None,
+                    },
+                    "002.2021-09-14": {
+                        ".metadata": None,
+                        "log.ndjson": None,
+                    },
+                    ".metadata": None,
+                }
+            )
+        else:
+            self.assert_folder(
+                {
+                    "001.2021-09-14": {
+                        ".metadata": None,
+                        "log.ndjson": None,
+                    },
+                    "002.2021-09-14": {
+                        ".metadata": None,
+                    },
+                    "003.2021-09-14": {
+                        ".metadata": None,
+                        "log.ndjson": None,
+                    },
+                    ".metadata": None,
+                }
+            )
 
     async def test_finds_prev_workdir_to_resume_with_nicknames(self):
         """Confirm we grab the right old folder to resume when using nicknames"""
@@ -793,6 +754,16 @@ class ExportTests(utils.TestCase):
                 ".metadata": None,
             }
         )
+
+    async def test_error_if_using_old_nicknames(self):
+        """Confirm we bail if resuming an old nickname is attempted"""
+        self.mock_bulk()
+
+        await self.cli("export", self.folder, "--type=Device", "--nickname=test")
+        await self.cli("export", self.folder, "--type=ServiceRequest")
+
+        with self.assertRaisesRegex(SystemExit, "Choose a new nickname."):
+            await self.cli("export", self.folder, "--type=Device", "--nickname=test")
 
     async def test_since_auto(self):
         """Confirm we calculate the right "since" value for since=auto"""

@@ -164,28 +164,40 @@ def find_workdir(
     filters: filtering.Filters,
     nickname: str | None,
 ) -> str:
-    # First, scan the workdirs to find the highest num and see if there's an exact nickname match.
-    highest_num = 0
-    for folder, (num, name) in lifecycle.list_workdirs(source_dir).items():
-        if not highest_num:
-            highest_num = num
+    """Finds a matching workdir, if it exists. Only looks one workdir back."""
+    workdirs = lifecycle.list_workdirs(source_dir)
 
-        if name == nickname:
-            logging.warning(f"Re-using existing subfolder '{folder}' with the same nickname.")
-            return folder
+    # Grab the number of the newest workdir
+    if workdirs:
+        # workdirs are returned in order of most recent to oldest. So first one is the one we want.
+        _folder, (prev_num, _name) = next(iter(workdirs.items()))
+    else:
+        prev_num = 0
 
-    # Didn't find exact nickname match. Can we find the same context?
-    for folder in lifecycle.list_workdirs(source_dir):
+    # Check if we have a matching nickname
+    if nickname:
+        for folder, (num, name) in workdirs.items():
+            if name == nickname:
+                if num == prev_num:
+                    rich.print(f"Re-using existing subfolder '{folder}' with the same nickname.")
+                    return folder
+                else:
+                    sys.exit(
+                        f"Existing subfolder '{folder}' with the same nickname is too "
+                        f"old to resume. Choose a new nickname."
+                    )
+    elif workdirs:
+        folder = next(iter(workdirs))
         metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
         if metadata.has_same_context(filters=filters):
-            logging.warning(f"Re-using existing subfolder '{folder}' with similar arguments.")
+            rich.print(f"Re-using existing subfolder '{folder}' with similar arguments.")
             return folder
 
     # Workdir not found. Let's just make a new one!
-    next_num = highest_num + 1
+    next_num = prev_num + 1
     nickname = nickname or timing.now().strftime("%Y-%m-%d")
     folder = f"{next_num:03}.{nickname}"
-    logging.warning(f"Creating new subfolder '{folder}'.")
+    rich.print(f"Creating new subfolder '{folder}'.")
     return folder
 
 
