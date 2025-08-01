@@ -67,15 +67,9 @@ class OutputMetadata(Metadata):
     def note_context(self, filters: filtering.Filters) -> None:
         filter_params = filters.params(with_since=False)
         ordered_filters = {res: sorted(params) for res, params in filter_params.items()}
-        if "filters" not in self._contents:
-            self._contents["filters"] = ordered_filters
-            self._contents["since"] = filters.since
-            self._contents["sinceMode"] = filters.since_mode and str(filters.since_mode)
-            self._write()
-            return
 
         found_filters = self._contents.get("filters")
-        if found_filters != ordered_filters:
+        if "filters" in self._contents and found_filters != ordered_filters:
             sys.exit(
                 f"Folder {self._folder} is for a different set of types and/or filters. "
                 f"Expected:\n{self._pretty_filters(ordered_filters)}\n\nbut found:\n"
@@ -83,18 +77,35 @@ class OutputMetadata(Metadata):
             )
 
         found_since = self._contents.get("since")
-        if found_since != filters.since:
+        if "since" in self._contents and found_since != filters.since:
             sys.exit(
                 f"Folder {self._folder} is for a different --since time. "
                 f"Expected {filters.since} but found {found_since}."
             )
 
         found_since_mode = self._contents.get("sinceMode")
-        if filters.since and found_since_mode != filters.since_mode:
+        if "sinceMode" in self._contents and found_since_mode != filters.since_mode:
             sys.exit(
                 f"Folder {self._folder} is for a different --since-mode. "
                 f"Expected '{filters.since_mode}' but found '{found_since_mode}'."
             )
+
+        # Record the set of since-affected resources (this only changes with server improvements
+        # or SMART Fetch improvements, so we don't need to warn user about any changes, but we
+        # should use existing values for already-done resources and our values for not-done ones)
+        found_since_resources = set(self._contents.get("sinceResources", []))
+        found_done = set(self._contents.get("done", {}))
+        since_resources = found_since_resources & found_done
+        since_resources |= filters.since_resources() - found_done
+
+        orig_contents = dict(self._contents)
+        self._contents["filters"] = ordered_filters
+        self._contents["since"] = filters.since
+        if filters.since:
+            self._contents["sinceMode"] = str(filters.since_mode)
+            self._contents["sinceResources"] = sorted(since_resources)
+        if orig_contents != self._contents:
+            self._write()
 
     def has_same_context(self, *, filters: filtering.Filters) -> bool:
         """
@@ -135,9 +146,9 @@ class OutputMetadata(Metadata):
         filter_params = filters.params(with_since=False)
         matches = {}
 
-        # We only match on the same type of "since"
+        # Fail to match if we have different ides of "since" (but allow if either is a full export)
         found_since_mode = self._contents.get("sinceMode")
-        if found_since_mode and found_since_mode != filters.since_mode:
+        if found_since_mode and filters.since_mode and found_since_mode != filters.since_mode:
             return matches
 
         for res_type, params_list in self._contents.get("filters", {}).items():
@@ -165,6 +176,9 @@ class OutputMetadata(Metadata):
 
     def get_new_patients(self) -> set[str]:
         return set(self._contents.get("newPatients", []))
+
+    def get_since_resources(self) -> set[str]:
+        return set(self._contents.get("sinceResources", []))
 
     @staticmethod
     def _pretty_filters(filters: dict[str, list[str]]) -> str:

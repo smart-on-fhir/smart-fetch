@@ -51,7 +51,6 @@ class CrawlTests(utils.TestCase):
                     "done": {resources.DEVICE: utils.FROZEN_TIMESTAMP},
                     "filters": {resources.DEVICE: []},
                     "since": None,
-                    "sinceMode": None,
                 },
                 "log.ndjson": [
                     {
@@ -286,7 +285,6 @@ class CrawlTests(utils.TestCase):
                     "filters": {resources.OBSERVATION: expected_filter_metadata},
                     "kind": "output",
                     "since": None,
-                    "sinceMode": None,
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
                 },
@@ -433,6 +431,7 @@ class CrawlTests(utils.TestCase):
                     },
                     "since": "2022-01-05",
                     "sinceMode": "updated",
+                    "sinceResources": ["Encounter", "Immunization"],
                 },
                 f"{resources.PATIENT}.ndjson.gz": None,
                 "log.ndjson": None,
@@ -694,7 +693,6 @@ class CrawlTests(utils.TestCase):
                         resources.SERVICE_REQUEST: [],
                     },
                     "since": None,
-                    "sinceMode": None,
                 },
                 f"{resources.ALLERGY_INTOLERANCE}.ndjson.gz": None,
                 f"{resources.CONDITION}.ndjson.gz": None,

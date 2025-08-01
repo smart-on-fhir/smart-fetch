@@ -77,6 +77,20 @@ class Filters:
     def resources(self) -> set[str]:
         return set(self._filters)
 
+    def since_resources(self) -> set[str]:
+        """Returns all resources that will have a "since" filter applied to them"""
+        if not self.since:
+            return set()
+
+        if self.since_mode == SinceMode.CREATED:
+            return {
+                res_type
+                for res_type, field in resources.CREATED_SEARCH_FIELDS.items()
+                if self._is_search_field_supported(res_type, field)
+            }
+
+        return self.resources()
+
     def params(self, *, with_since: bool = True, bulk: bool = False) -> TypeFilters:
         """
         Returns search / _typeFilter parameters for this set of filters.
@@ -169,6 +183,9 @@ class Filters:
         return since_mode
 
     def _is_search_field_supported(self, res_type: str, field: str) -> bool:
+        if not self._client:
+            return False
+
         for rest in self._client.capabilities.get("rest", []):
             if rest.get("mode") == "server":
                 break

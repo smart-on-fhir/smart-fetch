@@ -1,10 +1,10 @@
-"""Code for dealing with merged and newly-appearing Patient resources."""
+"""Code for dealing with merged, newly-appearing, and deleted resources."""
 
 import os
 
 import cumulus_fhir_support as cfs
 
-from smart_fetch import filtering, lifecycle, resources
+from smart_fetch import filtering, lifecycle, ndjson, resources
 
 
 def find_new_patients(
@@ -108,3 +108,64 @@ def find_new_patients_for_resource(
         new_patients |= folder_metadata.get_new_patients()
 
     return new_patients
+
+
+def read_resource_ids(res_type: str, folder: str) -> set[str]:
+    return {row["id"] for row in cfs.read_multiline_json_from_dir(folder, res_type)}
+
+
+def find_past_resource_ids(
+    res_type: str,
+    workdir: str,
+    managed_dir: str,
+    filters: filtering.Filters,
+) -> set[str]:
+    all_ids = set()
+
+    # Now, we go backward in time, reading all resources until we get to the last full export.
+    # (Only looking at filter-matching exports of course.)
+    for folder in lifecycle.list_workdirs(managed_dir):
+        full_path = os.path.join(managed_dir, folder)
+        if full_path == workdir:
+            continue
+        folder_metadata = lifecycle.OutputMetadata(full_path)
+        if res_type in folder_metadata.get_matching_timestamps(filters):
+            all_ids |= read_resource_ids(res_type, full_path)
+            if res_type not in folder_metadata.get_since_resources():
+                break  # this was a full export, we can stop looking backward
+
+    return all_ids
+
+
+def note_deleted_resource(
+    res_type: str,
+    workdir: str,
+    managed_dir: str,
+    filters: filtering.Filters,
+) -> None:
+    past_ids = find_past_resource_ids(res_type, workdir, managed_dir, filters)
+    current_ids = read_resource_ids(res_type, workdir)
+    deleted_ids = past_ids - current_ids
+    write_deleted_file(workdir, res_type, deleted_ids)
+
+
+def write_deleted_file(workdir: str, res_type: str, deleted_ids: set[str]) -> None:
+    if not deleted_ids:
+        return
+
+    deleted_dir = os.path.join(workdir, "deleted")
+    os.makedirs(deleted_dir, exist_ok=True)
+
+    deleted_file = os.path.join(deleted_dir, f"{res_type}.ndjson.gz")
+    with ndjson.NdjsonWriter(deleted_file) as writer:
+        # Write a new bundle for each resource - this is mildly wasteful of space, but it makes
+        # it easier to read/grep and most importantly, get a quick count of deleted resources by
+        # just checking how many lines are in the file.
+        for deleted_id in deleted_ids:
+            writer.write(
+                {
+                    "resourceType": resources.BUNDLE,
+                    "type": "transaction",
+                    "entry": [{"request": {"method": "DELETE", "url": f"{res_type}/{deleted_id}"}}],
+                }
+            )

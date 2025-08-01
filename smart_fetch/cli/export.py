@@ -14,7 +14,16 @@ import cumulus_fhir_support as cfs
 import rich
 import rich.progress
 
-from smart_fetch import bulk_utils, cli_utils, crawl_utils, filtering, lifecycle, tasks, timing
+from smart_fetch import (
+    bulk_utils,
+    cli_utils,
+    crawl_utils,
+    filtering,
+    lifecycle,
+    merges,
+    tasks,
+    timing,
+)
 
 
 class ExportMode(enum.StrEnum):
@@ -93,7 +102,9 @@ async def export_main(args: argparse.Namespace) -> None:
                 workdir=workdir,
                 managed_dir=source_dir,
             )
-            await finish_resource(rest_client, workdir, filters.resources(), open_client=True)
+            await finish_resource(
+                rest_client, workdir, source_dir, filters, filters.resources(), open_client=True
+            )
         else:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
@@ -107,7 +118,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 group=args.group,
                 mrn_file=args.mrn_file,
                 mrn_system=args.mrn_system,
-                finish_callback=partial(finish_resource, rest_client, workdir),
+                finish_callback=partial(finish_resource, rest_client, workdir, source_dir, filters),
             )
 
     cli_utils.print_done()
@@ -164,34 +175,48 @@ def find_workdir(
     filters: filtering.Filters,
     nickname: str | None,
 ) -> str:
-    # First, scan the workdirs to find the highest num and see if there's an exact nickname match.
-    highest_num = 0
-    for folder, (num, name) in lifecycle.list_workdirs(source_dir).items():
-        if not highest_num:
-            highest_num = num
+    """Finds a matching workdir, if it exists. Only looks one workdir back."""
+    workdirs = lifecycle.list_workdirs(source_dir)
 
-        if name == nickname:
-            logging.warning(f"Re-using existing subfolder '{folder}' with the same nickname.")
-            return folder
+    # Grab the number of the newest workdir
+    if workdirs:
+        # workdirs are returned in order of most recent to oldest. So first one is the one we want.
+        _folder, (prev_num, _name) = next(iter(workdirs.items()))
+    else:
+        prev_num = 0
 
-    # Didn't find exact nickname match. Can we find the same context?
-    for folder in lifecycle.list_workdirs(source_dir):
+    # Check if we have a matching nickname
+    if nickname:
+        for folder, (num, name) in workdirs.items():
+            if name == nickname:
+                if num == prev_num:
+                    rich.print(f"Re-using existing subfolder '{folder}' with the same nickname.")
+                    return folder
+                else:
+                    sys.exit(
+                        f"Existing subfolder '{folder}' with the same nickname is too "
+                        f"old to resume. Choose a new nickname."
+                    )
+    elif workdirs:
+        folder = next(iter(workdirs))
         metadata = lifecycle.OutputMetadata(os.path.join(source_dir, folder))
         if metadata.has_same_context(filters=filters):
-            logging.warning(f"Re-using existing subfolder '{folder}' with similar arguments.")
+            rich.print(f"Re-using existing subfolder '{folder}' with similar arguments.")
             return folder
 
     # Workdir not found. Let's just make a new one!
-    next_num = highest_num + 1
+    next_num = prev_num + 1
     nickname = nickname or timing.now().strftime("%Y-%m-%d")
     folder = f"{next_num:03}.{nickname}"
-    logging.warning(f"Creating new subfolder '{folder}'.")
+    rich.print(f"Creating new subfolder '{folder}'.")
     return folder
 
 
 async def finish_resource(
     client: cfs.FhirClient,
     workdir: str,
+    managed_dir: str,
+    filters: filtering.Filters,
     res_types: str | set[str],
     *,
     open_client: bool = False,
@@ -204,6 +229,15 @@ async def finish_resource(
             await run_hydration_tasks(client, workdir, res_types)
     else:
         await run_hydration_tasks(client, workdir, res_types)
+
+    # Check for deleted resources if we are doing a full update (non-incremental / non-since).
+    # (Regardless of bulk or crawl mode, even when we're in bulk which gives us deleted info for
+    # since runs, because we still want the deleted info from the last full export.)
+    # Always re-run this, because hydration tasks always re-run, and they could have pulled
+    # something new.
+    for res_type in res_types:
+        if res_type not in filters.since_resources():
+            merges.note_deleted_resource(res_type, workdir, managed_dir, filters)
 
     for res_type in res_types:
         make_links(workdir, res_type)

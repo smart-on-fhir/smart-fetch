@@ -129,9 +129,9 @@ async def perform_crawl(
                 finish_callback=processor_finish,
             )
         del filter_params[resources.PATIENT]
-        patient_ids = read_patient_ids(workdir)
+        patient_ids = merges.read_resource_ids(resources.PATIENT, workdir)
     else:
-        patient_ids = read_patient_ids(source_dir)
+        patient_ids = merges.read_resource_ids(resources.PATIENT, source_dir)
     if not patient_ids:
         sys.exit(
             f"No cohort patients found in {source_dir}.\n"
@@ -219,14 +219,14 @@ async def finish_wrapper(
     *,
     timestamp: datetime.datetime,
 ) -> None:
-    # Calculate new/deleted patients, if possible
+    # Calculate new/deleted resources, if possible
     if res_type == resources.PATIENT:
         new, deleted = merges.find_new_patients(workdir, managed_dir, filters)
         if new:
             metadata.note_new_patients(new)
             rich.print(f"Count of new patients: {len(new):,}.")
         if deleted:
-            _save_deleted_patients(workdir, deleted)
+            merges.write_deleted_file(workdir, res_type, deleted)
             rich.print(f"Count of deleted patients: {len(deleted):,}.")
 
     # If `timestamp` (which is when we started crawling) is earlier than our latest found date,
@@ -239,12 +239,6 @@ async def finish_wrapper(
     metadata.mark_done(res_type, transaction_times[res_type])
     if custom_finish:
         await custom_finish(res_type)
-
-
-def read_patient_ids(folder: str) -> set[str]:
-    return {
-        patient["id"] for patient in cfs.read_multiline_json_from_dir(folder, resources.PATIENT)
-    }
 
 
 async def resource_urls_with_new_patients(
@@ -360,22 +354,3 @@ async def process_resource(
         update_transaction_time(transaction_times, res_type, resources.get_created_date(resource))
 
         writer.write(resource)
-
-
-def _save_deleted_patients(workdir: str, patient_ids: set[str]) -> None:
-    deleted_dir = os.path.join(workdir, "deleted")
-    os.makedirs(deleted_dir, exist_ok=True)
-
-    patient_file = os.path.join(deleted_dir, f"{resources.PATIENT}.ndjson.gz")
-    with ndjson.NdjsonWriter(patient_file) as writer:
-        # Write a new bundle for each patient - this is mildly wasteful of space, but it makes
-        # it easier to read/grep and most importantly, get a quick count of deleted patients by
-        # just checking how many lines are in the file.
-        for patient_id in patient_ids:
-            writer.write(
-                {
-                    "resourceType": resources.BUNDLE,
-                    "type": "transaction",
-                    "entry": [{"request": {"method": "DELETE", "url": f"Patient/{patient_id}"}}],
-                }
-            )
