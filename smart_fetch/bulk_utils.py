@@ -758,5 +758,13 @@ async def perform_bulk(
             if new:
                 metadata.note_new_patients(new)
 
+        if not filters.since:
+            # This is a full export, so the server won't provide deleted/ info.
+            # But we still care, if this isn't the first export in our managed directory.
+            # So let's compare resources since the last full export and note deleted resources
+            # ourselves.
+            for res_type in res_types:
+                merges.note_deleted_resource(res_type, workdir, managed_dir, filters)
+
         for res_type in res_types:
             metadata.mark_done(res_type, exporter.transaction_time)

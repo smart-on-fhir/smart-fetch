@@ -174,7 +174,6 @@ class BulkTests(utils.TestCase):
                     "done": {resources.PATIENT: utils.TRANSACTION_TIME},
                     "filters": {resources.PATIENT: []},
                     "since": None,
-                    "sinceMode": None,
                 },
             }
         )
@@ -251,6 +250,15 @@ class BulkTests(utils.TestCase):
                     "kind": "output",
                     "since": "2022-01-05",
                     "sinceMode": "created",
+                    "sinceResources": [
+                        "AllergyIntolerance",
+                        "Condition",
+                        "DiagnosticReport",
+                        "DocumentReference",
+                        "MedicationRequest",
+                        "Observation",
+                        "ServiceRequest",
+                    ],
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
                 },
@@ -450,7 +458,6 @@ class BulkTests(utils.TestCase):
                     "version": utils.version,
                     "filters": {resources.DEVICE: []},
                     "since": None,
-                    "sinceMode": None,
                 },
                 "log.ndjson": None,
             }

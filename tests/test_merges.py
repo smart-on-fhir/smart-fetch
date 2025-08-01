@@ -42,6 +42,7 @@ class MergeTests(utils.TestCase):
                         "newPatients": ["pat2", "pat3"],
                         "since": "2020-10-10T00:00:00Z",
                         "sinceMode": "updated",
+                        "sinceResources": ["Patient"],
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -87,6 +88,7 @@ class MergeTests(utils.TestCase):
                         "newPatients": ["pat2", "pat4"],
                         "since": "2021-10-10T00:00:00Z",
                         "sinceMode": "updated",
+                        "sinceResources": ["Patient"],
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -172,3 +174,110 @@ class MergeTests(utils.TestCase):
             "--since=2024-10-18T12:00:00-05:00",
         )
         self.assertEqual(missing, [])
+
+    async def test_note_deleted_after_full_export(self):
+        """Confirm we manually make a deleted/ folder after a full export, since the server won't"""
+        pat1 = {"resourceType": "Patient", "id": "pat1"}
+        imm1 = {"resourceType": "Immunization", "id": "imm1"}
+        imm2 = {"resourceType": "Immunization", "id": "imm2"}
+        imm3 = {"resourceType": "Immunization", "id": "imm3"}
+        pro1 = {"resourceType": "Procedure", "id": "pro1"}
+        pro2 = {"resourceType": "Procedure", "id": "pro2"}
+        pro3 = {"resourceType": "Procedure", "id": "pro3"}
+        ser1 = {"resourceType": "ServiceRequest", "id": "ser1"}
+        types = "--type=Immunization,Procedure,ServiceRequest"
+
+        self.mock_bulk(output=[pat1, imm1, imm2, imm3, pro1, pro2, ser1])
+        await self.cli("export", self.folder, types + ",Patient", "--nickname=first-full")
+
+        self.mock_bulk(output=[imm1, imm2, pro1, pro2, ser1])
+        await self.cli("export", self.folder, types, "--nickname=second-full")
+
+        self.mock_bulk(output=[pro3])
+        await self.cli(
+            "export", self.folder, types, "--nickname=second-inc", "--since=2010-10-10T10:10:10Z"
+        )
+
+        # Now confirm we do this on crawls too
+        params = {
+            "Immunization": {httpx.QueryParams(patient="pat1"): [imm2]},
+            "Procedure": {httpx.QueryParams(patient="pat1"): [pro1]},
+            "ServiceRequest": {httpx.QueryParams(patient="pat1"): [ser1]},
+        }
+        missing = self.set_resource_search_queries(params)
+        await self.cli("export", self.folder, types, "--nickname=third-full", "--export-mode=crawl")
+        self.assertEqual(missing, [])
+
+        def deleted_row(res_ref: str) -> dict:
+            return {
+                "resourceType": "Bundle",
+                "type": "transaction",
+                "entry": [{"request": {"method": "DELETE", "url": res_ref}}],
+            }
+
+        self.assert_folder(
+            {
+                "001.first-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.001.ndjson.gz": None,
+                    "Immunization.002.ndjson.gz": None,
+                    "Immunization.003.ndjson.gz": None,
+                    "Patient.001.ndjson.gz": None,
+                    "Procedure.001.ndjson.gz": None,
+                    "Procedure.002.ndjson.gz": None,
+                    "ServiceRequest.001.ndjson.gz": None,
+                },
+                "002.second-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.001.ndjson.gz": None,
+                    "Immunization.002.ndjson.gz": None,
+                    "Procedure.001.ndjson.gz": None,
+                    "Procedure.002.ndjson.gz": None,
+                    "ServiceRequest.001.ndjson.gz": None,
+                    "deleted": {
+                        # Notices the missing immunization from the last full export
+                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm3")],
+                    },
+                },
+                "003.second-inc": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Procedure.001.ndjson.gz": None,
+                },
+                "004.third-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.ndjson.gz": None,
+                    "Procedure.ndjson.gz": None,
+                    "ServiceRequest.ndjson.gz": None,
+                    "deleted": {
+                        # Does *not* notice the immunization from two full exports ago (imm3)
+                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm1")],
+                        # Notices the procedure from the incremental and the full.
+                        "Procedure.ndjson.gz": [
+                            deleted_row("Procedure/pro2"),
+                            deleted_row("Procedure/pro3"),
+                        ],
+                    },
+                },
+                ".metadata": None,
+                "Immunization.001.ndjson.gz": None,
+                "Immunization.002.ndjson.gz": None,
+                "Immunization.003.ndjson.gz": None,
+                "Immunization.004.ndjson.gz": None,
+                "Immunization.005.ndjson.gz": None,
+                "Immunization.006.ndjson.gz": None,
+                "Patient.001.ndjson.gz": None,
+                "Procedure.001.ndjson.gz": None,
+                "Procedure.002.ndjson.gz": None,
+                "Procedure.003.ndjson.gz": None,
+                "Procedure.004.ndjson.gz": None,
+                "Procedure.005.ndjson.gz": None,
+                "Procedure.006.ndjson.gz": None,
+                "ServiceRequest.001.ndjson.gz": None,
+                "ServiceRequest.002.ndjson.gz": None,
+                "ServiceRequest.003.ndjson.gz": None,
+            }
+        )
