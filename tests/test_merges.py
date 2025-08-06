@@ -42,6 +42,7 @@ class MergeTests(utils.TestCase):
                         "newPatients": ["pat2", "pat3"],
                         "since": "2020-10-10T00:00:00Z",
                         "sinceMode": "updated",
+                        "sinceResources": ["Patient"],
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -87,6 +88,7 @@ class MergeTests(utils.TestCase):
                         "newPatients": ["pat2", "pat4"],
                         "since": "2021-10-10T00:00:00Z",
                         "sinceMode": "updated",
+                        "sinceResources": ["Patient"],
                         "kind": "output",
                         "timestamp": utils.FROZEN_TIMESTAMP,
                         "version": utils.version,
@@ -172,3 +174,136 @@ class MergeTests(utils.TestCase):
             "--since=2024-10-18T12:00:00-05:00",
         )
         self.assertEqual(missing, [])
+
+    async def test_note_deleted_after_full_export(self):
+        """Confirm we manually make a deleted/ folder after a full export, since the server won't"""
+        pat1 = {"resourceType": "Patient", "id": "pat1"}
+        imm1 = {"resourceType": "Immunization", "id": "imm1"}
+        imm2 = {"resourceType": "Immunization", "id": "imm2"}
+        imm3 = {"resourceType": "Immunization", "id": "imm3"}
+        obs1 = {
+            "resourceType": "Observation",
+            "id": "obs1",
+            "hasMember": [{"reference": "Observation/obs1.1"}],
+        }
+        obs2 = {
+            "resourceType": "Observation",
+            "id": "obs2",
+            "hasMember": [{"reference": "Observation/obs2.1"}],
+        }
+        obs3 = {
+            "resourceType": "Observation",
+            "id": "obs3",
+            "hasMember": [{"reference": "Observation/obs3.1"}],
+        }
+        ser1 = {"resourceType": "ServiceRequest", "id": "ser1"}
+        types = "--type=Immunization,Observation,ServiceRequest"
+
+        self.set_basic_resource_route()
+
+        self.mock_bulk(output=[pat1, imm1, imm2, imm3, obs1, obs2, ser1])
+        await self.cli("export", self.folder, types + ",Patient", "--nickname=first-full")
+
+        self.mock_bulk(output=[imm1, imm2, obs1, obs2, ser1])
+        await self.cli("export", self.folder, types, "--nickname=second-full")
+
+        self.mock_bulk(output=[obs3])
+        await self.cli(
+            "export", self.folder, types, "--nickname=second-inc", "--since=2010-10-10T10:10:10Z"
+        )
+
+        # Now confirm we do this on crawls too
+        params = {
+            "Immunization": {httpx.QueryParams(patient="pat1"): [imm2]},
+            "Observation": {
+                httpx.QueryParams(patient="pat1", category=utils.DEFAULT_OBS_CATEGORIES): [obs1]
+            },
+            "ServiceRequest": {httpx.QueryParams(patient="pat1"): [ser1]},
+        }
+        missing = self.set_resource_search_queries(params)
+        await self.cli("export", self.folder, types, "--nickname=third-full", "--export-mode=crawl")
+        self.assertEqual(missing, [])
+
+        def deleted_row(res_ref: str) -> dict:
+            return {
+                "resourceType": "Bundle",
+                "type": "transaction",
+                "entry": [{"request": {"method": "DELETE", "url": res_ref}}],
+            }
+
+        self.assert_folder(
+            {
+                "001.first-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.001.ndjson.gz": None,
+                    "Immunization.002.ndjson.gz": None,
+                    "Immunization.003.ndjson.gz": None,
+                    "Patient.001.ndjson.gz": None,
+                    "Observation.001.ndjson.gz": None,
+                    "Observation.002.ndjson.gz": None,
+                    "Observation.members.ndjson.gz": None,
+                    "ServiceRequest.001.ndjson.gz": None,
+                },
+                "002.second-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.001.ndjson.gz": None,
+                    "Immunization.002.ndjson.gz": None,
+                    "Observation.001.ndjson.gz": None,
+                    "Observation.002.ndjson.gz": None,
+                    "Observation.members.ndjson.gz": None,
+                    "ServiceRequest.001.ndjson.gz": None,
+                    "deleted": {
+                        # Notices the missing immunization from the last full export
+                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm3")],
+                    },
+                },
+                "003.second-inc": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Observation.001.ndjson.gz": None,
+                    "Observation.members.ndjson.gz": None,
+                },
+                "004.third-full": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Immunization.ndjson.gz": None,
+                    "Observation.ndjson.gz": None,
+                    "Observation.members.ndjson.gz": None,
+                    "ServiceRequest.ndjson.gz": None,
+                    "deleted": {
+                        # Does *not* notice the immunization from two full exports ago (imm3)
+                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm1")],
+                        # Notices the Observation from the incremental and the full.
+                        "Observation.ndjson.gz": [
+                            deleted_row("Observation/obs2"),
+                            deleted_row("Observation/obs2.1"),
+                            deleted_row("Observation/obs3"),
+                            deleted_row("Observation/obs3.1"),
+                        ],
+                    },
+                },
+                ".metadata": None,
+                "Immunization.001.ndjson.gz": None,
+                "Immunization.002.ndjson.gz": None,
+                "Immunization.003.ndjson.gz": None,
+                "Immunization.004.ndjson.gz": None,
+                "Immunization.005.ndjson.gz": None,
+                "Immunization.006.ndjson.gz": None,
+                "Patient.001.ndjson.gz": None,
+                "Observation.001.ndjson.gz": None,
+                "Observation.002.ndjson.gz": None,
+                "Observation.003.ndjson.gz": None,
+                "Observation.004.ndjson.gz": None,
+                "Observation.005.ndjson.gz": None,
+                "Observation.006.ndjson.gz": None,
+                "Observation.007.ndjson.gz": None,
+                "Observation.008.ndjson.gz": None,
+                "Observation.009.ndjson.gz": None,
+                "Observation.010.ndjson.gz": None,
+                "ServiceRequest.001.ndjson.gz": None,
+                "ServiceRequest.002.ndjson.gz": None,
+                "ServiceRequest.003.ndjson.gz": None,
+            }
+        )
