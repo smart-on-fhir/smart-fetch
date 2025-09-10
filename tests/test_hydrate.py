@@ -42,7 +42,7 @@ class HydrateTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--tasks=meds")
+        await self.cli("hydrate", self.folder, "--tasks=medication")
 
         self.assert_folder(
             {
@@ -71,7 +71,7 @@ class HydrateTests(utils.TestCase):
                 assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--tasks=meds")
+        await self.cli("hydrate", self.folder, "--tasks=medication")
 
         self.assert_folder(
             {
@@ -85,7 +85,7 @@ class HydrateTests(utils.TestCase):
 
     async def test_no_input(self):
         """Test that we gracefully skip the task when missing input sources"""
-        await self.cli("hydrate", self.folder, "--tasks=obs-members")
+        await self.cli("hydrate", self.folder, "--tasks=observation")
         self.assert_folder({})
 
     @ddt.data(
@@ -126,4 +126,4 @@ class HydrateTests(utils.TestCase):
 
         with self.assertRaisesRegex(SystemExit, "oops"):
             with mock.patch("smart_fetch.hydrate_utils.download_reference", new=slow_explode):
-                await self.cli("hydrate", self.folder, "--tasks=meds")
+                await self.cli("hydrate", self.folder, "--tasks=medication")

@@ -318,7 +318,7 @@ class CrawlTests(utils.TestCase):
                     "severity": "error",
                     "code": "exception",
                     "diagnostics": "An error occurred when connecting to "
-                    '"http://example.invalid/R4/Encounter?patient=pat3": boo',
+                    '"http://example.invalid/R4/Encounter?patient=pat3": [404] boo',
                 }
             ],
         }

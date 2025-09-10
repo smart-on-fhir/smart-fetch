@@ -4,6 +4,7 @@ import argparse
 import datetime
 import enum
 import glob
+import itertools
 import logging
 import os
 import re
@@ -250,9 +251,8 @@ async def run_hydration_tasks(client: cfs.FhirClient, workdir: str, res_types: s
     while loop_types:
         done_types |= loop_types
         next_loop_types = set()
-        for task_name, task_info in tasks.all_tasks.items():
-            input_type, output_type, task_func = task_info
-            if input_type not in loop_types:
+        for task in itertools.chain.from_iterable(tasks.all_tasks.values()):
+            if task.INPUT_RES_TYPE not in loop_types:
                 continue
 
             if first:
@@ -261,14 +261,14 @@ async def run_hydration_tasks(client: cfs.FhirClient, workdir: str, res_types: s
 
             # We don't provide a source_dir, because we want the hydration to only affect
             # this most recent export subfolder, not other exports.
-            await task_func(client, workdir)
+            await task(client).run(workdir)
 
             rich.get_console().rule()
 
-            if output_type not in done_types:
+            if task.OUTPUT_RES_TYPE not in done_types:
                 # We wrote a new type out - we should iterate again to hydrate the new
                 # resources, as needed
-                next_loop_types.add(output_type)
+                next_loop_types.add(task.OUTPUT_RES_TYPE)
 
         loop_types = next_loop_types
 
@@ -299,6 +299,6 @@ def make_links(workdir: str, res_type: str) -> None:
         os.symlink(target, os.path.join(source_dir, link_name))
 
     # Some resources have linked resources created by the hydration tasks
-    for input_type, output_type, task_func in tasks.all_tasks.values():
-        if res_type == input_type and res_type != output_type:
-            make_links(workdir, output_type)
+    for task in itertools.chain.from_iterable(tasks.all_tasks.values()):
+        if res_type == task.INPUT_RES_TYPE and res_type != task.OUTPUT_RES_TYPE:
+            make_links(workdir, task.OUTPUT_RES_TYPE)

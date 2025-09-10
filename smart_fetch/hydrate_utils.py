@@ -1,3 +1,4 @@
+import abc
 import dataclasses
 import enum
 import logging
@@ -22,6 +23,23 @@ class TaskResultReason(enum.Enum):
 
 SingleResult = tuple[dict | None, TaskResultReason]
 Result = list[SingleResult]
+
+
+class Task(abc.ABC):
+    NAME: str  # name of task
+    INPUT_RES_TYPE: str  # resource type to read in
+    OUTPUT_RES_TYPE: str  # resource type to write out
+
+    def __init__(self, client: cfs.FhirClient):
+        self.client = client
+
+    @abc.abstractmethod
+    async def run(self, workdir: str, **kwargs) -> None:
+        """Runs the task"""
+
+    @abc.abstractmethod
+    async def process_one(self, resource: dict, id_pool: set[str], **kwargs) -> Result:
+        """Handles one resource"""
 
 
 @dataclasses.dataclass()
@@ -110,7 +128,6 @@ async def _read(res_file: str) -> AsyncIterable[dict]:
 
 async def _write(
     callback: Callable,
-    client: cfs.FhirClient,
     id_pool: set[str],
     stats: TaskStats,
     res_type: str,
@@ -120,7 +137,7 @@ async def _write(
 ) -> None:
     del res_type
 
-    results = await callback(client, resource, id_pool)
+    results = await callback(resource, id_pool)
 
     for result in results:
         if result[0]:
@@ -180,7 +197,7 @@ async def process(
 
     # Iterate through inputs
     stats = TaskStats()
-    writer = partial(_write, callback, client, downloaded_ids, stats)
+    writer = partial(_write, callback, downloaded_ids, stats)
     processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         if not append:

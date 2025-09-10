@@ -112,7 +112,7 @@ that fact will be recorded in a `deleted/` folder, just like it would be for a b
 Downstream tooling might use that information.
 
 This all relies on looking back at previous exports in the export folder.
-Noticing new and deleted patients should automatically on the server side for a bulk export,
+Noticing new and deleted patients should automatically happen on the server side for a bulk export,
 but SMART Fetch has to do them manually for a crawl.
 
 ## Resuming
