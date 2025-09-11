@@ -517,7 +517,7 @@ class ExportTests(utils.TestCase):
 
         self.set_resource_route(respond)
 
-        mocker = mock.patch("smart_fetch.hydrate_utils.process", side_effect=RuntimeError)
+        mocker = mock.patch("smart_fetch.tasks.inline.InlineTask.run", side_effect=RuntimeError)
         self.addCleanup(mocker.stop)
         mocker.start()
 

@@ -1,7 +1,6 @@
 import csv
 import datetime
 import json
-import logging
 import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
@@ -112,7 +111,7 @@ async def perform_crawl(
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
     if resources.PATIENT in filter_params:
         if metadata.is_done(resources.PATIENT):
-            logging.warning(f"Skipping {resources.PATIENT}, already done.")
+            rich.print(f"Skipping {resources.PATIENT}, already done.")
             if finish_callback:
                 await finish_callback(resources.PATIENT)
         else:
@@ -141,7 +140,7 @@ async def perform_crawl(
 
     for res_type in filter_params:
         if metadata.is_done(res_type):
-            logging.warning(f"Skipping {res_type}, already done.")
+            rich.print(f"Skipping {res_type}, already done.")
             if finish_callback:
                 await finish_callback(res_type)
             continue

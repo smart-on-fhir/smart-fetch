@@ -7,11 +7,15 @@ DIAGNOSTIC_REPORT = "DiagnosticReport"
 DOCUMENT_REFERENCE = "DocumentReference"
 ENCOUNTER = "Encounter"
 IMMUNIZATION = "Immunization"
+LOCATION = "Location"
 MEDICATION = "Medication"
 MEDICATION_REQUEST = "MedicationRequest"
 OBSERVATION = "Observation"
 OPERATION_OUTCOME = "OperationOutcome"
+ORGANIZATION = "Organization"
 PATIENT = "Patient"
+PRACTITIONER = "Practitioner"
+PRACTITIONER_ROLE = "PractitionerRole"
 PROCEDURE = "Procedure"
 SERVICE_REQUEST = "ServiceRequest"
 
@@ -35,7 +39,11 @@ PATIENT_TYPES = [
 SCOPE_TYPES = {
     *PATIENT_TYPES,
     BINARY,
+    LOCATION,
     MEDICATION,
+    ORGANIZATION,
+    PRACTITIONER,
+    PRACTITIONER_ROLE,
 }
 
 # These are the fields to search for to ask "when was this record created?"

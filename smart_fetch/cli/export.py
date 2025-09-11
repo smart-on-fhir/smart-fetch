@@ -22,6 +22,7 @@ from smart_fetch import (
     filtering,
     lifecycle,
     merges,
+    resources,
     tasks,
     timing,
 )
@@ -240,7 +241,7 @@ async def finish_resource(
         if res_type not in filters.since_resources():
             merges.note_deleted_resource(res_type, workdir, managed_dir, filters)
 
-    for res_type in res_types:
+    for res_type in resources.SCOPE_TYPES:
         make_links(workdir, res_type)
 
 
@@ -297,8 +298,3 @@ def make_links(workdir: str, res_type: str) -> None:
         link_name = f"{res_type}.{index:03}.ndjson.gz"
 
         os.symlink(target, os.path.join(source_dir, link_name))
-
-    # Some resources have linked resources created by the hydration tasks
-    for task in itertools.chain.from_iterable(tasks.all_tasks.values()):
-        if res_type == task.INPUT_RES_TYPE and res_type != task.OUTPUT_RES_TYPE:
-            make_links(workdir, task.OUTPUT_RES_TYPE)
