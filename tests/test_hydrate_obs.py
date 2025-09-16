@@ -15,7 +15,7 @@ class HydrateObsMemberTests(utils.TestCase):
         ]
         self.write_res(resources.OBSERVATION, obs)
         self.set_basic_resource_route()
-        await self.cli("hydrate", self.folder, "--tasks=obs-members")
+        await self.cli("hydrate", self.folder, "--tasks=observation")
 
         self.assert_folder(
             {
@@ -59,7 +59,7 @@ class HydrateObsMemberTests(utils.TestCase):
                     assert False, f"Wrong res_id {res_id}"
 
         self.set_resource_route(respond)
-        await self.cli("hydrate", self.folder, "--tasks=obs-members")
+        await self.cli("hydrate", self.folder, "--tasks=observation")
 
         self.assert_folder(
             {
@@ -107,7 +107,7 @@ class HydrateObsDxrTests(utils.TestCase):
         ]
         self.write_res(resources.DIAGNOSTIC_REPORT, dxr)
         self.set_basic_resource_route()
-        await self.cli("hydrate", self.folder, "--tasks=dxr-results")
+        await self.cli("hydrate", self.folder, "--tasks=observation")
 
         self.assert_folder(
             {
@@ -130,7 +130,7 @@ class HydrateObsDxrTests(utils.TestCase):
         await self.cli(
             "hydrate",
             self.folder,
-            "--tasks=dxr-results",
+            "--tasks=observation",
             "--source-dir",
             os.path.join(self.folder, "elsewhere"),
         )

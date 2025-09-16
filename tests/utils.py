@@ -137,7 +137,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
 
         return all_params
 
-    def set_resource_search_route(self, callback: Callable[[httpx.Request, str], None]):
+    def set_resource_search_route(self, callback: Callable[[httpx.Request, str], httpx.Response]):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^$/?]+)[^/\$]*$")
         route.side_effect = callback
 

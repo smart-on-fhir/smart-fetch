@@ -1,5 +1,4 @@
 import argparse
-import logging
 import sys
 import tomllib
 
@@ -49,7 +48,7 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
     server_types = {res["type"] for res in rest["resource"] if "type" in res}
     for res_type in sorted(res_types):
         if res_type not in server_types:
-            logging.warning(f"Skipping {res_type} because the server does not support it.")
+            rich.print(f"Skipping {res_type} because the server does not support it.")
 
     return [x for x in res_types if x in server_types]
 

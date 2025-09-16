@@ -733,7 +733,7 @@ async def perform_bulk(
     if not metadata.get_bulk_status_url():
         for res_type in type_filters:
             if metadata.is_done(res_type):
-                logging.warning(f"Skipping {res_type}, already done.")
+                rich.print(f"Skipping {res_type}, already done.")
                 already_done.add(res_type)
     res_types = set(type_filters) - already_done
 

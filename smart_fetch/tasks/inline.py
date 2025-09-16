@@ -15,68 +15,14 @@ def parse_mimetypes(mimetypes: str | None) -> set[str]:
     return set(mimetypes.casefold().split(","))
 
 
-def parse_content_type(content_type: str) -> (str, str):
+def parse_content_type(content_type: str) -> tuple[str, str]:
     """Returns (mimetype, encoding)"""
     msg = email.message.EmailMessage()
     msg["content-type"] = content_type
     return msg.get_content_type(), msg.get_content_charset("utf8")
 
 
-async def _inline_task(
-    *,
-    client: cfs.FhirClient,
-    task_name: str,
-    input_type: str,
-    workdir: str,
-    mimetypes: str | None = None,
-) -> None:
-    mimetypes = parse_mimetypes(mimetypes)
-    stats = await hydrate_utils.process(
-        client=client,
-        task_name=task_name,
-        desc="Inlining",
-        workdir=workdir,
-        input_type=input_type,
-        callback=partial(_inline_resource, mimetypes),
-        append=False,
-    )
-    if stats:
-        stats.print("inlined", f"{input_type}s", "Attachments")
-
-
-async def task_doc_inline(
-    client: cfs.FhirClient,
-    workdir: str,
-    mimetypes: str | None = None,
-    **kwargs,
-):
-    await _inline_task(
-        client=client,
-        task_name="doc-inline",
-        workdir=workdir,
-        input_type=resources.DOCUMENT_REFERENCE,
-        mimetypes=mimetypes,
-    )
-
-
-async def task_dxr_inline(
-    client: cfs.FhirClient,
-    workdir: str,
-    mimetypes: str | None = None,
-    **kwargs,
-):
-    await _inline_task(
-        client=client,
-        task_name="dxr-inline",
-        workdir=workdir,
-        input_type=resources.DIAGNOSTIC_REPORT,
-        mimetypes=mimetypes,
-    )
-
-
-async def _inline_resource(
-    mimetypes: set[str], client, resource: dict, id_pool: set[str]
-) -> hydrate_utils.Result:
+async def _inline_resource(mimetypes: set[str], client, resource: dict) -> hydrate_utils.Result:
     match resource.get("resourceType"):
         case "DiagnosticReport":
             attachments = resource.get("presentedForm", [])
@@ -141,3 +87,41 @@ async def _inline_attachment(
     attachment["hash"] = base64.standard_b64encode(sha1_hash).decode("ascii")
 
     return hydrate_utils.TaskResultReason.NEWLY_DONE
+
+
+class InlineTask(hydrate_utils.Task):
+    async def run(self, workdir: str, mimetypes: str | None = None, **kwargs) -> None:
+        mimetypes = parse_mimetypes(mimetypes)
+        stats = await hydrate_utils.process(
+            client=self.client,
+            task_name=self.NAME,
+            desc="Inlining",
+            workdir=workdir,
+            input_type=self.INPUT_RES_TYPE,
+            callback=partial(self.process_one, mimetypes=mimetypes),
+            append=False,
+        )
+        if stats:
+            stats.print("inlined", f"{self.INPUT_RES_TYPE}s", "Attachments")
+
+    async def process_one(
+        self, resource: dict, id_pool: set[str], **kwargs
+    ) -> hydrate_utils.Result:
+        del id_pool
+        mimetypes = kwargs["mimetypes"]
+        return await _inline_resource(mimetypes, self.client, resource)
+
+
+class InlineDocTask(InlineTask):
+    NAME = "doc-inline"
+    INPUT_RES_TYPE = resources.DOCUMENT_REFERENCE
+    OUTPUT_RES_TYPE = resources.DOCUMENT_REFERENCE
+
+
+class InlineDxrTask(InlineTask):
+    NAME = "dxr-inline"
+    INPUT_RES_TYPE = resources.DIAGNOSTIC_REPORT
+    OUTPUT_RES_TYPE = resources.DIAGNOSTIC_REPORT
+
+
+INLINE_TASKS = [InlineDocTask, InlineDxrTask]

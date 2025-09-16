@@ -43,37 +43,34 @@ declare support for the `_lastUpdated` search field (Epic is a notable example).
 ### Limitations
 
 This mode has severe limitations that discourage its use unless you have no other choice.
+You may prefer to just do a full fresh export each time you want updates, without using `--since`.
 
 #### Possibility of Missed Resources
 
-Most FHIR resource types have a "created time" field for SMART Fetch to search over.
+Many FHIR resource types have a "created time" field for SMART Fetch to search over.
 
-But sometimes it's more of a clinical date than an administrative date.
-For example, the only searchable date field for Observations is the `effective` choice field.
+But resources can also be imported into your system after their own creation time
+(due to either a delay from internal processes or just a periodic import from external sources).
+FHIR does not have a field for "import time" (absent `meta.lastUpdated`).
 
-This means that if a newly created resource is clinically back-dated to before your since date,
-you will miss it.
-
-For example, if an Observation is created today, but is marked with an `effective` date of three
+This can cause issues.
+For example, if a DiagnosticReport is created today, but is marked with an `issued` date of three
 days ago, and you passed in a `--since` date of yesterday, that resource will not be picked up
 even though you would want it to be.
 
-Resource types affected by this:
-- Encounter
-- Immunization
-- Observation
-- Procedure
+#### Some Resources Have No Creation Dates
 
-#### Some Resources Have No Searchable Dates
-
-Some resource types don't even have searchable creation _or_ clinical dates.
+Some resource types don't even have searchable creation dates.
 SMART Fetch must export all of them every time.
 Thankfully, these resource types are not often huge.
 But it's something to be aware of.
 
 Resource types affected by this:
 - Device
+- Encounter
+- Immunization
 - Patient
+- Procedure
 
 #### Updates to Existing Resources Are Never Noticed
 

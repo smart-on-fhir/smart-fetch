@@ -1,6 +1,7 @@
+import abc
 import dataclasses
 import enum
-import logging
+import itertools
 import os
 from collections.abc import AsyncIterable, Callable
 from functools import partial
@@ -22,6 +23,84 @@ class TaskResultReason(enum.Enum):
 
 SingleResult = tuple[dict | None, TaskResultReason]
 Result = list[SingleResult]
+
+
+class Task(abc.ABC):
+    NAME: str  # name of task
+    INPUT_RES_TYPE: str  # resource type to read in
+    OUTPUT_RES_TYPE: str  # resource type to write out
+
+    def __init__(self, client: cfs.FhirClient):
+        self.client = client
+
+    @abc.abstractmethod
+    async def run(self, workdir: str, **kwargs) -> None:
+        """Runs the task"""
+
+    @abc.abstractmethod
+    async def process_one(self, resource: dict, id_pool: set[str], **kwargs) -> Result:
+        """Handles one resource"""
+
+
+class ReferenceDownloadTask(Task):
+    """A task that simply downloads referenced resources (e.g. linked Observations)"""
+
+    # This is a tuple of reference field names.
+    # Examples:
+    #    "performer" (simple 0..1 field)
+    #    "performer*" (0..* field)
+    #    "performer.actor" (nested field)
+    #    "performer*.actor" (nested field inside an array)
+    REFS: tuple[str] = ()
+    FILE_SLUG = "referenced"
+
+    async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
+        stats = await process(
+            client=self.client,
+            task_name=self.NAME,
+            desc="Downloading",
+            workdir=workdir,
+            source_dir=source_dir or workdir,
+            input_type=self.INPUT_RES_TYPE,
+            output_type=self.OUTPUT_RES_TYPE,
+            callback=self.process_one,
+            file_slug=self.FILE_SLUG,
+        )
+        if stats:
+            stats.print("downloaded", f"{self.INPUT_RES_TYPE}s", f"{self.OUTPUT_RES_TYPE}s")
+
+    @classmethod
+    def _resolve_ref_field(cls, resource: dict, field: str) -> list[dict]:
+        parts = field.split(".", 1)
+        cur_field = parts[0].removesuffix("*")
+        if parts[0].endswith("*"):
+            children = resource.get(cur_field, [])
+        else:
+            children = [resource.get(cur_field, {})]
+        if len(parts) == 1:
+            return children
+        else:
+            return itertools.chain.from_iterable(
+                cls._resolve_ref_field(child, parts[1]) for child in children
+            )
+
+    async def process_one(self, resource: dict, id_pool: set[str], **kwargs) -> Result:
+        refs = itertools.chain.from_iterable(
+            self._resolve_ref_field(resource, field) for field in self.REFS
+        )
+        results = [
+            await download_reference(
+                self.client, id_pool, ref.get("reference"), self.OUTPUT_RES_TYPE
+            )
+            for ref in refs
+        ]
+        # Recurse on results if input and output res types are the same.
+        # This avoids loops because the ID pool prevents us from visiting a resource twice.
+        if self.INPUT_RES_TYPE == self.OUTPUT_RES_TYPE:
+            for result in results:
+                if result[0]:
+                    results.extend(await self.process_one(result[0], id_pool))
+        return results
 
 
 @dataclasses.dataclass()
@@ -110,7 +189,6 @@ async def _read(res_file: str) -> AsyncIterable[dict]:
 
 async def _write(
     callback: Callable,
-    client: cfs.FhirClient,
     id_pool: set[str],
     stats: TaskStats,
     res_type: str,
@@ -120,7 +198,7 @@ async def _write(
 ) -> None:
     del res_type
 
-    results = await callback(client, resource, id_pool)
+    results = await callback(resource, id_pool)
 
     for result in results:
         if result[0]:
@@ -169,7 +247,7 @@ async def process(
     found_files = cfs.list_multiline_json_in_dir(source_dir, input_type)
 
     if not found_files:
-        logging.warning(f"Skipping {task_name}, no {input_type} resources found.")
+        rich.print(f"Skipping {task_name}, no {input_type} resources found.")
         return None
 
     # See what is already present
@@ -180,7 +258,7 @@ async def process(
 
     # Iterate through inputs
     stats = TaskStats()
-    writer = partial(_write, callback, client, downloaded_ids, stats)
+    writer = partial(_write, callback, downloaded_ids, stats)
     processor = iter_utils.ResourceProcessor(workdir, desc, writer, append=append)
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         if not append:
@@ -206,6 +284,11 @@ async def download_reference(
     elif reference in id_pool:
         return None, TaskResultReason.ALREADY_DONE
 
+    # Add this immediately, to help avoid any re-downloading during a hydrate operation.
+    # Notice that we want to add this before "awaiting", so that another fiber and us don't both
+    # try to download this.
+    id_pool.add(reference)
+
     try:
         response = await client.request("GET", reference)
         resource = response.json()
@@ -218,6 +301,4 @@ async def download_reference(
         # Hmm, wrong type. Could be OperationOutcome? Mark as fatal.
         return None, TaskResultReason.FATAL_ERROR
 
-    # Add this immediately, to help avoid any re-downloading during a hydrate operation
-    id_pool.add(f"{resource['resourceType']}/{resource['id']}")
     return resource, TaskResultReason.NEWLY_DONE

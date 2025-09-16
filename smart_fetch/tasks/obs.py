@@ -1,68 +1,73 @@
-import cumulus_fhir_support as cfs
+import abc
 
 from smart_fetch import hydrate_utils, resources
 
 
-async def _download_members(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:
-    results = [
-        await hydrate_utils.download_reference(
-            client, id_pool, member.get("reference"), resources.OBSERVATION
+class ObsTask(hydrate_utils.Task, abc.ABC):
+    OUTPUT_RES_TYPE = resources.OBSERVATION
+
+
+class DxrResultsTask(ObsTask):
+    NAME = "dxr-results"
+    INPUT_RES_TYPE = resources.DIAGNOSTIC_REPORT
+
+    async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
+        stats = await hydrate_utils.process(
+            client=self.client,
+            task_name=self.NAME,
+            desc="Downloading result",
+            workdir=workdir,
+            source_dir=source_dir or workdir,
+            input_type=self.INPUT_RES_TYPE,
+            output_type=self.OUTPUT_RES_TYPE,
+            callback=self.process_one,
+            file_slug="results",
         )
-        for member in resource.get("hasMember", [])
-    ]
-    for result in results:
-        if result[0]:
-            results.extend(await _download_members(client, result[0], id_pool))
-    return results
+        if stats:
+            stats.print("downloaded", f"{self.INPUT_RES_TYPE}s", f"Result {self.OUTPUT_RES_TYPE}s")
+
+    async def process_one(
+        self, resource: dict, id_pool: set[str], **kwargs
+    ) -> hydrate_utils.Result:
+        return [
+            await hydrate_utils.download_reference(
+                self.client, id_pool, result.get("reference"), self.OUTPUT_RES_TYPE
+            )
+            for result in resource.get("result", [])
+        ]
 
 
-async def task_obs_members(
-    client: cfs.FhirClient,
-    workdir: str,
-    source_dir: str | None = None,
-    **kwargs,
-):
-    stats = await hydrate_utils.process(
-        client=client,
-        task_name="obs-members",
-        desc="Downloading member",
-        workdir=workdir,
-        source_dir=source_dir or workdir,
-        input_type=resources.OBSERVATION,
-        callback=_download_members,
-        file_slug="members",
-    )
-    if stats:
-        stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
+class ObsMembersTask(ObsTask):
+    NAME = "obs-members"
+    INPUT_RES_TYPE = resources.OBSERVATION
 
-
-async def _download_dxr_result(client, resource: dict, id_pool: set[str]) -> hydrate_utils.Result:
-    return [
-        await hydrate_utils.download_reference(
-            client, id_pool, result.get("reference"), resources.OBSERVATION
+    async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
+        stats = await hydrate_utils.process(
+            client=self.client,
+            task_name="obs-members",
+            desc="Downloading member",
+            workdir=workdir,
+            source_dir=source_dir or workdir,
+            input_type=self.INPUT_RES_TYPE,
+            callback=self.process_one,
+            file_slug="members",
         )
-        for result in resource.get("result", [])
-    ]
+        if stats:
+            stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")
+
+    async def process_one(
+        self, resource: dict, id_pool: set[str], **kwargs
+    ) -> hydrate_utils.Result:
+        results = [
+            await hydrate_utils.download_reference(
+                self.client, id_pool, member.get("reference"), self.OUTPUT_RES_TYPE
+            )
+            for member in resource.get("hasMember", [])
+        ]
+        for result in results:
+            if result[0]:
+                results.extend(await self.process_one(result[0], id_pool))
+        return results
 
 
-async def task_obs_dxr(
-    client: cfs.FhirClient,
-    workdir: str,
-    source_dir: str | None = None,
-    **kwargs,
-):
-    stats = await hydrate_utils.process(
-        client=client,
-        task_name="dxr-results",
-        desc="Downloading result",
-        workdir=workdir,
-        source_dir=source_dir or workdir,
-        input_type=resources.DIAGNOSTIC_REPORT,
-        output_type=resources.OBSERVATION,
-        callback=_download_dxr_result,
-        file_slug="results",
-    )
-    if stats:
-        stats.print(
-            "downloaded", f"{resources.DIAGNOSTIC_REPORT}s", f"Result {resources.OBSERVATION}s"
-        )
+OBSERVATION_TASKS = [DxrResultsTask, ObsMembersTask]

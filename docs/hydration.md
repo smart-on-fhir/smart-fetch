@@ -43,10 +43,11 @@ or `Observation.hasMember`.
 But since both kinds of Observations are clinically useful,
 SMART Fetch will download them all for you, if they weren't already included in the export.
 
-## Downloading Medications
+## Downloading Useful-But-Not-Patient-Linked Resources
 
-MedicationRequests might reference external Medication resources.
-And those Medication resources are not patient-linked, so they cannot normally be bulk-exported.
+Resources like Medications, Locations, Organizations, Practitioner, and PractitionerRole
+might be useful for clinical analysis, but are not associated with patients directly.
+Thus, they aren't bulk-exportable.
 
-But since they are so clinically relevant,
-SMART Fetch will download all linked Medications for you.
+But since they are useful,
+SMART Fetch will download them for you when it encounters a reference in the exported data.
