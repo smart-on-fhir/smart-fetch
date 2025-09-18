@@ -4,7 +4,6 @@ import argparse
 import datetime
 import enum
 import glob
-import itertools
 import logging
 import os
 import re
@@ -20,10 +19,10 @@ from smart_fetch import (
     cli_utils,
     crawl_utils,
     filtering,
+    hydrate_utils,
     lifecycle,
     merges,
     resources,
-    tasks,
     timing,
 )
 
@@ -59,6 +58,12 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
     )
+    parser.add_argument(
+        "--hydration-tasks",
+        metavar="NAMES",
+        help="which hydration tasks to run "
+        "(comma separated, defaults to 'all', use 'help' to see list)",
+    )
 
     cli_utils.add_auth(parser)
     cli_utils.add_cohort_selection(parser)
@@ -72,6 +77,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
+    hydration_tasks = cli_utils.parse_hydration_tasks(args.hydration_tasks)
 
     async with bulk_client:
         res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
@@ -105,7 +111,13 @@ async def export_main(args: argparse.Namespace) -> None:
                 managed_dir=source_dir,
             )
             await finish_resource(
-                rest_client, workdir, source_dir, filters, filters.resources(), open_client=True
+                rest_client,
+                workdir,
+                source_dir,
+                filters,
+                filters.resources(),
+                open_client=True,
+                hydration_tasks=hydration_tasks,
             )
         else:
             await crawl_utils.perform_crawl(
@@ -120,7 +132,14 @@ async def export_main(args: argparse.Namespace) -> None:
                 group=args.group,
                 mrn_file=args.mrn_file,
                 mrn_system=args.mrn_system,
-                finish_callback=partial(finish_resource, rest_client, workdir, source_dir, filters),
+                finish_callback=partial(
+                    finish_resource,
+                    rest_client,
+                    workdir,
+                    source_dir,
+                    filters,
+                    hydration_tasks=hydration_tasks,
+                ),
             )
 
     cli_utils.print_done()
@@ -222,15 +241,16 @@ async def finish_resource(
     res_types: str | set[str],
     *,
     open_client: bool = False,
+    hydration_tasks: list[type[hydrate_utils.Task]],
 ):
     if isinstance(res_types, str):
         res_types = {res_types}
 
     if open_client:
         async with client:
-            await run_hydration_tasks(client, workdir, res_types)
+            await run_hydration_tasks(client, workdir, res_types, hydration_tasks)
     else:
-        await run_hydration_tasks(client, workdir, res_types)
+        await run_hydration_tasks(client, workdir, res_types, hydration_tasks)
 
     # Check for deleted resources if we are doing a full update (non-incremental / non-since).
     # (Regardless of bulk or crawl mode, even when we're in bulk which gives us deleted info for
@@ -245,14 +265,19 @@ async def finish_resource(
         make_links(workdir, res_type)
 
 
-async def run_hydration_tasks(client: cfs.FhirClient, workdir: str, res_types: set[str]) -> None:
+async def run_hydration_tasks(
+    client: cfs.FhirClient,
+    workdir: str,
+    res_types: set[str],
+    hydration_tasks: list[type[hydrate_utils.Task]],
+) -> None:
     first = True
     done_types = set()
     loop_types = res_types
     while loop_types:
         done_types |= loop_types
         next_loop_types = set()
-        for task in itertools.chain.from_iterable(tasks.all_tasks.values()):
+        for task in hydration_tasks:
             if task.INPUT_RES_TYPE not in loop_types:
                 continue
 

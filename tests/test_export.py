@@ -974,3 +974,16 @@ class ExportTests(utils.TestCase):
             "--since-mode=created",
             "--since=2001-01-01T00:00:00Z",
         )
+
+    @mock.patch("smart_fetch.hydrate_utils.process", side_effect=RuntimeError)
+    async def test_hydration_tasks_none(self, mock_run):
+        """Confirm we can skip all hydration tasks"""
+        self.mock_bulk()
+
+        await self.cli("export", self.folder, "--type=Condition", "--hydration-tasks=none")
+
+        # For sanity checking, run one task and confirm we do hit the error
+        with self.assertRaises(RuntimeError):
+            await self.cli(
+                "export", self.folder, "--type=Condition", "--hydration-tasks=practitioner"
+            )
