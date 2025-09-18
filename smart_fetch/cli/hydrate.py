@@ -1,11 +1,10 @@
 """Modify extracted data in various ways"""
 
 import argparse
-import sys
 
 import rich
 
-from smart_fetch import cli_utils, tasks
+from smart_fetch import cli_utils
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -32,36 +31,15 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.set_defaults(func=hydrate_main)
 
 
-def print_help():
-    rich.get_console().print("These hydration tasks are supported:")
-    rich.get_console().print("  all")
-    for task_name in sorted(tasks.all_tasks.keys()):
-        rich.get_console().print(f"  {task_name}")
-
-
 async def hydrate_main(args: argparse.Namespace) -> None:
     """Hydrate some data."""
     client, _bulk_client = cli_utils.prepare(args)
-    cli_tasks = set(args.tasks.casefold().split(",")) if args.tasks else {"all"}
-
-    if "help" in cli_tasks:
-        print_help()
-        sys.exit(0)
-
-    for task_name in cli_tasks:
-        if task_name != "all" and task_name not in tasks.all_tasks:
-            rich.get_console().print(f"Unknown hydration task provided: {task_name}")
-            rich.get_console().print()
-            print_help()
-            sys.exit(2)
+    task_classes = cli_utils.parse_hydration_tasks(args.tasks)
 
     async with client:
-        for task_name in tasks.all_tasks:
-            if task_name in cli_tasks or "all" in cli_tasks:
-                for task in tasks.all_tasks[task_name]:
-                    rich.get_console().rule()
-                    await task(client).run(
-                        args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes
-                    )
+        for task_class in task_classes:
+            rich.get_console().rule()
+            task = task_class(client)
+            await task.run(args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes)
 
     cli_utils.print_done()

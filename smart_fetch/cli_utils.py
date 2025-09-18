@@ -1,11 +1,12 @@
 import argparse
+import itertools
 import sys
 import tomllib
 
 import cumulus_fhir_support as cfs
 import rich.progress
 
-from smart_fetch import resources
+from smart_fetch import hydrate_utils, resources, tasks
 
 # RESOURCE SELECTION
 
@@ -149,6 +150,42 @@ def add_auth(parser: argparse.ArgumentParser):
         "--token-url",
         metavar="URL",
         help="FHIR server token URL, only needed if server does not provide it",
+    )
+
+
+# HYDRATION
+
+
+def _print_hydration_help():
+    rich.print("These hydration tasks are supported:")
+    rich.print("  all")
+    rich.print("  none")
+    for task_name in sorted(tasks.all_tasks.keys()):
+        rich.print(f"  {task_name}")
+
+
+def parse_hydration_tasks(user_tasks: str | None) -> list[type[hydrate_utils.Task]]:
+    user_tasks = set(user_tasks.casefold().split(",")) if user_tasks else {"all"}
+
+    if "help" in user_tasks:
+        _print_hydration_help()
+        sys.exit(0)
+    elif "none" in user_tasks:
+        return []
+    elif "all" in user_tasks:
+        return list(itertools.chain.from_iterable(tasks.all_tasks.values()))
+
+    for task_name in user_tasks:
+        if task_name not in tasks.all_tasks:
+            rich.print(f"Unknown hydration task provided: {task_name}")
+            rich.print()
+            _print_hydration_help()
+            sys.exit(2)
+
+    return list(
+        itertools.chain.from_iterable(
+            task_list for task_name, task_list in tasks.all_tasks.items() if task_name in user_tasks
+        )
     )
 
 
