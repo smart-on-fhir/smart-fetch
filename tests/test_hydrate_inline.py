@@ -34,6 +34,8 @@ class HydrateDocInlineTests(utils.TestCase):
                     },
                     # xhtml
                     {"attachment": {"url": "Binary/z", "contentType": "application/xhtml+xml"}},
+                    # Wrong content type returned
+                    {"attachment": {"url": "Binary/z", "contentType": "text/plain"}},
                     # fatal error case
                     {"attachment": {"url": "Binary/fatal-error", "contentType": "text/plain"}},
                     # retry error case
@@ -149,6 +151,12 @@ class HydrateDocInlineTests(utils.TestCase):
                                     "data": "PGJvZHk+YnllPC9ib2R5Pg==",
                                     "size": 16,
                                     "hash": "ybLPOkRO4i3shB3X4HDeMpAK6U4=",
+                                }
+                            },
+                            {
+                                "attachment": {
+                                    "url": "Binary/z",
+                                    "contentType": "text/plain",
                                 }
                             },
                             {
