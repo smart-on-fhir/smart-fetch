@@ -79,11 +79,16 @@ async def _inline_attachment(
     except cfs.TemporaryNetworkError:
         return hydrate_utils.TaskResultReason.RETRY_ERROR
 
+    response_mimetype, _encoding = parse_content_type(response.headers.get("Content-Type", ""))
+    if response_mimetype != mimetype:
+        # The server gave us the wrong mimetype! This is here just as a sanity check.
+        return hydrate_utils.TaskResultReason.FATAL_ERROR
+
     attachment["data"] = base64.standard_b64encode(response.content).decode("ascii")
     # Overwrite other associated metadata with latest info (existing metadata might now be stale)
     attachment["contentType"] = f"{mimetype}; charset={response.encoding}"
     attachment["size"] = len(response.content)
-    sha1_hash = hashlib.sha1(response.content).digest()  # noqa: S324
+    sha1_hash = hashlib.sha1(response.content, usedforsecurity=False).digest()
     attachment["hash"] = base64.standard_b64encode(sha1_hash).decode("ascii")
 
     return hydrate_utils.TaskResultReason.NEWLY_DONE

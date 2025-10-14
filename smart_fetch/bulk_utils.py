@@ -15,6 +15,7 @@ from functools import partial
 
 import cumulus_fhir_support as cfs
 import httpx
+import rich
 import rich.live
 import rich.text
 
@@ -425,11 +426,11 @@ class BulkExporter:
         if self._metadata.get_bulk_status_url():
             poll_location = self._metadata.get_bulk_status_url()
             self._log.export_id = poll_location
-            logging.warning("Resuming bulk FHIR export…")
+            rich.print("Resuming bulk FHIR export…")
         else:
             poll_location = await self._kick_off()
             self._metadata.set_bulk_status_url(poll_location)
-            logging.warning("Starting bulk FHIR export…")
+            rich.print("Starting bulk FHIR export…")
 
         # Request status report, until export is done
         response = await self._request_with_delay_status(
@@ -449,7 +450,7 @@ class BulkExporter:
             self.transaction_time = timing.now()
 
         # Download all the files
-        logging.warning("Bulk FHIR export finished, now downloading resources…")
+        rich.print("Bulk FHIR export finished, now downloading resources…")
         await self._download_all_ndjson_files(response_json, "output")
         await self._download_all_ndjson_files(response_json, "error")
         await self._download_all_ndjson_files(response_json, "deleted")
@@ -529,7 +530,7 @@ class BulkExporter:
             response = await self._request_with_retries(*args, rich_text=status_box, **kwargs)
 
         if status_box.plain:
-            logging.warning(  # pragma: no cover
+            rich.print(  # pragma: no cover
                 f"  Waited for a total of {cli_utils.human_time_offset(self._total_wait_time)}"
             )
 
@@ -709,7 +710,7 @@ class BulkExporter:
 
         rel_filename = os.path.relpath(filename, self._destination)
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
-        logging.warning(f"  Downloaded {rel_filename} ({human_size})")
+        rich.print(f"  Downloaded {rel_filename} ({human_size})")
 
 
 async def perform_bulk(
