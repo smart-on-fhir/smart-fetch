@@ -1,11 +1,13 @@
 import base64
 import email
 import hashlib
+import json
 from functools import partial
 
 import cumulus_fhir_support as cfs
+import httpx
 
-from smart_fetch import hydrate_utils, resources
+from smart_fetch import cli_utils, hydrate_utils, resources
 
 
 def parse_mimetypes(mimetypes: str | None) -> set[str]:
@@ -47,6 +49,22 @@ async def _inline_resource(mimetypes: set[str], client, resource: dict) -> hydra
     return result
 
 
+def maybe_print_mime_mismatch(expected: str, got_type: str, response: httpx.Response) -> None:
+    message = f"Error: expected MIME type of '{expected}', but got '{got_type}'."
+
+    # We could have received an OperationOutcome, which will hold a real error message we could
+    # show. So check for that.
+    if got_type == "application/fhir+json":
+        try:
+            parsed = response.json()
+            if text := cli_utils.text_from_operation_outcome(parsed):
+                message = text
+        except json.JSONDecodeError:
+            pass
+
+    cli_utils.maybe_print_error(message)
+
+
 async def _inline_attachment(
     client: cfs.FhirClient, attachment: dict, *, mimetypes: set[str]
 ) -> hydrate_utils.TaskResultReason:
@@ -74,14 +92,17 @@ async def _inline_attachment(
             # See https://www.hl7.org/fhir/binary.html
             headers={"Accept": mimetype},
         )
-    except cfs.FatalNetworkError:
+    except cfs.FatalNetworkError as exc:
+        cli_utils.maybe_print_error(exc)
         return hydrate_utils.TaskResultReason.FATAL_ERROR
-    except cfs.TemporaryNetworkError:
+    except cfs.TemporaryNetworkError as exc:
+        cli_utils.maybe_print_error(exc)
         return hydrate_utils.TaskResultReason.RETRY_ERROR
 
     response_mimetype, _encoding = parse_content_type(response.headers.get("Content-Type", ""))
     if response_mimetype != mimetype:
         # The server gave us the wrong mimetype! This is here just as a sanity check.
+        maybe_print_mime_mismatch(mimetype, response_mimetype, response)
         return hydrate_utils.TaskResultReason.FATAL_ERROR
 
     attachment["data"] = base64.standard_b64encode(response.content).decode("ascii")

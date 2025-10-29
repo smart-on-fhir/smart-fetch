@@ -43,6 +43,7 @@ async def main(argv: list[str]) -> None:
 
     parser = define_parser()
     args = parser.parse_args(argv)
+    cli_utils.verbose = args.verbose
     await args.func(args)
 
 

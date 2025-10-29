@@ -10,7 +10,7 @@ import cumulus_fhir_support as cfs
 import rich.progress
 import rich.table
 
-from smart_fetch import iter_utils, ndjson
+from smart_fetch import cli_utils, iter_utils, ndjson
 
 
 class TaskResultReason(enum.Enum):
@@ -292,13 +292,16 @@ async def download_reference(
     try:
         response = await client.request("GET", reference)
         resource = response.json()
-    except cfs.FatalNetworkError:
+    except cfs.FatalNetworkError as exc:
+        cli_utils.maybe_print_error(exc)
         return None, TaskResultReason.FATAL_ERROR
-    except cfs.TemporaryNetworkError:
+    except cfs.TemporaryNetworkError as exc:
+        cli_utils.maybe_print_error(exc)
         return None, TaskResultReason.RETRY_ERROR
 
     if resource.get("resourceType") != expected_type:
         # Hmm, wrong type. Could be OperationOutcome? Mark as fatal.
+        cli_utils.maybe_print_type_mismatch(expected_type, resource)
         return None, TaskResultReason.FATAL_ERROR
 
     return resource, TaskResultReason.NEWLY_DONE

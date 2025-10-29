@@ -276,3 +276,29 @@ class HydratePractitionerTests(utils.TestCase):
                 "Practitioner.ndjson.gz": None,
             }
         )
+
+    async def test_op_outcome_error(self):
+        """Confirm we print correct errors"""
+        self.write_res(
+            resources.SERVICE_REQUEST, [{"requester": {"reference": "Practitioner/nope"}}]
+        )
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            match res_id:
+                case "nope":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        json={
+                            "resourceType": "OperationOutcome",
+                            "issue": [{"details": {"text": "detailed error"}}],
+                        },
+                    )
+                case _:
+                    assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+        stdout, _stderr = await self.capture_cli(
+            "hydrate", self.folder, "--tasks=practitioner", "-v"
+        )
+        self.assertIn("detailed error", stdout.decode())

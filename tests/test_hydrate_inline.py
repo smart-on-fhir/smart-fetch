@@ -2,12 +2,14 @@ import json
 import os
 from unittest import mock
 
+import ddt
 import httpx
 
 from smart_fetch import resources
 from tests import utils
 
 
+@ddt.ddt
 class HydrateDocInlineTests(utils.TestCase):
     @mock.patch("asyncio.sleep")
     async def test_edge_cases(self, mock_sleep):
@@ -179,6 +181,66 @@ class HydrateDocInlineTests(utils.TestCase):
                 ],
             }
         )
+
+    @ddt.data(
+        ("outcome-details", "detailed error"),
+        ("outcome-diag", "diagnostic error"),
+        ("outcome-invalid", "expected MIME type"),
+        ("http-error", "missing, yikes"),
+    )
+    @ddt.unpack
+    async def test_verbose_errors(self, given_id, expected_msg):
+        """Confirm we print correct errors"""
+        docrefs = [
+            {
+                "content": [
+                    {"attachment": {"url": f"Binary/{given_id}", "contentType": "text/html"}},
+                ]
+            },
+        ]
+        self.write_res(resources.DOCUMENT_REFERENCE, docrefs)
+
+        def respond(request: httpx.Request, res_type: str, res_id: str) -> httpx.Response:
+            match res_id:
+                case "outcome-details":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        content=json.dumps(
+                            {
+                                "resourceType": "OperationOutcome",
+                                "issue": [{"details": {"text": "detailed error"}}],
+                            }
+                        ),
+                        headers={"Content-Type": "application/fhir+json"},
+                    )
+                case "outcome-diag":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        content=json.dumps(
+                            {
+                                "resourceType": "OperationOutcome",
+                                "issue": [{"diagnostics": "diagnostic error"}],
+                            }
+                        ),
+                        headers={"Content-Type": "application/fhir+json"},
+                    )
+                case "outcome-invalid":
+                    return httpx.Response(
+                        200,
+                        request=request,
+                        content=b'{"resourceType',
+                        headers={"Content-Type": "application/fhir+json"},
+                    )
+                case "http-error":
+                    return httpx.Response(404, text="missing, yikes")
+                case _:
+                    assert False, f"Wrong res_id {res_id}"
+
+        self.set_resource_route(respond)
+        stdout, _stderr = await self.capture_cli("hydrate", self.folder, "--tasks=inline", "-v")
+        self.assertIn(expected_msg, stdout.decode())
 
     async def test_custom_mimetypes(self):
         docrefs = [

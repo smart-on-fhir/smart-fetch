@@ -36,6 +36,9 @@ async def crawl_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rich.get_console().rule()
 
+    cli_utils.validate_output_folder(args.folder)
+    cli_utils.validate_input_folder(args.source_dir)
+
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 
