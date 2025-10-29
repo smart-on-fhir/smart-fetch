@@ -33,6 +33,8 @@ async def export_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rich.get_console().rule()
 
+    cli_utils.validate_output_folder(args.folder)
+
     _rest_client, bulk_client = cli_utils.prepare(args)
     workdir = args.folder
 

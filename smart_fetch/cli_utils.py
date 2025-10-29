@@ -1,7 +1,9 @@
 import argparse
 import itertools
+import os.path
 import sys
 import tomllib
+import urllib.parse
 
 import cumulus_fhir_support as cfs
 import rich.progress
@@ -189,12 +191,59 @@ def parse_hydration_tasks(user_tasks: str | None) -> list[type[hydrate_utils.Tas
     )
 
 
+# VALIDATION / ERROR HANDLING
+
+
+verbose = False  # global indicator of verbose mode (rather than trying to pass down to all funcs)
+
+
+def maybe_print_error(exc: Exception | str) -> None:
+    if verbose:
+        rich.print(str(exc))
+
+
+def maybe_print_type_mismatch(expected: str, got: dict) -> None:
+    got_type = got.get("resourceType")
+    message = f"Error: expected resource type of '{expected}', but got '{got_type}'."
+
+    # We could have received an OperationOutcome, which will hold a real error message we could
+    # show. So check for that.
+    if text := text_from_operation_outcome(got):
+        message = text
+
+    maybe_print_error(message)
+
+
+def text_from_operation_outcome(resource: dict) -> str | None:
+    if resource.get("resourceType") == resources.OPERATION_OUTCOME:
+        if issue := resource.get("issue"):
+            issue = issue[0]  # just grab first issue
+            return issue.get("details", {}).get("text") or issue.get("diagnostics")
+    return None
+
+
+def validate_output_folder(path: str | None) -> None:
+    scheme = path and urllib.parse.urlparse(path).scheme
+    if scheme:
+        sys.exit(f"Expected a local folder, but '{path}' looks like a URL.")
+
+
+def validate_input_folder(path: str | None) -> None:
+    validate_output_folder(path)
+
+    if path and not os.path.exists(path):
+        sys.exit(f"Local folder '{path}' does not exist.")
+
+
 # GENERAL
 
 
 def add_general(parser: argparse.ArgumentParser, root: bool = False) -> None:
     default = None if root else argparse.SUPPRESS
     parser.add_argument("--config", "-c", metavar="PATH", help="config file", default=default)
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="show more output (like network errors)"
+    )
 
 
 def load_config(args) -> None:

@@ -1,4 +1,4 @@
-from smart_fetch import crawl_utils, hydrate_utils, resources
+from smart_fetch import cli_utils, crawl_utils, hydrate_utils, resources
 
 
 class AllergyPractitionerTask(hydrate_utils.ReferenceDownloadTask):
@@ -169,7 +169,8 @@ class PractitionerPractitionerRoleTask(hydrate_utils.Task):
         url = f"{resources.PRACTITIONER_ROLE}?practitioner={resource['id']}"
         results = []
         async for resource in crawl_utils.crawl_bundle_chain(self.client, url):
-            if resource["resourceType"] != self.OUTPUT_RES_TYPE:  # OperationOutcome
+            if resource.get("resourceType") != self.OUTPUT_RES_TYPE:  # OperationOutcome
+                cli_utils.maybe_print_type_mismatch(self.OUTPUT_RES_TYPE, resource)
                 # This could be misleading - it might be a retry error. But it's awkward to
                 # grab which kind it was, using crawl_bundle_chain. Just assume fatal for now.
                 results.append((None, hydrate_utils.TaskResultReason.FATAL_ERROR))

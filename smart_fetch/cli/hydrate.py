@@ -33,6 +33,9 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def hydrate_main(args: argparse.Namespace) -> None:
     """Hydrate some data."""
+    cli_utils.validate_output_folder(args.folder)
+    cli_utils.validate_input_folder(args.source_dir)
+
     client, _bulk_client = cli_utils.prepare(args)
     task_classes = cli_utils.parse_hydration_tasks(args.tasks)
 
