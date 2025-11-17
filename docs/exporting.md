@@ -44,6 +44,8 @@ Because Observation typically has the largest volume of resources,
 SMART Fetch saves time and space by only exporting Observations with one of the
 [nine standard categories](https://www.hl7.org/fhir/R4/valueset-observation-category.html).
 
+You can disable this by passing the `--no-default-filters` flag.
+
 ## Crawling
 
 "Crawling" is the process of faking a bulk export by going through every patient in your cohort,

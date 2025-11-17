@@ -950,3 +950,12 @@ class ExportTests(utils.TestCase):
             await self.cli(
                 "export", self.folder, "--type=Condition", "--hydration-tasks=practitioner"
             )
+
+    async def test_disable_obs_filter(self):
+        # First with the default filters
+        self.mock_bulk(params={"_type": "Observation", "_typeFilter": utils.DEFAULT_OBS_FILTER})
+        await self.cli("export", self.folder, "--type=Observation")
+
+        # And confirm we can turn them off
+        self.mock_bulk(params={"_type": "Observation"})
+        await self.cli("export", self.folder, "--type=Observation", "--no-default-filters")
