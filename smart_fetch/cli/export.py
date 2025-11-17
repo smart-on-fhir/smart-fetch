@@ -3,10 +3,7 @@
 import argparse
 import datetime
 import enum
-import glob
-import logging
 import os
-import re
 import sys
 from functools import partial
 
@@ -22,7 +19,7 @@ from smart_fetch import (
     hydrate_utils,
     lifecycle,
     merges,
-    resources,
+    symlinks,
     timing,
 )
 
@@ -263,8 +260,7 @@ async def finish_resource(
         if res_type not in filters.since_resources():
             merges.note_deleted_resource(res_type, workdir, managed_dir, filters)
 
-    for res_type in resources.SCOPE_TYPES:
-        make_links(workdir, res_type)
+    symlinks.reset_all_links(managed_dir)
 
 
 async def run_hydration_tasks(
@@ -299,29 +295,3 @@ async def run_hydration_tasks(
                 next_loop_types.add(task.OUTPUT_RES_TYPE)
 
         loop_types = next_loop_types
-
-
-def make_links(workdir: str, res_type: str) -> None:
-    work_name = os.path.basename(workdir)
-    source_dir = os.path.dirname(workdir)
-
-    current_links = glob.glob(f"{source_dir}/{res_type}.*.ndjson.gz")
-    current_targets = {os.readlink(link) for link in current_links}
-    current_matches = [re.fullmatch(r".*\.(\d+)\.ndjson\.gz", path) for path in current_links]
-    current_nums = [int(m.group(1)) for m in current_matches]
-    index = max(current_nums) if current_nums else 0
-
-    for filename in cfs.list_multiline_json_in_dir(workdir, res_type):
-        ndjson_name = os.path.basename(filename)
-        if not ndjson_name.endswith(".ndjson.gz"):
-            logging.warning(f"Found unexpected filename {ndjson_name}, not linking.")
-            continue
-
-        target = os.path.join(work_name, ndjson_name)
-        if target in current_targets:
-            continue
-
-        index += 1
-        link_name = f"{res_type}.{index:03}.ndjson.gz"
-
-        os.symlink(target, os.path.join(source_dir, link_name))

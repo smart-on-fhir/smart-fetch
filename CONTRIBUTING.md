@@ -76,6 +76,22 @@ A reviewer will be looking for things like:
 Once approved, you can merge your PR yourself as long as the other GitHub tests pass.
 Congratulations, and thank you!
 
+## Terminology
+
+* **export**: one cohesive data extraction from the EHR, of one or more resource types
+* **bulk export**: one way of exporting, using the FHIR bulk export API
+* **crawl**: another way of exporting, using the FHIR search API
+* **hydrate**: adding extra data to a folder (e.g. downloading linked Medications from
+  MedicationRequests)
+* **full export**: an export done without a --since parameter (i.e. getting all available resources)
+* **incremental export**: or a "since" export, done *with* a --since parameter and only contains
+  a partial view of a given resource type
+* **managed dir**: a SMART-Fetch-owned folder, where it holds multiple exports
+* **workdir**: a subdir of a managed dir, holding one export
+* **active**: for a given resource type, a workdir has active resources if it holds currently-valid
+  export data (e.g. with four Condition workdirs "A (full)", "B (incremental)", "C (full)", and
+  "D (incremental)", only C and D hold active Conditions)
+
 ## Design Explanations
 
 ### Dates

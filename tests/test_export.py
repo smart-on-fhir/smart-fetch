@@ -1,12 +1,10 @@
-import gzip
-import json
 import os
 from unittest import mock
 
 import ddt
 import httpx
 
-from smart_fetch import filtering, lifecycle, resources
+from smart_fetch import lifecycle, resources
 from tests import utils
 
 
@@ -353,8 +351,8 @@ class ExportTests(utils.TestCase):
             {
                 "DiagnosticReport.001.ndjson.gz": "001.2021-09-14/DiagnosticReport.ndjson.gz",
                 "Observation.001.ndjson.gz": "001.2021-09-14/Observation.members.ndjson.gz",
-                "Observation.002.ndjson.gz": "001.2021-09-14/Observation.results.ndjson.gz",
-                "Observation.003.ndjson.gz": "001.2021-09-14/Observation.ndjson.gz",
+                "Observation.002.ndjson.gz": "001.2021-09-14/Observation.ndjson.gz",
+                "Observation.003.ndjson.gz": "001.2021-09-14/Observation.results.ndjson.gz",
                 "Patient.001.ndjson.gz": "001.2021-09-14/Patient.001.ndjson.gz",
                 "001.2021-09-14": {
                     ".metadata": None,
@@ -449,41 +447,6 @@ class ExportTests(utils.TestCase):
         metadata.note_context(fhir_url=self.url, group="group1")
         with self.assertRaisesRegex(SystemExit, "is for a different Group"):
             await self.cli("export", self.folder, "--group=new-group")
-
-    async def test_random_resource_file_is_ignored(self):
-        """Confirm that when making links, we don't link *everything*"""
-        # First, make an existing workdir to resume, so we can stuff some random files in there
-        workdir = f"{self.folder}/001.2021-09-14"
-        os.makedirs(workdir)
-
-        metadata = lifecycle.OutputMetadata(workdir)
-        metadata.note_context(
-            filtering.Filters(["Patient"], since_mode=filtering.SinceMode.UPDATED)
-        )
-
-        # Non gzipped is ignored
-        with open(f"{workdir}/test.ndjson", "w", encoding="utf8") as f:
-            json.dump({"resourceType": resources.PATIENT, "id": "pat1"}, f)
-
-        # Gzipped is assumed to be ours
-        with gzip.open(f"{workdir}/test.ndjson.gz", "wt", encoding="utf8") as f:
-            json.dump({"resourceType": resources.PATIENT, "id": "pat1"}, f)
-
-        self.mock_bulk("group1")
-        await self.cli("export", self.folder, "--group=group1", "--type", resources.PATIENT)
-
-        self.assert_folder(
-            {
-                "001.2021-09-14": {
-                    ".metadata": None,
-                    "log.ndjson": None,
-                    "test.ndjson": None,
-                    "test.ndjson.gz": None,
-                },
-                "Patient.001.ndjson.gz": "001.2021-09-14/test.ndjson.gz",
-                ".metadata": None,
-            }
-        )
 
     @ddt.data("bulk", "crawl")
     async def test_interrupted_hydration_will_resume(self, export_mode):

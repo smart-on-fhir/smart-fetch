@@ -34,6 +34,9 @@ class Metadata:
                     f" but {MetadataKind.pretty(found_kind)}"
                 )
 
+    def is_empty(self) -> bool:
+        return not bool(self._contents)
+
     def _basic_metadata(self) -> dict:
         return {
             "kind": self._kind,
@@ -169,6 +172,15 @@ class OutputMetadata(Metadata):
                     matches[res_type] = datetime.datetime.fromisoformat(done[res_type])
 
         return matches
+
+    def get_res_filters(self, res_type: str) -> set[str] | None:
+        """
+        Returns the filters used for the given resource type or None if not exported.
+        """
+        params_list = self._contents.get("filters", {}).get(res_type)
+        if params_list is None:
+            return None
+        return set(params_list)
 
     def note_new_patients(self, patient_ids: set[str]) -> None:
         self._contents["newPatients"] = sorted(patient_ids)
