@@ -32,7 +32,16 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
         "--type-filter",
         metavar="FILTER",
         action="append",
-        help="search filter to apply to the export (_typeFilter), can be specified multiple times",
+        help="search filter to apply to the export; "
+        "can be specified multiple times; looks like 'Condition?code=1234'; "
+        "see FHIR docs for details on _typeFilter",
+    )
+    group.add_argument(
+        "--no-default-filters",
+        dest="default_filters",
+        action="store_false",
+        help="disable any default type filters when none are provided "
+        "(like Observation categories)",
     )
 
 

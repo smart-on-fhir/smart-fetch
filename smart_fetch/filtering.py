@@ -28,6 +28,7 @@ class Filters:
         client: cfs.FhirClient | None = None,
         since: str | None = None,
         since_mode: SinceMode | None = None,
+        use_default_filters: bool = False,
     ):
         """
         Create a Filters object to store all the slicing and dicing information for an export.
@@ -43,6 +44,8 @@ class Filters:
             client: the client in use to talk to the server (must be in an open session)
             since: a datetime string (or "auto")
             since_mode: whether to get resources since creation or update (or "auto")
+            use_default_filters: whether to fall back to default filters if none are provided
+              (resource-specific, most resources don't have any default filters)
         """
         self._client = client
         self.server_type = client.server_type if client else cfs.ServerType.UNKNOWN
@@ -64,7 +67,7 @@ class Filters:
                 sys.exit(f"Type filter for {res_type} but that type is not included in --type.")
             self._filters[res_type].add(params)
 
-        if self._filters.get(resources.OBSERVATION) == set():
+        if use_default_filters and self._filters.get(resources.OBSERVATION) == set():
             # Add some basic default filters for Observation, because the volume of Observations
             # gets overwhelming quickly. So we limit to the nine basic US Core categories.
             categories = "category=social-history,vital-signs,imaging,laboratory,survey,exam"

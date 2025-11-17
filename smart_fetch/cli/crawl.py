@@ -50,6 +50,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
             type_filters=args.type_filter,
             since=args.since,
             since_mode=args.since_mode,
+            use_default_filters=args.default_filters,
         )
         workdir = args.folder
         source_dir = args.source_dir or workdir
