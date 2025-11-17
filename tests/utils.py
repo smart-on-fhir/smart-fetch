@@ -141,10 +141,15 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         route = self.server.get(url__regex=rf"{self.url}/(?P<res_type>[^$/?]+)[^/\$]*$")
         route.side_effect = callback
 
+    @staticmethod
+    async def local_cli(*args) -> None:
+        """CLI call without pointing at a FHIR server"""
+        await main.main([str(arg) for arg in args])
+
     async def cli(self, *args) -> None:
         default_args = ["--fhir-url", self.url]
         with self.server:
-            await main.main([str(arg) for arg in args] + default_args)
+            await self.local_cli(*args, *default_args)
 
     async def capture_cli(self, *args) -> tuple[bytes, str]:
         stdout = io.TextIOWrapper(io.BytesIO())

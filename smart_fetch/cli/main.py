@@ -8,7 +8,7 @@ import sys
 import rich.logging
 
 from smart_fetch import cli_utils
-from smart_fetch.cli import bulk, crawl, export, hydrate, single
+from smart_fetch.cli import bulk, crawl, export, hydrate, reset_symlinks, single
 
 
 def define_parser() -> argparse.ArgumentParser:
@@ -28,6 +28,11 @@ def define_parser() -> argparse.ArgumentParser:
     )
     hydrate.make_subparser(subparsers.add_parser("hydrate", help="add to already-exported data"))
     single.make_subparser(subparsers.add_parser("single", help="request a single resource"))
+    reset_symlinks.make_subparser(
+        subparsers.add_parser(
+            "reset-symlinks", help="reset managed export symlinks (not normally needed)"
+        )
+    )
 
     return parser
 

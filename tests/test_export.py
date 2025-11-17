@@ -353,8 +353,8 @@ class ExportTests(utils.TestCase):
             {
                 "DiagnosticReport.001.ndjson.gz": "001.2021-09-14/DiagnosticReport.ndjson.gz",
                 "Observation.001.ndjson.gz": "001.2021-09-14/Observation.members.ndjson.gz",
-                "Observation.002.ndjson.gz": "001.2021-09-14/Observation.results.ndjson.gz",
-                "Observation.003.ndjson.gz": "001.2021-09-14/Observation.ndjson.gz",
+                "Observation.002.ndjson.gz": "001.2021-09-14/Observation.ndjson.gz",
+                "Observation.003.ndjson.gz": "001.2021-09-14/Observation.results.ndjson.gz",
                 "Patient.001.ndjson.gz": "001.2021-09-14/Patient.001.ndjson.gz",
                 "001.2021-09-14": {
                     ".metadata": None,
