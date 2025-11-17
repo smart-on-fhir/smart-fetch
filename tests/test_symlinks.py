@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 
 from tests import utils
@@ -183,6 +184,41 @@ class SymlinkTests(utils.TestCase):
                 "001.2021-09-14": None,
                 "002.2021-09-14": None,
                 "003.2021-09-14": None,
+                ".metadata": None,
+            }
+        )
+
+    async def test_random_resource_file_is_ignored(self):
+        """Confirm that when making links, we don't link *everything*"""
+        # Create a basic skeleton of an export
+        pat = {"resourceType": "Patient", "id": "pat"}
+        self.mock_bulk(output=[pat], params={"_type": "Patient"})
+        await self.cli("export", self.folder, "--type=Patient")
+
+        # Rename the normal file to something custom, to confirm we still pick it up (this is
+        # just a side effect of us using cumulus-fhir-support's code for this - I don't know what
+        # the real world use case for this is)
+        os.rename(
+            f"{self.folder}/001.2021-09-14/Patient.001.ndjson.gz",
+            f"{self.folder}/001.2021-09-14/test.ndjson.gz",
+        )
+
+        # Non gzipped is ignored
+        with open(f"{self.folder}/001.2021-09-14/test.ndjson", "w", encoding="utf8") as f:
+            json.dump(pat, f)
+
+        # Now reset the symlinks
+        await self.local_cli("reset-symlinks", self.folder)
+
+        self.assert_folder(
+            {
+                "001.2021-09-14": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "test.ndjson": pat,
+                    "test.ndjson.gz": pat,
+                },
+                "Patient.001.ndjson.gz": "001.2021-09-14/test.ndjson.gz",
                 ".metadata": None,
             }
         )
