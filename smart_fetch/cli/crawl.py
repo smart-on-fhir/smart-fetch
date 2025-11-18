@@ -4,7 +4,7 @@ import argparse
 
 import rich
 
-from smart_fetch import cli_utils, crawl_utils, filtering
+from smart_fetch import cli_utils, crawl_utils, filtering, ndjson
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -17,6 +17,11 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         choices=list(filtering.SinceMode),
         default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
+    )
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="put all resources into one Bundle file",
     )
 
     group = cli_utils.add_cohort_selection(parser)
@@ -67,5 +72,8 @@ async def crawl_main(args: argparse.Namespace) -> None:
             mrn_file=args.mrn_file,
             mrn_system=args.mrn_system,
         )
+
+    if args.bundle:
+        ndjson.bundle_folder(workdir)
 
     cli_utils.print_done()
