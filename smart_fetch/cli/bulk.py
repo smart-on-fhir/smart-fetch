@@ -6,7 +6,7 @@ import sys
 import cumulus_fhir_support as cfs
 import rich
 
-from smart_fetch import bulk_utils, cli_utils, filtering, lifecycle
+from smart_fetch import bulk_utils, cli_utils, filtering, lifecycle, ndjson
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -21,6 +21,11 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         choices=list(filtering.SinceMode),
         default=filtering.SinceMode.AUTO,
         help="how to interpret --since (defaults to 'updated' if server supports it)",
+    )
+    parser.add_argument(
+        "--bundle",
+        action="store_true",
+        help="put all resources into one Bundle file",
     )
     parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
 
@@ -62,6 +67,9 @@ async def export_main(args: argparse.Namespace) -> None:
             group=args.group,
             workdir=workdir,
         )
+
+    if args.bundle:
+        ndjson.bundle_folder(workdir)
 
     cli_utils.print_done()
 

@@ -4,6 +4,10 @@ import json
 import os
 from functools import partial
 
+import cumulus_fhir_support as cfs
+
+from smart_fetch import timing
+
 
 class NdjsonWriter:
     """
@@ -67,3 +71,55 @@ def compact_json(obj: dict) -> str:
     """Formats JSON with no whitespace"""
     # Specify separators for the most compact (no whitespace) representation saves disk space.
     return json.dumps(obj, separators=(",", ":"))
+
+
+def bundle_folder(folder: str, output_name: str = "Bundle.json.gz") -> bool:
+    """
+    Converts a folder into a single Bundle file.
+
+    Note: all source NDJSON files used will be deleted!
+
+    Returns:
+        Whether a bundle was created (it won't be if there are no input files).
+    """
+    filenames = [
+        path for path, res_type in cfs.list_multiline_json_in_dir(folder).items() if res_type
+    ]
+    if not filenames:
+        return False
+
+    output_file = os.path.join(folder, output_name)
+    with gzip.open(output_file, "wt", encoding="utf8") as f:
+        # Start the Bundle
+        f.write(
+            "{\n"
+            '  "resourceType": "Bundle",\n'
+            '  "meta": {\n'
+            '    "profile": ["http://hl7.org/fhir/R4/StructureDefinition/Bundle"]\n'
+            "  },\n"
+            '  "type": "collection",\n'
+            f'  "timestamp": "{timing.now().isoformat()}",\n'
+            '  "entry": ['
+        )
+
+        # Now read each resource and add into our Bundle
+        first = True
+        for path in filenames:
+            for res in cfs.read_multiline_json(path):
+                if not first:
+                    f.write(",")
+                f.write('\n    {"resource": ' + compact_json(res) + "}")
+                first = False
+
+        # And finish up
+        f.write(
+            "\n"  # end the last resource
+            "  ]\n"
+            "}\n"
+        )
+
+    # Now delete all the source files
+    for path in filenames:
+        os.unlink(path)
+
+    return True

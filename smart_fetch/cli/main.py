@@ -8,7 +8,7 @@ import sys
 import rich.logging
 
 from smart_fetch import cli_utils
-from smart_fetch.cli import bulk, crawl, export, hydrate, reset_symlinks, single
+from smart_fetch.cli import bulk, bundle, crawl, export, hydrate, reset_symlinks, single
 
 
 def define_parser() -> argparse.ArgumentParser:
@@ -28,6 +28,14 @@ def define_parser() -> argparse.ArgumentParser:
     )
     hydrate.make_subparser(subparsers.add_parser("hydrate", help="add to already-exported data"))
     single.make_subparser(subparsers.add_parser("single", help="request a single resource"))
+    bundle.make_subparser(
+        subparsers.add_parser(
+            "bundle",
+            help="convert a folder of data into a single Bundle file",
+            description="Caution: this will delete all current FHIR data in the folder, "
+            "replacing it with the Bundle file",
+        )
+    )
     reset_symlinks.make_subparser(
         subparsers.add_parser(
             "reset-symlinks", help="reset managed export symlinks (not normally needed)"

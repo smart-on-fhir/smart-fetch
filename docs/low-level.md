@@ -34,3 +34,9 @@ smart-fetch single Patient?active=true
 ```
 
 See `--help` for all the options.
+
+## Bundling Data
+You can create a single Bundle file from a folder of existing NDJSON
+by calling `smart-fetch bundle`.
+
+See `--help` for all the options.
