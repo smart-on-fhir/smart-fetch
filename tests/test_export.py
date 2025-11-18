@@ -26,7 +26,8 @@ class ExportTests(utils.TestCase):
             "export",
             self.folder,
             "--group=group1",
-            f"--type={resources.CONDITION},{resources.PATIENT}",
+            "--type=Condition",  # confirm we handle two type args
+            "--type=Patient",
         )
 
         self.assert_folder(
