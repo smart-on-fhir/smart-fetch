@@ -62,7 +62,7 @@ class CommandLineTests(utils.TestCase):
             with contextlib.redirect_stdout(stdout):
                 await self.cli("export", self.folder, f"--type={arg}")
         self.assertEqual(cm.exception.code, exit_code)
-        self.assertIn("These types are supported:", stdout.getvalue())
+        self.assertIn("These resource types are supported:", stdout.getvalue())
 
     async def test_type_parsing_is_case_insensitive(self):
         self.mock_bulk("group1", params={"_type": f"{resources.CONDITION},{resources.PATIENT}"})

@@ -24,6 +24,7 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
     group = parser.add_argument_group("resource selection")
     group.add_argument(
         "--type",
+        action="append",
         help="only consider these resource types (comma separated, "
         "default is all supported FHIR resources, "
         "use '--type help' to see full list)",
@@ -65,17 +66,18 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
     return [x for x in res_types if x in server_types]
 
 
-def parse_resource_selection(types: str) -> list[str]:
+def parse_resource_selection(types: list[str] | None) -> list[str]:
     """
     Determines the list of resource types based on the requested CLI values.
 
     Handles "help", "all", and case-insensitivity.
     """
-    orig_types = set(types.split(",")) if types else {"all"}
+    types = types or ["all"]
+    orig_types = set(itertools.chain.from_iterable(x.split(",") for x in types))
     lower_types = {t.casefold() for t in orig_types}
 
     def print_help():
-        rich.get_console().print("These types are supported:")
+        rich.print("These resource types are supported:")
         rich.get_console().print("  all")
         for pat_type in resources.PATIENT_TYPES:
             rich.get_console().print(f"  {pat_type}")
@@ -266,7 +268,7 @@ def load_config(args) -> None:
     for key in data:
         prop = key.replace("-", "_")
         if prop in args and getattr(args, prop) is None:
-            if prop in {"type_filter"}:
+            if prop in {"type", "type_filter"}:
                 # Special handling for "append" types, to upgrade to list
                 if isinstance(data[key], str):
                     data[key] = [data[key]]

@@ -30,6 +30,7 @@ Once you have a Group identifier, simply pass it in with `--group ID`.
 ## Filtering
 
 You can limit which resource types are exported by passing `--type Patient,Condition`.
+Type arguments can be specified multiple times.
 
 You can also filter further by adding
 [type filters](https://hl7.org/fhir/uv/bulkdata/export.html#_typefilter-experimental-query-parameter)
