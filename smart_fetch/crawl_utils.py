@@ -51,8 +51,9 @@ async def perform_crawl(
     bulk_client: cfs.FhirClient,
     group_nickname: str | None,
     group: str | None,
-    mrn_file: str | None,
-    mrn_system: str | None,
+    id_file: str | None,
+    id_list: str | None,
+    id_system: str | None,
     finish_callback: Callable[[str], Awaitable[None]] | None = None,
     managed_dir: str | None = None,
 ) -> None:
@@ -60,8 +61,8 @@ async def perform_crawl(
         group_name = group_nickname
     elif group is not None:
         group_name = group
-    elif mrn_file:
-        group_name = os.path.splitext(os.path.basename(mrn_file))[0]
+    elif id_file:
+        group_name = os.path.splitext(os.path.basename(id_file))[0]
     else:
         group_name = os.path.basename(source_dir)
 
@@ -109,33 +110,49 @@ async def perform_crawl(
 
     # Before crawling, we have to decide if we need to do anything special with patients,
     # like a bulk export or even a normal crawl using MRN, in order to get the patient IDs.
+    download_patients = False
+    patient_ids = None
     if resources.PATIENT in filter_params:
         if metadata.is_done(resources.PATIENT):
             rich.print(f"Skipping {resources.PATIENT}, already done.")
             if finish_callback:
                 await finish_callback(resources.PATIENT)
         else:
-            await gather_patients(
-                bulk_client=bulk_client,
-                processor=processor,
-                filters=filters,
-                workdir=workdir,
-                mrn_file=mrn_file,
-                mrn_system=mrn_system,
-                fhir_url=fhir_url,
-                group=group,
-                metadata=metadata,
-                finish_callback=processor_finish,
-            )
+            download_patients = True
         del filter_params[resources.PATIENT]
-        patient_ids = merges.read_resource_ids(resources.PATIENT, workdir)
+    elif id_file or id_list:
+        # TODO: once support becomes more widespread, we could do the chained query
+        #  transparently for the user instead of a separate download step. But today,
+        #  support isn't there (for Epic and Oracle at least):
+        #  - Condition?patient.identifier= (Epic supports, Oracle does not)
+        #  - Condition?patient:identifier= (Neither Epic nor Oracle supports)
+        rich.print("Fetching Patients for the provided IDs.")
+        download_patients = True
     else:
+        # Read from source dir, not workdir
         patient_ids = merges.read_resource_ids(resources.PATIENT, source_dir)
+
+    if download_patients:
+        await gather_patients(
+            bulk_client=bulk_client,
+            processor=processor,
+            filters=filters,
+            workdir=workdir,
+            id_file=id_file,
+            id_list=id_list,
+            id_system=id_system,
+            fhir_url=fhir_url,
+            group=group,
+            metadata=metadata,
+            finish_callback=processor_finish,
+        )
+    if patient_ids is None:
+        patient_ids = merges.read_resource_ids(resources.PATIENT, workdir)
     if not patient_ids:
         sys.exit(
             f"No cohort patients found in {source_dir}.\n"
-            f"You can provide a cohort from a previous export with --source-dir, "
-            "or export patients in this crawl too."
+            f"You must either provide a cohort from a previous export with --source-dir, "
+            "--id-list, or --id-file, or export patients in this crawl too."
         )
 
     for res_type in filter_params:
@@ -158,36 +175,51 @@ async def perform_crawl(
         create_fake_log(workdir, fhir_url, group_name, log_time)
 
 
+def load_specified_ids(*, id_list: str | None, id_file: str | None) -> set[str]:
+    ids = set(id_list.split(",")) if id_list else set()
+
+    if id_file:
+        with open(id_file, encoding="utf8", newline="") as f:
+            if id_file.casefold().endswith(".csv"):
+                reader = csv.DictReader(f)
+                fieldnames = {name.casefold(): name for name in reader.fieldnames}
+                if "id" in fieldnames:
+                    ids |= {row[fieldnames["id"]] for row in reader}
+                elif "mrn" in fieldnames:
+                    ids |= {row[fieldnames["mrn"]] for row in reader}
+                else:
+                    sys.exit(f"ID file {id_file} has no 'id' or 'mrn' header")
+            else:
+                ids |= {row.strip() for row in f}
+
+    return set(filter(None, ids))  # ignore empty lines
+
+
 async def gather_patients(
     *,
     bulk_client,
     processor,
     filters: filtering.Filters,
     workdir: str,
-    mrn_file: str | None,
-    mrn_system: str | None,
+    id_file: str | None,
+    id_list: str | None,
+    id_system: str | None,
     fhir_url: str,
     group: str,
     metadata: lifecycle.OutputMetadata,
     finish_callback: Callable[[str], Awaitable[None]],
 ) -> None:
-    if mrn_file and mrn_system:
-        with open(mrn_file, encoding="utf8", newline="") as f:
-            if mrn_file.casefold().endswith(".csv"):
-                reader = csv.DictReader(f)
-                fieldnames = {name.casefold(): name for name in reader.fieldnames}
-                if "mrn" not in fieldnames:
-                    sys.exit(f"MRN file {mrn_file} has no 'mrn' header")
-                mrns = {row[fieldnames["mrn"]] for row in reader}
-            else:
-                mrns = {row.strip() for row in f}
-        mrns = set(filter(None, mrns))  # ignore empty lines
+    if id_file or id_list:
+        ids = load_specified_ids(id_file=id_file, id_list=id_list)
 
-        processor.add_source(
-            resources.PATIENT,
-            resource_urls(resources.PATIENT, f"identifier={mrn_system}|", mrns, filters.params()),
-            len(mrns),
-        )
+        if id_system:
+            urls = resource_urls(
+                resources.PATIENT, f"identifier={id_system}|", ids, filters.params()
+            )
+        else:
+            urls = resource_urls(resources.PATIENT, "_id=", ids, filters.params())
+
+        processor.add_source(resources.PATIENT, urls, len(ids))
         await processor.run()
 
     else:

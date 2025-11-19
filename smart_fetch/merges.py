@@ -20,14 +20,14 @@ def find_new_patients(
 
     There are a couple sources of new patients (or at least, patients we want to treat as new,
     in the sense of getting their historical resources the first time we see them):
-    - Literally just newly appeared patients (user added some to their --mrn-file or the Group got
+    - Literally just newly appeared patients (user added some to their --id-file or the Group got
       expanded)
     - Merged patients (patient A got merged into patient B - maybe both are pre-existing patients,
       but we want to treat patient B as new in the sense that we need to update all their
       historical data in case old patient A resources got updated to point at B)
 
     And a couple ways of thinking about deleted patients:
-    - Maybe the patient got dropped from the Group or --mrn-file
+    - Maybe the patient got dropped from the Group or --id-file
     - Merged patients (patient A got merged into patient B) - which can be a soft delete or a hard
       delete, depending on how the EHR handles it - we follow their lead and only consider the
       patient deleted if they aren't in the export anymore.

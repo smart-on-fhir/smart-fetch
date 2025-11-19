@@ -69,8 +69,9 @@ async def crawl_main(args: argparse.Namespace) -> None:
             bulk_client=bulk_client,
             group_nickname=args.group_nickname,
             group=args.group,
-            mrn_file=args.mrn_file,
-            mrn_system=args.mrn_system,
+            id_file=args.id_file,
+            id_list=args.id_list,
+            id_system=args.id_system,
         )
 
     if args.bundle:

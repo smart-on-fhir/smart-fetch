@@ -73,19 +73,24 @@ from a defined FHIR Group just like the normal bulk export flow.
 After that, it will use those exported Patients to do non-bulk searches.
 
 But if you don't even have a FHIR Group at all,
-you can also specify a custom cohort with a file of MRN values. 
+you can also specify a custom cohort with a file of identifier values (for example, MRNs).
 
-Pass in _both_:
-- `--mrn-file` which can be either a text file with one MRN per line
-  or a CSV file with a column labelled `MRN` (case-insensitive)
-- `--mrn-system` which is a code system that your institution/vendor uses to identify
-  the patient MRN identifiers
+Pass in:
+- `--id-file` which can be either a text file with one ID per line
+  or a CSV file with a column labelled `ID` or `MRN` (case-insensitive)
+- `--id-system` which is a code system that your institution/vendor uses to mark
+  the patient identifiers (if not set, direct FHIR IDs will be matched)
+
+If you are only working with a small number of IDs,
+you can instead pass in `--id-list` to specify them on the command line
+(comma separated).
 
 #### Example
-You may have a Patient resource that looks like this:
+Assume there is a Patient resource that looks like this:
 ```json
 {
   "resourceType": "Patient",
+  "id": "123",
   "identifier": [
     {
       "system": "uri:oid:1.2.3.4",
@@ -95,9 +100,14 @@ You may have a Patient resource that looks like this:
 }
 ```
 
-You can pass in `--mrn-system=uri:oid:1.2.3.4`
-and `--mrn-file=mrns.txt` (where that file contains a line of `abc`)
-to have SMART Fetch use a cohort that includes this patient.
+You can pass in `--id-list=123` to have SMART Fetch use a cohort of just this patient.
+(Or instead, pass in both `--id-system=uri:oid:1.2.3.4` and `--id-list=abc`.)
+
+#### Make a Cohort from an Existing Export
+
+Alternatively, if you already have a pile of Patient FHIR data from a previous export,
+you can also use it as a cohort. Pass `--source-dir=path/to/fhir/data`
+and any Patient resources found there will be used as the cohort.
 
 ### New and Deleted Patients
 
