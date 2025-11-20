@@ -22,7 +22,6 @@ class CrawlTests(utils.TestCase):
     @ddt.data(
         ["--group-nickname", "blarg"],
         ["--group", "blarg"],
-        ["--mrn-file", "blarg.txt"],
         [],
     )
     async def test_metadata(self, args):
@@ -117,13 +116,13 @@ class CrawlTests(utils.TestCase):
             }
         )
 
-    @ddt.data(True, False)
-    async def test_from_mrn_file(self, is_csv):
+    @ddt.data("MRN", "id", None)
+    async def test_from_id_file(self, csv_header):
         """Simple patient crawl from MRNs"""
-        mrn_file = self.tmp_file(suffix=(".csv" if is_csv else ""))
+        mrn_file = self.tmp_file(suffix=(".csv" if csv_header else ""))
         with mrn_file:
-            if is_csv:
-                mrn_file.write("MRN\n")
+            if csv_header:
+                mrn_file.write(f"{csv_header}\n")
             mrn_file.write("abc\n\ndef\n")  # the blank line will be ignored
 
         pat1 = [{"resourceType": resources.PATIENT, "id": "pat1"}]
@@ -152,9 +151,8 @@ class CrawlTests(utils.TestCase):
         await self.cli(
             "crawl",
             self.folder,
-            "--mrn-system=uri:mrn",
-            "--mrn-file",
-            mrn_file.name,
+            "--id-system=uri:mrn",
+            f"--id-file={mrn_file.name}",
             f"--type={resources.CONDITION},{resources.PATIENT}",
         )
 
@@ -164,6 +162,38 @@ class CrawlTests(utils.TestCase):
                 "log.ndjson": None,
                 f"{resources.CONDITION}.ndjson.gz": con1 + con2,
                 f"{resources.PATIENT}.ndjson.gz": pat1 + pat2,
+            }
+        )
+
+    async def test_from_id_list(self):
+        """Simple patient crawl from a CLI list, with no system this time"""
+        pat1 = [{"resourceType": "Patient", "id": "pat1"}]
+        pat2 = [{"resourceType": "Patient", "id": "pat2"}]
+        con1 = [{"resourceType": "Condition", "id": "con1"}]
+        con2 = [{"resourceType": "Condition", "id": "con2"}]
+
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            if res_type == "Patient":
+                if request.url.params == httpx.QueryParams(_id="pat1"):
+                    return httpx.Response(200, json=self.make_bundle(pat1))
+                elif request.url.params == httpx.QueryParams(_id="pat2"):
+                    return httpx.Response(200, json=self.make_bundle(pat2))
+            elif res_type == "Condition":
+                if request.url.params == httpx.QueryParams(patient="pat1"):
+                    return httpx.Response(200, json=self.make_bundle(con1))
+                elif request.url.params == httpx.QueryParams(patient="pat2"):
+                    return httpx.Response(200, json=self.make_bundle(con2))
+            assert False, f"Invalid request: {request.url.params}"
+
+        self.set_resource_search_route(respond)
+
+        await self.cli("crawl", self.folder, "--id-list=pat1,pat2", "--type=Condition")
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "log.ndjson": None,
+                "Condition.ndjson.gz": con1 + con2,
+                "Patient.ndjson.gz": pat1 + pat2,
             }
         )
 
@@ -532,12 +562,12 @@ class CrawlTests(utils.TestCase):
             mrn_file.write("header1,header2\n")
             mrn_file.write("abc,def\nghi,jkl\n")
 
-        with self.assertRaisesRegex(SystemExit, "has no 'mrn' header"):
+        with self.assertRaisesRegex(SystemExit, "has no 'id' or 'mrn' header"):
             await self.cli(
                 "crawl",
                 self.folder,
-                f"--mrn-file={mrn_file.name}",
-                "--mrn-system=my-system",
+                f"--id-file={mrn_file.name}",
+                "--id-system=my-system",
                 f"--type={resources.PATIENT}",
             )
 

@@ -116,13 +116,25 @@ def add_cohort_selection(parser: argparse.ArgumentParser):
         metavar="NAME",
         help="a human-friendly name for the cohort, used in log files and such",
     )
-    group.add_argument("--mrn-system", metavar="SYSTEM", help="system identifier for MRNs")
     group.add_argument(
-        "--mrn-file",
-        metavar="PATH",
-        help="file with MRNs to export (instead of a Group), one per line "
-        "(or a .csv with an 'mrn' column)",
+        "--id-list",
+        metavar="IDS",
+        help="list of IDs/MRNs to export (instead of a Group), comma separated",
     )
+    group.add_argument(
+        "--id-file",
+        metavar="PATH",
+        help="file with IDs/MRNs to export (instead of a Group), one per line "
+        "(or a .csv with an 'id' or 'mrn' column)",
+    )
+    group.add_argument(
+        "--id-system",
+        metavar="SYSTEM",
+        help="system URI of the identifier to look for; if not set, FHIR IDs will be used",
+    )
+    # Deprecated aliases for the above (deprecated in Nov '25)
+    group.add_argument("--mrn-file", dest="id_file", help=argparse.SUPPRESS)
+    group.add_argument("--mrn-system", dest="id_system", help=argparse.SUPPRESS)
     return group
 
 
