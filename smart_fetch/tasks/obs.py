@@ -13,7 +13,6 @@ class DxrResultsTask(ObsTask):
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
         stats = await hydrate_utils.process(
-            client=self.client,
             task_name=self.NAME,
             desc="Downloading result",
             workdir=workdir,
@@ -22,6 +21,7 @@ class DxrResultsTask(ObsTask):
             output_type=self.OUTPUT_RES_TYPE,
             callback=self.process_one,
             file_slug="results",
+            compress=self.compress,
         )
         if stats:
             stats.print("downloaded", f"{self.INPUT_RES_TYPE}s", f"Result {self.OUTPUT_RES_TYPE}s")
@@ -43,14 +43,14 @@ class ObsMembersTask(ObsTask):
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
         stats = await hydrate_utils.process(
-            client=self.client,
-            task_name="obs-members",
+            task_name=self.NAME,
             desc="Downloading member",
             workdir=workdir,
             source_dir=source_dir or workdir,
             input_type=self.INPUT_RES_TYPE,
             callback=self.process_one,
             file_slug="members",
+            compress=self.compress,
         )
         if stats:
             stats.print("downloaded", f"{resources.OBSERVATION}s", "Members")

@@ -23,6 +23,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="put all resources into one Bundle file",
     )
+    cli_utils.add_compression(parser)
 
     group = cli_utils.add_cohort_selection(parser)
     group.add_argument(
@@ -72,9 +73,10 @@ async def crawl_main(args: argparse.Namespace) -> None:
             id_file=args.id_file,
             id_list=args.id_list,
             id_system=args.id_system,
+            compress=args.compress,
         )
 
     if args.bundle:
-        ndjson.bundle_folder(workdir)
+        ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     cli_utils.print_done()

@@ -26,11 +26,11 @@ class BundleTests(utils.TestCase):
         with self.assertRaisesRegex(
             SystemExit, f"Bundle file '{self.bundle_file}' already exists."
         ):
-            await self.local_cli("bundle", f"{self.folder}")
+            await self.local_cli("bundle", self.folder)
 
     async def test_no_input_files(self):
         with self.assertRaisesRegex(SystemExit, f"No FHIR files found in '{self.folder}'."):
-            await self.local_cli("bundle", f"{self.folder}")
+            await self.local_cli("bundle", self.folder)
 
     async def test_bundle_happy_path(self):
         # Just make a couple dead-simple resources
@@ -44,7 +44,7 @@ class BundleTests(utils.TestCase):
         )
 
         # Bundle those two files up into one
-        await self.local_cli("bundle", f"{self.folder}")
+        await self.local_cli("bundle", self.folder)
         self.assert_folder(
             {
                 "Bundle.json.gz": None,
@@ -98,5 +98,34 @@ class BundleTests(utils.TestCase):
                 ".metadata": None,
                 "log.ndjson": None,
                 "Bundle.json.gz": None,
+            }
+        )
+
+    async def test_non_compressed(self):
+        self.write_res("Condition", [{}])
+        await self.local_cli("bundle", "--no-compression", self.folder)
+        self.assert_folder({"Bundle.json": None})
+
+    async def test_crawl_bundle_non_compressed(self):
+        pat = {"resourceType": "Patient", "id": "pat"}
+        self.mock_bulk(output=[pat], params={"_type": "Patient"})
+        await self.cli("crawl", self.folder, "--bundle", "--type=Patient", "--no-compression")
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "log.ndjson": None,
+                "Bundle.json": None,
+            }
+        )
+
+    async def test_bulk_bundle_non_compressed(self):
+        pat = {"resourceType": "Patient", "id": "pat"}
+        self.mock_bulk(output=[pat], params={"_type": "Patient"})
+        await self.cli("bulk", self.folder, "--bundle", "--type=Patient", "--no-compression")
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "log.ndjson": None,
+                "Bundle.json": None,
             }
         )

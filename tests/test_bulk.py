@@ -462,3 +462,27 @@ class BulkTests(utils.TestCase):
                 "log.ndjson": None,
             }
         )
+
+    async def test_no_compression(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        err1 = {"resourceType": resources.OPERATION_OUTCOME, "id": "err1"}
+        del1 = {
+            "resourceType": resources.BUNDLE,
+            "entry": [
+                {"request": {"method": "DELETE", "url": f"{resources.PATIENT}/pat2"}},
+            ],
+        }
+
+        self.mock_bulk(output=[pat1], error=[err1], deleted=[del1])
+
+        await self.cli("bulk", self.folder, "--type=Patient", "--no-compression")
+
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "log.ndjson": None,
+                "Patient.001.ndjson": pat1,
+                "error": {"OperationOutcome.001.ndjson": [err1]},
+                "deleted": {"Bundle.001.ndjson": [del1]},
+            },
+        )

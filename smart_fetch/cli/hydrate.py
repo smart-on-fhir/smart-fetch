@@ -26,6 +26,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         metavar="MIMES",
         help="mimetypes to inline, comma separated (default is text, HTML, and XHTML)",
     )
+    cli_utils.add_compression(parser)
 
     cli_utils.add_auth(parser)
     parser.set_defaults(func=hydrate_main)
@@ -42,7 +43,7 @@ async def hydrate_main(args: argparse.Namespace) -> None:
     async with client:
         for task_class in task_classes:
             rich.get_console().rule()
-            task = task_class(client)
+            task = task_class(client, compress=args.compress)
             await task.run(args.folder, source_dir=args.source_dir, mimetypes=args.mimetypes)
 
     cli_utils.print_done()

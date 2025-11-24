@@ -150,7 +150,6 @@ class PractitionerPractitionerRoleTask(hydrate_utils.Task):
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
         stats = await hydrate_utils.process(
-            client=self.client,
             task_name=self.NAME,
             desc="Downloading",
             workdir=workdir,
@@ -159,6 +158,7 @@ class PractitionerPractitionerRoleTask(hydrate_utils.Task):
             output_type=self.OUTPUT_RES_TYPE,
             callback=self.process_one,
             file_slug="referenced",
+            compress=self.compress,
         )
         if stats:
             stats.print("downloaded", f"{self.OUTPUT_RES_TYPE}s")

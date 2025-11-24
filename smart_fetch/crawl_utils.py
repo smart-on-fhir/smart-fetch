@@ -56,6 +56,7 @@ async def perform_crawl(
     id_system: str | None,
     finish_callback: Callable[[str], Awaitable[None]] | None = None,
     managed_dir: str | None = None,
+    compress: bool = False,
 ) -> None:
     if group_nickname:
         group_name = group_nickname
@@ -98,14 +99,18 @@ async def perform_crawl(
         workdir,
         managed_dir,
         filters,
+        compress=compress,
     )
 
     processor = iter_utils.ResourceProcessor(
         workdir,
         "Crawling",
-        callback=partial(process_resource, rest_client, id_pool, workdir, transaction_times),
+        callback=partial(
+            process_resource, rest_client, id_pool, workdir, transaction_times, compress=compress
+        ),
         finish_callback=processor_finish,
         append=False,
+        compress=compress,
     )
 
     # Before crawling, we have to decide if we need to do anything special with patients,
@@ -144,6 +149,7 @@ async def perform_crawl(
             fhir_url=fhir_url,
             group=group,
             metadata=metadata,
+            compress=compress,
             finish_callback=processor_finish,
         )
     if patient_ids is None:
@@ -165,7 +171,8 @@ async def perform_crawl(
         processor.add_source(
             res_type,
             resource_urls_with_new_patients(res_type, metadata, managed_dir, patient_ids, filters),
-            len(patient_ids),
+            total=len(patient_ids),
+            output_file=ndjson.filename(f"{res_type}.ndjson", compress=compress),
         )
 
     if processor.sources:
@@ -207,6 +214,7 @@ async def gather_patients(
     fhir_url: str,
     group: str,
     metadata: lifecycle.OutputMetadata,
+    compress: bool = False,
     finish_callback: Callable[[str], Awaitable[None]],
 ) -> None:
     if id_file or id_list:
@@ -219,7 +227,12 @@ async def gather_patients(
         else:
             urls = resource_urls(resources.PATIENT, "_id=", ids, filters.params())
 
-        processor.add_source(resources.PATIENT, urls, len(ids))
+        processor.add_source(
+            resources.PATIENT,
+            urls,
+            total=len(ids),
+            output_file=ndjson.filename(f"{resources.PATIENT}.ndjson", compress=compress),
+        )
         await processor.run()
 
     else:
@@ -234,6 +247,7 @@ async def gather_patients(
                 since=filters.get_bulk_since(),
                 type_filter=filters.params(bulk=True),
                 metadata=metadata,
+                compress=compress,
             )
             await exporter.export()
             await finish_callback(resources.PATIENT, timestamp=exporter.transaction_time)
@@ -249,6 +263,7 @@ async def finish_wrapper(
     res_type: str,
     *,
     timestamp: datetime.datetime,
+    compress: bool = False,
 ) -> None:
     # Calculate new/deleted resources, if possible
     if res_type == resources.PATIENT:
@@ -257,7 +272,7 @@ async def finish_wrapper(
             metadata.note_new_patients(new)
             rich.print(f"Count of new patients: {len(new):,}.")
         if deleted:
-            merges.write_deleted_file(workdir, res_type, deleted)
+            merges.write_deleted_file(workdir, res_type, deleted, compress=compress)
             rich.print(f"Count of deleted patients: {len(deleted):,}.")
 
     # If `timestamp` (which is when we started crawling) is earlier than our latest found date,
@@ -340,11 +355,13 @@ async def crawl_bundle_chain(client: cfs.FhirClient, url: str) -> AsyncIterable[
             break
 
 
-def _log_error(folder: str, resource: dict) -> None:
+def _log_error(folder: str, resource: dict, *, compress: bool = False) -> None:
     # Make a fake "error" folder, just like we'd see in a bulk export
     error_subfolder = os.path.join(folder, "error")
     os.makedirs(error_subfolder, exist_ok=True)
-    error_file = os.path.join(error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson.gz")
+    error_file = ndjson.filename(
+        error_subfolder, f"{resources.OPERATION_OUTCOME}.ndjson", compress=compress
+    )
     with ndjson.NdjsonWriter(error_file, append=True) as error_writer:
         error_writer.write(resource)
 
@@ -367,11 +384,12 @@ async def process_resource(
     res_type: str,
     writer: ndjson.NdjsonWriter,
     url: str,
+    compress: bool = False,
     **kwargs,
 ) -> None:
     async for resource in crawl_bundle_chain(client, url):
         if resource["resourceType"] == resources.OPERATION_OUTCOME:
-            _log_error(folder, resource)
+            _log_error(folder, resource, compress=compress)
             continue
 
         res_pool = id_pool.get(resource["resourceType"])

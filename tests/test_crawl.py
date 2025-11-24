@@ -801,3 +801,30 @@ class CrawlTests(utils.TestCase):
                 ],
             }
         )
+
+    async def test_no_compression(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        outcome1 = {"resourceType": resources.OPERATION_OUTCOME, "id": "outcome1"}
+        enc1 = {"resourceType": resources.ENCOUNTER, "id": "enc1"}
+
+        self.mock_bulk(output=[pat1])
+
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            if res_type == resources.ENCOUNTER:
+                if request.url.params == httpx.QueryParams(patient="pat1"):
+                    return httpx.Response(200, json=self.make_bundle([enc1, outcome1]))
+            assert False, f"Invalid request: {request.url.params}"
+
+        self.set_resource_search_route(respond)
+
+        await self.cli("crawl", self.folder, "--type=Encounter,Patient", "--no-compression")
+
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "log.ndjson": None,
+                "Encounter.ndjson": [enc1],
+                "Patient.001.ndjson": [pat1],
+                "error": {"OperationOutcome.ndjson": [outcome1]},
+            }
+        )

@@ -2,7 +2,6 @@
 
 import asyncio
 import datetime
-import gzip
 import json
 import logging
 import os
@@ -269,6 +268,7 @@ class BulkExporter:
         type_filter: filtering.TypeFilters | None = None,
         metadata: lifecycle.OutputMetadata,
         prefer_url_resources: bool = False,
+        compress: bool = False,
     ):
         """
         Initialize a bulk exporter (but does not start an export).
@@ -288,6 +288,7 @@ class BulkExporter:
         self._total_wait_time = 0  # in seconds, across all our requests
         self._log: BulkExportLogWriter | None = None
         self._metadata = metadata
+        self._compress = compress
 
         self.export_url = self._format_kickoff_url(
             url,
@@ -663,7 +664,7 @@ class BulkExporter:
         for file in files:
             count = resource_counts.get(file["type"], 0) + 1
             resource_counts[file["type"]] = count
-            filename = f"{file['type']}.{count:03}.ndjson.gz"
+            filename = ndjson.filename(f"{file['type']}.{count:03}.ndjson", compress=self._compress)
             coroutines.append(
                 self._download_ndjson_file(
                     file["url"],
@@ -695,7 +696,7 @@ class BulkExporter:
         )
         try:
             os.makedirs(os.path.dirname(filename), exist_ok=True)
-            with gzip.open(filename, "wt", encoding="utf8") as file:
+            with ndjson.open_file(filename, "w") as file:
                 async for block in response.aiter_text():
                     file.write(block)
                     decompressed_size += len(block)
@@ -721,6 +722,7 @@ async def perform_bulk(
     group: str,
     workdir: str,
     managed_dir: str | None = None,
+    compress: bool = False,
 ):
     os.makedirs(workdir, exist_ok=True)
     metadata = lifecycle.OutputMetadata(workdir)
@@ -747,6 +749,7 @@ async def perform_bulk(
             since=filters.get_bulk_since(),
             type_filter=type_filters,
             metadata=metadata,
+            compress=compress,
         )
         await exporter.export()
 

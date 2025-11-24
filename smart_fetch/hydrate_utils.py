@@ -2,7 +2,6 @@ import abc
 import dataclasses
 import enum
 import itertools
-import os
 from collections.abc import AsyncIterable, Callable
 from functools import partial
 
@@ -30,8 +29,9 @@ class Task(abc.ABC):
     INPUT_RES_TYPE: str  # resource type to read in
     OUTPUT_RES_TYPE: str  # resource type to write out
 
-    def __init__(self, client: cfs.FhirClient):
+    def __init__(self, client: cfs.FhirClient, compress: bool = False):
         self.client = client
+        self.compress = compress
 
     @abc.abstractmethod
     async def run(self, workdir: str, **kwargs) -> None:
@@ -56,7 +56,6 @@ class ReferenceDownloadTask(Task):
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
         stats = await process(
-            client=self.client,
             task_name=self.NAME,
             desc="Downloading",
             workdir=workdir,
@@ -65,6 +64,7 @@ class ReferenceDownloadTask(Task):
             output_type=self.OUTPUT_RES_TYPE,
             callback=self.process_one,
             file_slug=self.FILE_SLUG,
+            compress=self.compress,
         )
         if stats:
             stats.print("downloaded", f"{self.INPUT_RES_TYPE}s", f"{self.OUTPUT_RES_TYPE}s")
@@ -212,7 +212,6 @@ async def _write(
 
 async def process(
     *,
-    client: cfs.FhirClient,
     task_name: str,
     desc: str,
     workdir: str | None,
@@ -220,6 +219,7 @@ async def process(
     source_dir: str | None = None,
     output_type: str | None = None,
     append: bool = True,
+    compress: bool = False,
     file_slug: str | None = None,
     callback: Callable,
 ) -> TaskStats | None:
@@ -264,11 +264,13 @@ async def process(
         if not append:
             output_file = res_file
         elif file_slug:
-            output_file = os.path.join(workdir, f"{output_type}.{file_slug}.ndjson.gz")
+            output_file = ndjson.filename(f"{output_type}.{file_slug}.ndjson", compress=compress)
         else:
-            output_file = None
+            output_file = ndjson.filename(f"{output_type}.ndjson", compress=compress)
         total_lines = ndjson.read_local_line_count(res_file)
-        processor.add_source(output_type, _read(res_file), total_lines, output_file=output_file)
+        processor.add_source(
+            output_type, _read(res_file), total=total_lines, output_file=output_file
+        )
     await processor.run()
 
     return stats

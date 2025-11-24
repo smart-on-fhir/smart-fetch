@@ -127,3 +127,27 @@ class HydrateTests(utils.TestCase):
         with self.assertRaisesRegex(SystemExit, "oops"):
             with mock.patch("smart_fetch.hydrate_utils.download_reference", new=slow_explode):
                 await self.cli("hydrate", self.folder, "--tasks=medication")
+
+    async def test_no_compression(self):
+        self.write_res("Condition", [{"recorder": {"reference": "Practitioner/1"}}])
+
+        # Handle searching for roles from practitioners
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            if request.url.params == httpx.QueryParams(practitioner="1"):
+                entries = [{"resource": {"resourceType": "PractitionerRole", "id": "searched"}}]
+            else:
+                entries = []
+            return httpx.Response(200, json={"resourceType": resources.BUNDLE, "entry": entries})
+
+        self.set_resource_search_route(respond)
+        self.set_basic_resource_route()
+
+        await self.cli("hydrate", self.folder, "--tasks=practitioner", "--no-compression")
+
+        self.assert_folder(
+            {
+                "Condition.ndjson.gz": None,
+                "Practitioner.referenced.ndjson": None,
+                "PractitionerRole.referenced.ndjson": None,
+            }
+        )
