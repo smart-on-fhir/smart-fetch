@@ -8,7 +8,6 @@ class MedsTask(hydrate_utils.Task):
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
         stats = await hydrate_utils.process(
-            client=self.client,
             task_name=self.NAME,
             desc="Downloading",
             workdir=workdir,
@@ -16,6 +15,7 @@ class MedsTask(hydrate_utils.Task):
             input_type=self.INPUT_RES_TYPE,
             output_type=self.OUTPUT_RES_TYPE,
             callback=self.process_one,
+            compress=self.compress,
         )
         if stats:
             stats.print("downloaded", f"{self.OUTPUT_RES_TYPE}s")

@@ -2,7 +2,9 @@ import gzip
 import itertools
 import json
 import os
+import sys
 from functools import partial
+from typing import TextIO
 
 import cumulus_fhir_support as cfs
 
@@ -20,7 +22,6 @@ class NdjsonWriter:
         self._path = path
         self._write_path = path if append or not os.path.exists(path) else path + ".tmp"
         self._append = append
-        self._compressed = path.endswith(".gz")
         self._file = None
 
     def __enter__(self):
@@ -39,8 +40,7 @@ class NdjsonWriter:
     def _ensure_file(self):
         if not self._file:
             mode = "a" if self._append else "w"
-            open_func = gzip.open if self._compressed else open
-            self._file = open_func(self._write_path, mode + "t", encoding="utf8")
+            self._file = open_file(self._write_path, mode)
 
     def write(self, obj: dict) -> None:
         # lazily create the file, to avoid 0-line ndjson files
@@ -55,7 +55,7 @@ def read_local_line_count(path) -> int:
     # Copyright Michael Bacon, licensed CC-BY-SA 3.0
     count = 0
     buf = None
-    open_func = gzip.open if path.casefold().endswith(".gz") else partial(open, buffering=0)
+    open_func = gzip.open if is_compressed(path) else partial(open, buffering=0)
     with open_func(path, "rb") as f:
         bufgen = itertools.takewhile(
             lambda x: x, (f.read(1024 * 1024) for _ in itertools.repeat(None))
@@ -73,23 +73,26 @@ def compact_json(obj: dict) -> str:
     return json.dumps(obj, separators=(",", ":"))
 
 
-def bundle_folder(folder: str, output_name: str = "Bundle.json.gz") -> bool:
+def bundle_folder(folder: str, *, compress: bool = False, exist_ok: bool = False) -> str | None:
     """
     Converts a folder into a single Bundle file.
 
     Note: all source NDJSON files used will be deleted!
 
     Returns:
-        Whether a bundle was created (it won't be if there are no input files).
+        Filename if a bundle was created else None (it won't be if there are no input files).
     """
+    output_path = filename(folder, "Bundle.json", compress=compress)
+    if not exist_ok and os.path.exists(output_path):
+        sys.exit(f"Bundle file '{output_path}' already exists.")
+
     filenames = [
         path for path, res_type in cfs.list_multiline_json_in_dir(folder).items() if res_type
     ]
     if not filenames:
-        return False
+        return None
 
-    output_file = os.path.join(folder, output_name)
-    with gzip.open(output_file, "wt", encoding="utf8") as f:
+    with open_file(output_path, "w") as f:
         # Start the Bundle
         f.write(
             "{\n"
@@ -122,4 +125,20 @@ def bundle_folder(folder: str, output_name: str = "Bundle.json.gz") -> bool:
     for path in filenames:
         os.unlink(path)
 
-    return True
+    return output_path
+
+
+def filename(stem: str, *extra, compress: bool = False) -> str:
+    """Returns an appropriate output filename to use"""
+    stem = os.path.join(stem, *extra)
+    return f"{stem}.gz" if compress else stem
+
+
+def is_compressed(path: str) -> bool:
+    path = path.casefold().removesuffix(".tmp")
+    return path.endswith(".gz")
+
+
+def open_file(path: str, mode: str) -> TextIO:
+    open_func = gzip.open if is_compressed(path) else open
+    return open_func(path, mode + "t", encoding="utf8")

@@ -158,3 +158,9 @@ depending on your use case at the time.
 
 If you want more predictably named subfolders, pass `--nickname my-nickname` and the folder will
 be named something like `003.my-nickname` instead of using the current date.
+
+## Compression
+
+By default, SMART Fetch writes compressed NDJSON files, which makes the files ~90% smaller.
+But if gzip files are awkward for your pipeline to process, you can turn off compression by
+passing `--no-compression` to the `export` command (or any command that writes output files).

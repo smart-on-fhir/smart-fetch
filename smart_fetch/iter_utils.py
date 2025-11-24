@@ -97,6 +97,7 @@ class ResourceProcessor:
         callback: Callable[[str, ndjson.NdjsonWriter, Item], Awaitable[None]],
         finish_callback: Callable[[str], Awaitable[None]] | None = None,
         append: bool = True,
+        compress: bool = False,
     ):
         self.sources: dict[str, list[_SourceDetails]] = {}
         self._callback = callback
@@ -104,16 +105,17 @@ class ResourceProcessor:
         self._folder = folder
         self._desc = desc
         self._append = append
+        self._compress = compress
 
     def add_source(
         self,
         res_type: str,
         iterable: AsyncIterable[Item],
+        *,
         total: int,
-        output_file: str | None = None,
+        output_file: str,
     ):
-        if not output_file:
-            output_file = os.path.join(self._folder, f"{res_type}.ndjson.gz")
+        output_file = os.path.join(self._folder, output_file)
         source = _SourceDetails(iterable, total, output_file)
         self.sources.setdefault(res_type, []).append(source)
 

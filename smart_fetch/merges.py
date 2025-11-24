@@ -142,21 +142,24 @@ def note_deleted_resource(
     workdir: str,
     managed_dir: str,
     filters: filtering.Filters,
+    compress: bool = False,
 ) -> None:
     past_ids = find_past_resource_ids(res_type, workdir, managed_dir, filters)
     current_ids = read_resource_ids(res_type, workdir)
     deleted_ids = past_ids - current_ids
-    write_deleted_file(workdir, res_type, deleted_ids)
+    write_deleted_file(workdir, res_type, deleted_ids, compress=compress)
 
 
-def write_deleted_file(workdir: str, res_type: str, deleted_ids: set[str]) -> None:
+def write_deleted_file(
+    workdir: str, res_type: str, deleted_ids: set[str], *, compress: bool = False
+) -> None:
     if not deleted_ids:
         return
 
     deleted_dir = os.path.join(workdir, "deleted")
     os.makedirs(deleted_dir, exist_ok=True)
 
-    deleted_file = os.path.join(deleted_dir, f"{res_type}.ndjson.gz")
+    deleted_file = ndjson.filename(deleted_dir, f"{res_type}.ndjson", compress=compress)
     with ndjson.NdjsonWriter(deleted_file) as writer:
         # Write a new bundle for each resource - this is mildly wasteful of space, but it makes
         # it easier to read/grep and most importantly, get a quick count of deleted resources by

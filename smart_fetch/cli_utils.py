@@ -269,6 +269,16 @@ def add_general(parser: argparse.ArgumentParser, root: bool = False) -> None:
     )
 
 
+def add_compression(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--no-compression",
+        dest="compress",
+        action="store_false",
+        help="turns off gzip compression of files (which saves ~90% of file size, "
+        "but may not be supported in some downstream tools)",
+    )
+
+
 def load_config(args) -> None:
     """Loads a config file and injects the contents into our CLI argument list"""
     if not args.config:

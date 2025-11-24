@@ -1,10 +1,9 @@
-import glob
 import itertools
 import os
 
 import cumulus_fhir_support as cfs
 
-from smart_fetch import lifecycle, resources, tasks
+from smart_fetch import lifecycle, ndjson, resources, tasks
 
 
 def reset_all_links(managed_dir: str) -> None:
@@ -14,15 +13,16 @@ def reset_all_links(managed_dir: str) -> None:
 
 def reset_res_links(managed_dir: str, res_type: str) -> None:
     # Remove all current links for this resource type
-    current_links = glob.glob(f"{managed_dir}/{res_type}.*.ndjson.gz")
-    for link in current_links:
-        os.remove(link)
+    for entry in os.scandir(managed_dir):
+        if entry.name.startswith(f"{res_type}.") and entry.is_symlink():
+            os.remove(entry.path)
 
     # Add links for all "active" files for this resource type, and consider all possible ways
     # the resource could appear (either direct export or hydration).
     files = _find_active_resource_files(managed_dir, res_type)
     for index, path in enumerate(files, 1):
-        link_name = f"{res_type}.{index:03}.ndjson.gz"
+        compressed = ndjson.is_compressed(path)
+        link_name = ndjson.filename(f"{res_type}.{index:03}.ndjson", compress=compressed)
         os.symlink(path, os.path.join(managed_dir, link_name))
 
 
@@ -57,10 +57,6 @@ def _find_active_resource_files(managed_dir: str, res_type: str) -> list[str]:
     filenames = []
     for workdir in sorted(workdirs):
         filenames.extend(cfs.list_multiline_json_in_dir(workdir, res_type))
-
-    # Only include .gz filenames (to allow us to ignore like... someone manually unzipping a file
-    # or whatever inside the workdir). We ourselves only make .gz files.
-    filenames = list(filter(lambda f: f.endswith(".gz"), filenames))
 
     return [os.path.relpath(f, start=managed_dir) for f in filenames]
 

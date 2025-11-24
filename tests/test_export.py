@@ -960,3 +960,63 @@ class ExportTests(utils.TestCase):
         # And confirm we can turn them off
         self.mock_bulk(params={"_type": "Observation"})
         await self.cli("export", self.folder, "--type=Observation", "--no-default-filters")
+
+    async def test_bulk_no_compression(self):
+        medreq1 = {
+            "resourceType": "MedicationRequest",
+            "id": "medreq1",
+            "medicationReference": {"reference": "Medication/1"},
+        }
+        self.mock_bulk(output=[medreq1])
+        self.set_basic_resource_route()
+        await self.cli("export", self.folder, "--type=MedicationRequest", "--no-compression")
+        self.assert_folder(
+            {
+                "Medication.001.ndjson": "001.2021-09-14/Medication.ndjson",
+                "MedicationRequest.001.ndjson": "001.2021-09-14/MedicationRequest.001.ndjson",
+                "001.2021-09-14": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Medication.ndjson": [{"resourceType": "Medication", "id": "1"}],
+                    "MedicationRequest.001.ndjson": [medreq1],
+                },
+                ".metadata": None,
+            }
+        )
+
+    async def test_crawl_no_compression(self):
+        pat1 = {"resourceType": "Patient", "id": "pat1"}
+        medreq1 = {
+            "resourceType": "MedicationRequest",
+            "id": "medreq1",
+            "medicationReference": {"reference": "Medication/1"},
+        }
+        params = {"MedicationRequest": {httpx.QueryParams(patient="pat1"): [medreq1]}}
+        missing = self.set_resource_search_queries(params)
+        self.set_basic_resource_route()
+        self.mock_bulk(output=[pat1])
+
+        await self.cli(
+            "export",
+            self.folder,
+            "--export-mode=crawl",
+            "--type=MedicationRequest,Patient",
+            "--no-compression",
+        )
+
+        self.assertEqual(missing, [])
+        self.assert_folder(
+            {
+                "Medication.001.ndjson": "001.2021-09-14/Medication.ndjson",
+                "MedicationRequest.001.ndjson": "001.2021-09-14/MedicationRequest.ndjson",
+                "Patient.001.ndjson": "001.2021-09-14/Patient.001.ndjson",
+                "001.2021-09-14": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Medication.ndjson": [{"resourceType": "Medication", "id": "1"}],
+                    "MedicationRequest.ndjson": [medreq1],
+                    "Patient.001.ndjson": [pat1],
+                },
+                ".metadata": None,
+            }
+        )

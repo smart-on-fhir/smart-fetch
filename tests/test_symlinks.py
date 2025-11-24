@@ -188,7 +188,7 @@ class SymlinkTests(utils.TestCase):
             }
         )
 
-    async def test_random_resource_file_is_ignored(self):
+    async def test_random_file_is_ignored(self):
         """Confirm that when making links, we don't link *everything*"""
         # Create a basic skeleton of an export
         pat = {"resourceType": "Patient", "id": "pat"}
@@ -203,9 +203,13 @@ class SymlinkTests(utils.TestCase):
             f"{self.folder}/001.2021-09-14/test.ndjson.gz",
         )
 
-        # Non gzipped is ignored
+        # Non-gzipped version is included too
         with open(f"{self.folder}/001.2021-09-14/test.ndjson", "w", encoding="utf8") as f:
             json.dump(pat, f)
+
+        # Non-resource file is ignored (much like log.ndjson is)
+        with open(f"{self.folder}/001.2021-09-14/random.ndjson", "w", encoding="utf8") as f:
+            json.dump({"random-json": True}, f)
 
         # Now reset the symlinks
         await self.local_cli("reset-symlinks", self.folder)
@@ -215,10 +219,12 @@ class SymlinkTests(utils.TestCase):
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
+                    "random.ndjson": None,
                     "test.ndjson": pat,
                     "test.ndjson.gz": pat,
                 },
-                "Patient.001.ndjson.gz": "001.2021-09-14/test.ndjson.gz",
+                "Patient.001.ndjson": "001.2021-09-14/test.ndjson",
+                "Patient.002.ndjson.gz": "001.2021-09-14/test.ndjson.gz",
                 ".metadata": None,
             }
         )

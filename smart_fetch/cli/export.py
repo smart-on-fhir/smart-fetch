@@ -61,6 +61,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         help="which hydration tasks to run "
         "(comma separated, defaults to 'all', use 'help' to see list)",
     )
+    cli_utils.add_compression(parser)
 
     cli_utils.add_auth(parser)
     cli_utils.add_cohort_selection(parser)
@@ -109,6 +110,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 group=args.group,
                 workdir=workdir,
                 managed_dir=source_dir,
+                compress=args.compress,
             )
             await finish_resource(
                 rest_client,
@@ -118,6 +120,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 filters.resources(),
                 open_client=True,
                 hydration_tasks=hydration_tasks,
+                compress=args.compress,
             )
         else:
             await crawl_utils.perform_crawl(
@@ -133,6 +136,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 id_file=args.id_file,
                 id_list=args.id_list,
                 id_system=args.id_system,
+                compress=args.compress,
                 finish_callback=partial(
                     finish_resource,
                     rest_client,
@@ -140,6 +144,7 @@ async def export_main(args: argparse.Namespace) -> None:
                     source_dir,
                     filters,
                     hydration_tasks=hydration_tasks,
+                    compress=args.compress,
                 ),
             )
 
@@ -243,15 +248,17 @@ async def finish_resource(
     *,
     open_client: bool = False,
     hydration_tasks: list[type[hydrate_utils.Task]],
+    compress: bool = False,
 ):
     if isinstance(res_types, str):
         res_types = {res_types}
 
+    run_tasks = run_hydration_tasks(client, workdir, res_types, hydration_tasks, compress=compress)
     if open_client:
         async with client:
-            await run_hydration_tasks(client, workdir, res_types, hydration_tasks)
+            await run_tasks
     else:
-        await run_hydration_tasks(client, workdir, res_types, hydration_tasks)
+        await run_tasks
 
     # Check for deleted resources if we are doing a full update (non-incremental / non-since).
     # (Regardless of bulk or crawl mode, even when we're in bulk which gives us deleted info for
@@ -260,7 +267,7 @@ async def finish_resource(
     # something new.
     for res_type in res_types:
         if res_type not in filters.since_resources():
-            merges.note_deleted_resource(res_type, workdir, managed_dir, filters)
+            merges.note_deleted_resource(res_type, workdir, managed_dir, filters, compress=compress)
 
     symlinks.reset_all_links(managed_dir)
 
@@ -270,6 +277,7 @@ async def run_hydration_tasks(
     workdir: str,
     res_types: set[str],
     hydration_tasks: list[type[hydrate_utils.Task]],
+    compress: bool = False,
 ) -> None:
     first = True
     done_types = set()
@@ -287,7 +295,7 @@ async def run_hydration_tasks(
 
             # We don't provide a source_dir, because we want the hydration to only affect
             # this most recent export subfolder, not other exports.
-            await task(client).run(workdir)
+            await task(client, compress=compress).run(workdir)
 
             rich.get_console().rule()
 

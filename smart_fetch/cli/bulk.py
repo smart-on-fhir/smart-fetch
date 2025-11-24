@@ -27,6 +27,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="put all resources into one Bundle file",
     )
+    cli_utils.add_compression(parser)
     parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
 
     cli_utils.add_auth(parser)
@@ -66,10 +67,11 @@ async def export_main(args: argparse.Namespace) -> None:
             filters=filters,
             group=args.group,
             workdir=workdir,
+            compress=args.compress,
         )
 
     if args.bundle:
-        ndjson.bundle_folder(workdir)
+        ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     cli_utils.print_done()
 

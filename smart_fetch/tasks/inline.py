@@ -119,13 +119,13 @@ class InlineTask(hydrate_utils.Task):
     async def run(self, workdir: str, mimetypes: str | None = None, **kwargs) -> None:
         mimetypes = parse_mimetypes(mimetypes)
         stats = await hydrate_utils.process(
-            client=self.client,
             task_name=self.NAME,
             desc="Inlining",
             workdir=workdir,
             input_type=self.INPUT_RES_TYPE,
             callback=partial(self.process_one, mimetypes=mimetypes),
             append=False,
+            compress=self.compress,
         )
         if stats:
             stats.print("inlined", f"{self.INPUT_RES_TYPE}s", "Attachments")
