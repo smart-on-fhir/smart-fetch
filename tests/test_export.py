@@ -507,6 +507,7 @@ class ExportTests(utils.TestCase):
             {
                 "001.2021-09-14": {
                     ".metadata": {
+                        # Notice: no complete=true here
                         "done": {
                             resources.DOCUMENT_REFERENCE: res_time,
                             resources.PATIENT: utils.TRANSACTION_TIME,
@@ -539,6 +540,7 @@ class ExportTests(utils.TestCase):
             {
                 "001.2021-09-14": {
                     ".metadata": {
+                        "complete": True,
                         "done": {
                             resources.DOCUMENT_REFERENCE: res_time,
                             resources.PATIENT: utils.TRANSACTION_TIME,

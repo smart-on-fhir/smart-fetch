@@ -148,6 +148,7 @@ async def export_main(args: argparse.Namespace) -> None:
                 ),
             )
 
+    lifecycle.OutputMetadata(workdir).mark_complete()
     cli_utils.print_done()
 
 

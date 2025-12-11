@@ -168,6 +168,7 @@ class BulkTests(utils.TestCase):
                     f"{resources.BUNDLE}.001.ndjson.gz": [del1],
                 },
                 ".metadata": {
+                    "complete": True,
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
@@ -216,6 +217,7 @@ class BulkTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "done": {
                         "AllergyIntolerance": utils.TRANSACTION_TIME,
                         "Condition": utils.TRANSACTION_TIME,
@@ -452,6 +454,7 @@ class BulkTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "done": {resources.DEVICE: utils.FROZEN_TIMESTAMP},  # <- current time used
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,

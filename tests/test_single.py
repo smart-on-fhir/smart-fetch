@@ -1,4 +1,5 @@
 import base64
+import json
 
 from tests import utils
 
@@ -85,7 +86,20 @@ class SingleTests(utils.TestCase):
         self.assertEqual(stdout, b"")
         self.assertEqual(stderr, "")
 
+    @staticmethod
+    def make_error() -> dict:
+        return {
+            "resourceType": "OperationOutcome",
+            "issue": [{"details": {"text": "bad request, bruh", "diagnostics": "code 1234"}}],
+        }
+
     async def test_error(self):
-        self.server.get("Patient/alice").respond(400, text="bad request, bruh")
-        with self.assertRaisesRegex(SystemExit, "bad request, bruh"):
+        self.server.get("Patient/alice").respond(400, json=self.make_error())
+        with self.assertRaisesRegex(SystemExit, ": \\[400\\] bad request, bruh$"):
             await self.capture_cli("single", "Patient/alice")
+
+    async def test_verbose_error(self):
+        self.server.get("Patient/alice").respond(400, json=self.make_error())
+        with self.assertRaises(SystemExit) as cm:
+            await self.capture_cli("single", "Patient/alice", "--verbose")
+        self.assertEqual(json.loads(cm.exception.code), self.make_error())

@@ -37,6 +37,7 @@ class MergeTests(utils.TestCase):
                 "001.2021-09-14": None,
                 "002.2021-09-14": {
                     ".metadata": {
+                        "complete": True,
                         "done": {"Patient": utils.TRANSACTION_TIME},
                         "filters": {"Patient": []},
                         "newPatients": ["pat2", "pat3"],
@@ -83,6 +84,7 @@ class MergeTests(utils.TestCase):
                 "002.2021-09-14": None,
                 "003.2021-09-14": {
                     ".metadata": {
+                        "complete": True,
                         "done": {"Patient": utils.TRANSACTION_TIME},
                         "filters": {"Patient": []},
                         "newPatients": ["pat2", "pat4"],
