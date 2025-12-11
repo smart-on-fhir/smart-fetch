@@ -217,6 +217,24 @@ class OutputMetadata(Metadata):
         done[tag] = timestamp.isoformat()
         self._write()
 
+    def mark_complete(self) -> None:
+        """
+        Marks the main job in this workdir as finished.
+
+        This is similar to the "done" field, but that simply tracks individual resource progress.
+        This field tracks if the export/crawl/bulk job as a whole has finished (we're done with
+        hydration, with bundling up files, any kind of post-processing, etc.).
+
+        This does not *prevent* future modifications of files in this directory, like via a manual
+        hydrate call. But it does indicate to any consumers that the contents of this folder are
+        ready to be processed.
+        """
+        # This is simply a boolean, not a timestamp, because the global timestamp field can give
+        # you the last time this metadata was modified, and I want to keep it easy to search in a
+        # .metadata file for this status (`grep '"complete" = true'` or whatever)
+        self._contents["complete"] = True
+        self._write()
+
     def get_earliest_done_date(self) -> datetime.datetime | None:
         if done := self._contents.get("done"):
             return min(datetime.datetime.fromisoformat(time) for time in done.values())

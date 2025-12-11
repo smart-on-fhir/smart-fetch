@@ -38,7 +38,10 @@ async def single_main(args: argparse.Namespace) -> None:
         try:
             response = await rest_client.request("GET", args.resource)
         except cfs.NetworkError as exc:
-            sys.exit(str(exc))
+            if args.verbose:
+                sys.exit(exc.response.text)
+            else:
+                sys.exit(str(exc))
 
         fhir_json = response.json()
 

@@ -73,6 +73,7 @@ async def export_main(args: argparse.Namespace) -> None:
     if args.bundle:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
+    lifecycle.OutputMetadata(workdir).mark_complete()
     cli_utils.print_done()
 
 

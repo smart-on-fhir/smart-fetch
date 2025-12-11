@@ -44,6 +44,7 @@ class CrawlTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
@@ -311,6 +312,7 @@ class CrawlTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "done": {resources.OBSERVATION: utils.FROZEN_TIMESTAMP},
                     "filters": {resources.OBSERVATION: expected_filter_metadata},
                     "kind": "output",
@@ -448,6 +450,7 @@ class CrawlTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "kind": "output",
                     "timestamp": utils.FROZEN_TIMESTAMP,
                     "version": utils.version,
@@ -693,6 +696,7 @@ class CrawlTests(utils.TestCase):
         self.assert_folder(
             {
                 ".metadata": {
+                    "complete": True,
                     "kind": "output",
                     "timestamp": final_timestamp,
                     "version": utils.version,

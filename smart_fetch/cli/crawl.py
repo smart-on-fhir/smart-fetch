@@ -4,7 +4,7 @@ import argparse
 
 import rich
 
-from smart_fetch import cli_utils, crawl_utils, filtering, ndjson
+from smart_fetch import cli_utils, crawl_utils, filtering, lifecycle, ndjson
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
@@ -79,4 +79,5 @@ async def crawl_main(args: argparse.Namespace) -> None:
     if args.bundle:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
+    lifecycle.OutputMetadata(workdir).mark_complete()
     cli_utils.print_done()
