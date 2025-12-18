@@ -1,4 +1,3 @@
-import contextlib
 import io
 import os
 from unittest import mock
@@ -59,8 +58,7 @@ class CommandLineTests(utils.TestCase):
     async def test_type_parsing_help(self, arg, exit_code):
         stdout = io.StringIO()
         with self.assertRaises(SystemExit) as cm:
-            with contextlib.redirect_stdout(stdout):
-                await self.cli("export", self.folder, f"--type={arg}")
+            await self.capture_cli("export", self.folder, f"--type={arg}", stdout=stdout)
         self.assertEqual(cm.exception.code, exit_code)
         self.assertIn("These resource types are supported:", stdout.getvalue())
 
@@ -266,3 +264,25 @@ but found:
     def test_unit_metadata_no_earliest_done(self):
         """Confirm we return None if there is no earliest done date"""
         self.assertIsNone(lifecycle.OutputMetadata(self.folder).get_earliest_done_date())
+
+    @ddt.data(
+        None,
+        "bulk",
+        "bundle",
+        "crawl",
+        "export",
+        "hydrate",
+        "reset-symlinks",
+        "single",
+    )
+    async def test_help(self, subcommand):
+        """Proof of life for --help"""
+        args = [subcommand, "--help"] if subcommand else ["--help"]
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            await self.capture_cli(*args, stdout=stdout, stderr=stderr)
+
+        self.assertEqual(cm.exception.code, 0)
+        self.assertIn("options:\n", stdout.getvalue())
+        self.assertEqual(stderr.getvalue(), "")
