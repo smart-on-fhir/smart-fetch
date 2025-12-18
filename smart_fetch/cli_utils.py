@@ -274,7 +274,7 @@ def add_compression(parser: argparse.ArgumentParser) -> None:
         "--no-compression",
         dest="compress",
         action="store_false",
-        help="turns off gzip compression of files (which saves ~90% of file size, "
+        help="turns off gzip compression of files (which saves ~90%% of file size, "
         "but may not be supported in some downstream tools)",
     )
 

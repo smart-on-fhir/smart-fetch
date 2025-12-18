@@ -151,9 +151,9 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         with self.server:
             await self.local_cli(*args, *default_args)
 
-    async def capture_cli(self, *args) -> tuple[bytes, str]:
-        stdout = io.TextIOWrapper(io.BytesIO())
-        stderr = io.StringIO()
+    async def capture_cli(self, *args, stdout=None, stderr=None) -> tuple[bytes, str]:
+        stdout = stdout or io.TextIOWrapper(io.BytesIO())
+        stderr = stderr or io.StringIO()
         with contextlib.redirect_stdout(stdout):
             with contextlib.redirect_stderr(stderr):
                 await self.cli(*args)
