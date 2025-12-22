@@ -8,6 +8,7 @@ import urllib.parse
 import cumulus_fhir_support as cfs
 import rich.progress
 
+import smart_fetch
 from smart_fetch import hydrate_utils, resources, tasks
 
 # RESOURCE SELECTION
@@ -262,6 +263,9 @@ def validate_input_folder(path: str | None) -> None:
 
 
 def add_general(parser: argparse.ArgumentParser, root: bool = False) -> None:
+    parser.add_argument(
+        "--version", action="version", version=f"smart-fetch {smart_fetch.__version__}"
+    )
     default = None if root else argparse.SUPPRESS
     parser.add_argument("--config", "-c", metavar="PATH", help="config file", default=default)
     parser.add_argument(

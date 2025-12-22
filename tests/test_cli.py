@@ -4,6 +4,7 @@ from unittest import mock
 
 import ddt
 
+import smart_fetch
 from smart_fetch import cli_utils, filtering, lifecycle, resources
 from smart_fetch.cli import main
 from tests import utils
@@ -285,4 +286,14 @@ but found:
 
         self.assertEqual(cm.exception.code, 0)
         self.assertIn("options:\n", stdout.getvalue())
+        self.assertEqual(stderr.getvalue(), "")
+
+    async def test_version(self):
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        with self.assertRaises(SystemExit) as cm:
+            await self.capture_cli("--version", stdout=stdout, stderr=stderr)
+
+        self.assertEqual(cm.exception.code, 0)
+        self.assertEqual(stdout.getvalue(), f"smart-fetch {smart_fetch.__version__}\n")
         self.assertEqual(stderr.getvalue(), "")
