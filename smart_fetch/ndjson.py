@@ -59,14 +59,18 @@ class NdjsonWriter:
             try:
                 shutil.copy2(self._path, self._write_path)
             except FileNotFoundError:
-                pass
+                # OK nothing to start with, remove any previous temp file
+                try:
+                    os.remove(self._write_path)
+                except FileNotFoundError:
+                    pass
 
             # Check for newline, in case this file came from a third party that didn't write it
             try:
                 with open_file_bytes(self._write_path, "r") as f:
                     f.seek(-1, os.SEEK_END)
                     needs_newline = f.read(1) != b"\n"
-            except (EOFError, FileNotFoundError, OSError):
+            except (FileNotFoundError, OSError):
                 needs_newline = False
 
             # And finally, open the file for actual writing
