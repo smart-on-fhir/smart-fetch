@@ -66,7 +66,7 @@ class NdjsonWriter:
                 with open_file_bytes(self._write_path, "r") as f:
                     f.seek(-1, os.SEEK_END)
                     needs_newline = f.read(1) != b"\n"
-            except (FileNotFoundError, OSError):
+            except (EOFError, FileNotFoundError, OSError):
                 needs_newline = False
 
             # And finally, open the file for actual writing
