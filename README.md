@@ -66,18 +66,17 @@ pipx install smart-fetch
 # Initial export
 smart-fetch export \
   --fhir-url https://bulk-data.smarthealthit.org/fhir \
-  --type Encounter,Patient \
+  --type DocumentReference \
   /tmp/export
 
 ls -l /tmp/export
 # 001.2025-06-26/
-# Encounter.001.ndjson.gz -> 001.2025-06-26/Encounter.001.ndjson.gz
-# Patient.001.ndjson.gz -> 001.2025-06-26/Patient.001.ndjson.gz
+# DocumentReference.001.ndjson.gz -> 001.2025-06-26/DocumentReference.001.ndjson.gz
 
 # Second export with a --since date, a new resource, and a nickname for the export
 smart-fetch export \
   --fhir-url https://bulk-data.smarthealthit.org/fhir \
-  --type Encounter,Patient,Condition \
+  --type DocumentReference,Condition \
   --since 2020-01-01 \
   --nickname second-run \
   /tmp/export
@@ -86,8 +85,6 @@ ls -l /tmp/export
 # 001.2025-06-26/
 # 002.second-run/
 # Condition.001.ndjson.gz -> 002.second-run/Condition.001.ndjson.gz
-# Encounter.001.ndjson.gz -> 001.2025-06-26/Encounter.001.ndjson.gz
-# Encounter.002.ndjson.gz -> 002.second-run/Encounter.001.ndjson.gz
-# Patient.001.ndjson.gz -> 001.2025-06-26/Patient.001.ndjson.gz
-# Patient.002.ndjson.gz -> 002.second-run/Patient.001.ndjson.gz
+# DocumentReference.001.ndjson.gz -> 001.2025-06-26/DocumentReference.001.ndjson.gz
+# DocumentReference.002.ndjson.gz -> 002.second-run/DocumentReference.001.ndjson.gz
 ```
