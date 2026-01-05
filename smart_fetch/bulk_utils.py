@@ -416,7 +416,7 @@ class BulkExporter:
         """
         try:
             await self._internal_export()
-        except cfs.NetworkError as exc:
+        except cfs.RequestError as exc:
             sys.exit(str(exc))
 
     async def _internal_export(self):
@@ -515,7 +515,7 @@ class BulkExporter:
         try:
             await self._request_with_delay_status(poll_url, method="DELETE", target_status_code=202)
             return True
-        except cfs.NetworkError as err:
+        except cfs.RequestError as err:
             # Don't bail on ETL as a whole, this isn't a show stopper error.
             logging.warning(f"Failed to clean up export job on the server side: {err}")
             return False
@@ -576,7 +576,7 @@ class BulkExporter:
             self._total_wait_time += delay
 
         def _raise_custom_error(*args) -> typing.NoReturn:
-            exc = cfs.NetworkError(*args)
+            exc = cfs.FatalNetworkError(*args)
             if log_error:
                 log_error(exc)
             raise exc
@@ -702,7 +702,7 @@ class BulkExporter:
                     decompressed_size += len(block)
         except Exception as exc:
             self._log.download_error(url, exc)
-            raise cfs.NetworkError(f"Error downloading '{url}': {exc}", None)
+            raise cfs.RequestError(f"Error downloading '{url}': {exc}")
         finally:
             await response.aclose()
 
