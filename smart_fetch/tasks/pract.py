@@ -1,3 +1,5 @@
+import cumulus_fhir_support as cfs
+
 from smart_fetch import cli_utils, crawl_utils, hydrate_utils, resources
 
 
@@ -143,29 +145,48 @@ class PractitionerRolePractitionerTask(hydrate_utils.ReferenceDownloadTask):
 # Sometimes nothing directly links to a PractitionerRole, but the server will still have them.
 # Epic is in that boat. The Role information is still very useful though. So grab the roles for
 # all Practitioners we know about by manually searching.
-class PractitionerPractitionerRoleTask(hydrate_utils.Task):
+class PractitionerPractitionerRoleTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "pract-practrole"
     INPUT_RES_TYPE = resources.PRACTITIONER
     OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
+    FILE_SLUG = "searched"
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
-        stats = await hydrate_utils.process(
-            task_name=self.NAME,
-            desc="Downloading",
-            workdir=workdir,
-            source_dir=source_dir or workdir,
-            input_type=self.INPUT_RES_TYPE,
-            output_type=self.OUTPUT_RES_TYPE,
-            callback=self.process_one,
-            file_slug="referenced",
-            compress=self.compress,
-        )
-        if stats:
-            stats.print("downloaded", f"{self.OUTPUT_RES_TYPE}s")
+        self._find_skippable_practitioners(workdir)
+        await super().run(workdir, source_dir, **kwargs)
+
+    def _find_skippable_practitioners(self, workdir: str) -> None:
+        """
+        Determines the count of downloaded Roles if we know we already searched for a Practitioner.
+        """
+        self._skippable = {}  # Pract -> int (count of Roles)
+        # Keep our own custom ID pool, for just the searched IDs.
+        # If we didn't do this, an ID from the referenced Role file might stop us from writing out
+        # the ID into the searched Role file. And since we use the searched Role file to decide
+        # whether we can skip a search, we might make redundant searches if we don't record the
+        # Role in the searched output file from the get-go.
+        # So we'd rather duplicate some Roles (have a Role be in both the referenced and searched
+        # output files) than do redundant searches, which are costly.
+        self._id_pool = set()
+
+        for filename in cfs.list_multiline_json_in_dir(workdir, resources.PRACTITIONER_ROLE):
+            # Only look at the searched Roles. We don't want to be tricked by manually
+            # referenced Roles - if Role/Alice1 is referenced manually and Pract/Alice is also,
+            # we still want to search for other Roles, in case Role/Alice2 exists.
+            if f"/{resources.PRACTITIONER_ROLE}.{self.FILE_SLUG}." in filename:
+                for resource in cfs.read_multiline_json(filename):
+                    self._id_pool.add(f"{resources.PRACTITIONER_ROLE}/{resource['id']}")
+                    ref = resource.get("practitioner", {}).get("reference", "")
+                    if ref.startswith(f"{resources.PRACTITIONER}/"):
+                        pract_id = ref.split("/", 1)[1]
+                        self._skippable[pract_id] = self._skippable.get(pract_id, 0) + 1
 
     async def process_one(
         self, resource: dict, id_pool: set[str], **kwargs
     ) -> hydrate_utils.Result:
+        if downloaded_count := self._skippable.get(resource["id"]):
+            return [(None, hydrate_utils.TaskResultReason.ALREADY_DONE)] * downloaded_count
+
         url = f"{resources.PRACTITIONER_ROLE}?practitioner={resource['id']}"
         results = []
         async for resource in crawl_utils.crawl_bundle_chain(self.client, url):
@@ -177,10 +198,10 @@ class PractitionerPractitionerRoleTask(hydrate_utils.Task):
                 continue
 
             ref = f"{resources.PRACTITIONER_ROLE}/{resource['id']}"
-            if ref in id_pool:
+            if ref in self._id_pool:
                 results.append((None, hydrate_utils.TaskResultReason.ALREADY_DONE))
                 continue
-            id_pool.add(ref)
+            self._id_pool.add(ref)
 
             results.append((resource, hydrate_utils.TaskResultReason.NEWLY_DONE))
 

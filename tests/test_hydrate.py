@@ -148,6 +148,6 @@ class HydrateTests(utils.TestCase):
             {
                 "Condition.ndjson.gz": None,
                 "Practitioner.referenced.ndjson": None,
-                "PractitionerRole.referenced.ndjson": None,
+                "PractitionerRole.searched.ndjson": None,
             }
         )

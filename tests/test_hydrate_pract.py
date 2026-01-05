@@ -242,7 +242,9 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "PractitionerRole", "id": "proc3"},
                     {"resourceType": "PractitionerRole", "id": "servreq1"},
                     {"resourceType": "PractitionerRole", "id": "servreq2"},
-                    {"resourceType": "PractitionerRole", "id": "searched"},  # unique here
+                ],
+                "PractitionerRole.searched.ndjson.gz": [
+                    {"resourceType": "PractitionerRole", "id": "searched"},  # unique Role here
                 ],
             }
         )
@@ -270,10 +272,90 @@ class HydratePractitionerTests(utils.TestCase):
 
         self.assert_folder(
             {
-                "PractitionerRole.referenced.ndjson.gz": [
+                "PractitionerRole.searched.ndjson.gz": [
                     {"resourceType": "PractitionerRole", "id": "repeated"},
                 ],
                 "Practitioner.ndjson.gz": None,
+            }
+        )
+
+    async def test_searching_skips_previous_downloads(self):
+        role1 = {
+            "resourceType": "PractitionerRole",
+            "id": "role1",
+            "practitioner": {"reference": "Practitioner/pract1"},
+        }
+        role2a = {
+            "resourceType": "PractitionerRole",
+            "id": "role2a",
+            "practitioner": {"reference": "Practitioner/pract2"},
+        }
+        role2b = {
+            "resourceType": "PractitionerRole",
+            "id": "role2b",
+            "practitioner": {"reference": "Practitioner/pract2"},
+        }
+
+        # Set up a DxReport with a manual pointer at role2, to prove that we ignore such manual
+        # entries when searching (because there may be more roles to find)
+        self.write_res(
+            "DiagnosticReport",
+            [{"id": "dxrep1", "performer": [{"reference": "PractitionerRole/role2a"}]}],
+        )
+        self.write_res("Practitioner", [{"id": "pract1"}])
+
+        # Handle searching for roles from practitioners
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            self.assertEqual(request.url.params.get("practitioner"), "pract1")
+            entries = [{"resource": role1}]
+            return httpx.Response(200, json={"resourceType": "Bundle", "entry": entries})
+
+        self.set_resource_search_route(respond)
+
+        def get_role2(
+            request: httpx.Request, res_type: str, res_id: str, **kwargs
+        ) -> httpx.Response:
+            if res_id == "role2a":
+                return httpx.Response(200, request=request, json=role2a)
+            elif res_id == "pract2":  # from Role, just ignore for now
+                return httpx.Response(404, request=request)
+            else:
+                self.fail(f"Unexpected res_id {res_id}")
+
+        self.set_resource_route(get_role2)
+
+        # Do first search, on just one Practitioner
+        await self.cli("hydrate", self.folder, "--tasks=practitioner")
+
+        self.assert_folder(
+            {
+                "DiagnosticReport.ndjson.gz": None,
+                "Practitioner.ndjson.gz": None,
+                "PractitionerRole.referenced.ndjson.gz": [role2a],
+                "PractitionerRole.searched.ndjson.gz": [role1],
+            }
+        )
+
+        # Now a second Practitioner appears - if we hydrate again, we should only search this one
+        self.write_res("Practitioner", [{"id": "pract1"}, {"id": "pract2"}])
+
+        # Handle searching for roles from practitioners
+        def respond(request: httpx.Request, res_type: str) -> httpx.Response:
+            self.assertEqual(request.url.params.get("practitioner"), "pract2")
+            entries = [{"resource": role2a}, {"resource": role2b}]
+            return httpx.Response(200, json={"resourceType": "Bundle", "entry": entries})
+
+        self.set_resource_search_route(respond)
+
+        # Do second search
+        await self.cli("hydrate", self.folder, "--tasks=practitioner")
+
+        self.assert_folder(
+            {
+                "DiagnosticReport.ndjson.gz": None,
+                "Practitioner.ndjson.gz": None,
+                "PractitionerRole.referenced.ndjson.gz": [role2a],
+                "PractitionerRole.searched.ndjson.gz": [role1, role2a, role2b],
             }
         )
 

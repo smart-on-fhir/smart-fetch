@@ -2,7 +2,7 @@ import abc
 import dataclasses
 import enum
 import itertools
-from collections.abc import AsyncIterable, Callable
+from collections.abc import AsyncIterable, Callable, Iterator
 from functools import partial
 
 import cumulus_fhir_support as cfs
@@ -55,6 +55,7 @@ class ReferenceDownloadTask(Task):
     FILE_SLUG = "referenced"
 
     async def run(self, workdir: str, source_dir: str | None = None, **kwargs) -> None:
+        rich.print(f"Downloading referenced {self.OUTPUT_RES_TYPE}s from {self.INPUT_RES_TYPE}s.")
         stats = await process(
             task_name=self.NAME,
             desc="Downloading",
@@ -84,14 +85,17 @@ class ReferenceDownloadTask(Task):
                 cls._resolve_ref_field(child, parts[1]) for child in children
             )
 
-    async def process_one(self, resource: dict, id_pool: set[str], **kwargs) -> Result:
+    @classmethod
+    def resolve_ref_fields(cls, resource: dict) -> Iterator[str]:
         refs = itertools.chain.from_iterable(
-            self._resolve_ref_field(resource, field) for field in self.REFS
+            cls._resolve_ref_field(resource, field) for field in cls.REFS
         )
+        return filter(None, [ref.get("reference") for ref in refs])
+
+    async def process_one(self, resource: dict, id_pool: set[str], **kwargs) -> Result:
+        refs = self.resolve_ref_fields(resource)
         results = [
-            await download_reference(
-                self.client, id_pool, ref.get("reference"), self.OUTPUT_RES_TYPE
-            )
+            await download_reference(self.client, id_pool, ref, self.OUTPUT_RES_TYPE)
             for ref in refs
         ]
         # Recurse on results if input and output res types are the same.
@@ -142,43 +146,36 @@ class TaskStats:
         for reason in reasons:
             self._add(reason)
 
-    def print(self, adjective: str, resource_header: str, item_header: str | None = None):
+    def print(self, adjective: str, resource_header: str, item_header: str):
+        if resource_header == item_header:
+            resource_header = f"Source {resource_header}"
+            item_header = f"Target {item_header}"
         table = rich.table.Table(
             "",
             rich.table.Column(header=resource_header, justify="right"),
             box=None,
         )
-        if item_header:
-            table.add_column(header=item_header, justify="right")
-            table.add_row("Total examined", f"{self.total_resources:,}", f"{self.total:,}")
-            if self.already_done:
-                table.add_row(
-                    f"Already {adjective}",
-                    f"{self.already_done_resources:,}",
-                    f"{self.already_done:,}",
-                )
+        table.add_column(header=item_header, justify="right")
+        table.add_row("Total examined", f"{self.total_resources:,}", f"{self.total:,}")
+        if self.already_done:
             table.add_row(
-                f"Newly {adjective}", f"{self.newly_done_resources:,}", f"{self.newly_done:,}"
+                f"Already {adjective}",
+                f"{self.already_done_resources:,}",
+                f"{self.already_done:,}",
             )
-            if self.fatal_errors:
-                table.add_row(
-                    "Fatal errors", f"{self.fatal_errors_resources:,}", f"{self.fatal_errors:,}"
-                )
-            if self.retry_errors:
-                table.add_row(
-                    "Retried but gave up",
-                    f"{self.retry_errors_resources:,}",
-                    f"{self.retry_errors:,}",
-                )
-        else:
-            table.add_row("Total examined", f"{self.total:,}")
-            if self.already_done:
-                table.add_row(f"Already {adjective}", f"{self.already_done:,}")
-            table.add_row(f"Newly {adjective}", f"{self.newly_done:,}")
-            if self.fatal_errors:
-                table.add_row("Fatal errors", f"{self.fatal_errors:,}")
-            if self.retry_errors:
-                table.add_row("Retried but gave up", f"{self.retry_errors:,}")
+        table.add_row(
+            f"Newly {adjective}", f"{self.newly_done_resources:,}", f"{self.newly_done:,}"
+        )
+        if self.fatal_errors:
+            table.add_row(
+                "Fatal errors", f"{self.fatal_errors_resources:,}", f"{self.fatal_errors:,}"
+            )
+        if self.retry_errors:
+            table.add_row(
+                "Retried but gave up",
+                f"{self.retry_errors_resources:,}",
+                f"{self.retry_errors:,}",
+            )
         rich.get_console().print(table)
 
 
