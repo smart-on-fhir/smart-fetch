@@ -2,7 +2,7 @@
 name = "smart-fetch"
 requires-python = ">= 3.11"
 dependencies = [
-    "cumulus-fhir-support >= 1.5",
+    "cumulus-fhir-support >= 1.10",
     "rich",
 ]
 authors = [

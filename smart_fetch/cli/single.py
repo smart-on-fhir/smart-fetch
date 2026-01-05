@@ -37,8 +37,8 @@ async def single_main(args: argparse.Namespace) -> None:
     async with rest_client:
         try:
             response = await rest_client.request("GET", args.resource)
-        except cfs.NetworkError as exc:
-            if args.verbose:
+        except cfs.RequestError as exc:
+            if args.verbose and getattr(exc, "response", None):
                 sys.exit(exc.response.text)
             else:
                 sys.exit(str(exc))
