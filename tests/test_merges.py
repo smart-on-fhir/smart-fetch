@@ -100,7 +100,7 @@ class MergeTests(utils.TestCase):
                     "Patient.002.ndjson.gz": None,
                     "Patient.003.ndjson.gz": None,
                     "deleted": {
-                        "Patient.ndjson.gz": [self.deleted("pat1")],
+                        "Bundle.Patient.ndjson.gz": [self.deleted("pat1")],
                     },
                 },
                 ".metadata": None,
@@ -258,7 +258,7 @@ class MergeTests(utils.TestCase):
                     "ServiceRequest.001.ndjson.gz": None,
                     "deleted": {
                         # Notices the missing immunization from the last full export
-                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm3")],
+                        "Bundle.Immunization.ndjson.gz": [deleted_row("Immunization/imm3")],
                     },
                 },
                 "003.second-inc": {
@@ -276,9 +276,9 @@ class MergeTests(utils.TestCase):
                     "ServiceRequest.ndjson.gz": None,
                     "deleted": {
                         # Does *not* notice the immunization from two full exports ago (imm3)
-                        "Immunization.ndjson.gz": [deleted_row("Immunization/imm1")],
+                        "Bundle.Immunization.ndjson.gz": [deleted_row("Immunization/imm1")],
                         # Notices the Observation from the incremental and the full.
-                        "Observation.ndjson.gz": [
+                        "Bundle.Observation.ndjson.gz": [
                             deleted_row("Observation/obs2"),
                             deleted_row("Observation/obs2.1"),
                             deleted_row("Observation/obs3"),

@@ -159,7 +159,7 @@ def write_deleted_file(
     deleted_dir = os.path.join(workdir, "deleted")
     os.makedirs(deleted_dir, exist_ok=True)
 
-    deleted_file = ndjson.filename(deleted_dir, f"{res_type}.ndjson", compress=compress)
+    deleted_file = ndjson.filename(deleted_dir, f"Bundle.{res_type}.ndjson", compress=compress)
     with ndjson.NdjsonWriter(deleted_file) as writer:
         # Write a new bundle for each resource - this is mildly wasteful of space, but it makes
         # it easier to read/grep and most importantly, get a quick count of deleted resources by
