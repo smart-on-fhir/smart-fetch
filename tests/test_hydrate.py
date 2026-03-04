@@ -46,7 +46,7 @@ class HydrateTests(utils.TestCase):
 
         self.assert_folder(
             {
-                f"{resources.MEDICATION}.ndjson.gz": [
+                f"{resources.MEDICATION}.referenced.ndjson.gz": [
                     {"resourceType": resources.MEDICATION, "id": "good"},
                 ],
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
@@ -77,6 +77,8 @@ class HydrateTests(utils.TestCase):
             {
                 f"{resources.MEDICATION}.ndjson.gz": [
                     {"resourceType": resources.MEDICATION, "id": "1"},
+                ],
+                f"{resources.MEDICATION}.referenced.ndjson.gz": [
                     {"resourceType": resources.MEDICATION, "id": "2"},
                 ],
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,

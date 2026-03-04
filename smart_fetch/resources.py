@@ -9,6 +9,7 @@ ENCOUNTER = "Encounter"
 IMMUNIZATION = "Immunization"
 LOCATION = "Location"
 MEDICATION = "Medication"
+MEDICATION_DISPENSE = "MedicationDispense"
 MEDICATION_REQUEST = "MedicationRequest"
 OBSERVATION = "Observation"
 OPERATION_OUTCOME = "OperationOutcome"
@@ -30,6 +31,7 @@ PATIENT_TYPES = [
     DIAGNOSTIC_REPORT,
     DOCUMENT_REFERENCE,
     IMMUNIZATION,
+    MEDICATION_DISPENSE,
     MEDICATION_REQUEST,
     OBSERVATION,
     PROCEDURE,
@@ -69,6 +71,7 @@ CREATED_SEARCH_FIELDS = {
     DOCUMENT_REFERENCE: "date",
     # ENCOUNTER: has no admin date to search on (but does have clinical date of "date")
     # IMMUNIZATION has `recorded` but you can't search it (but does have clinical date of "date")
+    # MEDICATION_DISPENSE has no admin date to search on (but does have two clinical dates)
     MEDICATION_REQUEST: "authoredon",
     OBSERVATION: "issued",  # not searchable per spec, but some servers allow it (notably, Epic)
     # PATIENT has no admin date to search on (which is sort of good - merges.py relies on it)

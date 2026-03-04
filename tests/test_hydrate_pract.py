@@ -83,6 +83,22 @@ class HydratePractitionerTests(utils.TestCase):
             ],
         )
         self.write_res(
+            resources.MEDICATION_DISPENSE,
+            [
+                {
+                    "performer": [{"actor": {"reference": "Practitioner/meddisp1"}}],
+                    "receiver": [{"reference": "Practitioner/meddisp2"}],
+                    "substitution": {"responsibleParty": [{"reference": "Practitioner/meddisp3"}]},
+                },
+                {
+                    "performer": [{"actor": {"reference": "PractitionerRole/meddisp1"}}],
+                    "substitution": {
+                        "responsibleParty": [{"reference": "PractitionerRole/meddisp2"}]
+                    },
+                },
+            ],
+        )
+        self.write_res(
             resources.MEDICATION_REQUEST,
             [
                 {
@@ -183,6 +199,7 @@ class HydratePractitionerTests(utils.TestCase):
                 "Encounter.ndjson.gz": None,
                 "Immunization.ndjson.gz": None,
                 "Observation.ndjson.gz": None,
+                "MedicationDispense.ndjson.gz": None,
                 "MedicationRequest.ndjson.gz": None,
                 "Patient.ndjson.gz": None,
                 "Procedure.ndjson.gz": None,
@@ -206,6 +223,9 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "Practitioner", "id": "doc3"},
                     {"resourceType": "Practitioner", "id": "enc1"},
                     {"resourceType": "Practitioner", "id": "imm1"},
+                    {"resourceType": "Practitioner", "id": "meddisp1"},
+                    {"resourceType": "Practitioner", "id": "meddisp2"},
+                    {"resourceType": "Practitioner", "id": "meddisp3"},
                     {"resourceType": "Practitioner", "id": "medreq1"},
                     {"resourceType": "Practitioner", "id": "medreq2"},
                     {"resourceType": "Practitioner", "id": "medreq3"},
@@ -231,6 +251,8 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "PractitionerRole", "id": "doc3"},
                     {"resourceType": "PractitionerRole", "id": "enc1"},
                     {"resourceType": "PractitionerRole", "id": "imm1"},
+                    {"resourceType": "PractitionerRole", "id": "meddisp1"},
+                    {"resourceType": "PractitionerRole", "id": "meddisp2"},
                     {"resourceType": "PractitionerRole", "id": "medreq1"},
                     {"resourceType": "PractitionerRole", "id": "medreq2"},
                     {"resourceType": "PractitionerRole", "id": "medreq3"},

@@ -20,6 +20,15 @@ class HydrateLocationTests(utils.TestCase):
         )
         self.write_res(resources.IMMUNIZATION, [{"location": {"reference": "Location/imm1"}}])
         self.write_res(resources.LOCATION, [{"partOf": {"reference": "Location/loc1"}}])
+        self.write_res(
+            resources.MEDICATION_DISPENSE,
+            [
+                {
+                    "location": {"reference": "Location/meddisp1"},
+                    "destination": {"reference": "Location/meddisp2"},
+                }
+            ],
+        )
         self.write_res(resources.OBSERVATION, [{"subject": {"reference": "Location/obs1"}}])
         self.write_res(resources.PRACTITIONER_ROLE, [{"location": [{"reference": "Location/pr1"}]}])
         self.write_res(resources.PROCEDURE, [{"location": {"reference": "Location/proc1"}}])
@@ -43,6 +52,7 @@ class HydrateLocationTests(utils.TestCase):
                 "DiagnosticReport.ndjson.gz": None,
                 "Encounter.ndjson.gz": None,
                 "Immunization.ndjson.gz": None,
+                "MedicationDispense.ndjson.gz": None,
                 "Observation.ndjson.gz": None,
                 "PractitionerRole.ndjson.gz": None,
                 "Procedure.ndjson.gz": None,
@@ -62,6 +72,8 @@ class HydrateLocationTests(utils.TestCase):
                     {"resourceType": "Location", "id": "enc3"},
                     {"resourceType": "Location", "id": "imm1"},
                     {"resourceType": "Location", "id": "loc1"},
+                    {"resourceType": "Location", "id": "meddisp1"},
+                    {"resourceType": "Location", "id": "meddisp2"},
                     {"resourceType": "Location", "id": "obs1"},
                     {"resourceType": "Location", "id": "pr1"},
                     {"resourceType": "Location", "id": "proc1"},

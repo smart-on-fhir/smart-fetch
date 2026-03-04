@@ -75,6 +75,19 @@ class ImmPractitionerRoleTask(ImmPractitionerTask):
     OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
 
 
+class MedDispPractitionerTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "meddisp-pract"
+    INPUT_RES_TYPE = resources.MEDICATION_DISPENSE
+    OUTPUT_RES_TYPE = resources.PRACTITIONER
+    REFS = ("performer*.actor", "receiver*", "substitution.responsibleParty*")
+
+
+class MedDispPractitionerRoleTask(MedDispPractitionerTask):
+    NAME = "meddisp-practrole"
+    OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
+    REFS = ("performer*.actor", "substitution.responsibleParty*")
+
+
 class MedReqPractitionerTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "medreq-pract"
     INPUT_RES_TYPE = resources.MEDICATION_REQUEST
@@ -221,6 +234,8 @@ PRACTITIONER_TASKS = [
     EncPractitionerRoleTask,
     ImmPractitionerTask,
     ImmPractitionerRoleTask,
+    MedDispPractitionerTask,
+    MedDispPractitionerRoleTask,
     MedReqPractitionerTask,
     MedReqPractitionerRoleTask,
     ObsPractitionerTask,

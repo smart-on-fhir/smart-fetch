@@ -29,6 +29,13 @@ class ImmLocationTask(hydrate_utils.ReferenceDownloadTask):
     REFS = ("location",)
 
 
+class MedDispLocationTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "meddisp-loc"
+    INPUT_RES_TYPE = resources.MEDICATION_DISPENSE
+    OUTPUT_RES_TYPE = resources.LOCATION
+    REFS = ("location", "destination")
+
+
 class ObsLocationTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "obs-loc"
     INPUT_RES_TYPE = resources.OBSERVATION
@@ -69,6 +76,7 @@ LOCATION_TASKS = [
     DxReportLocationTask,
     EncLocationTask,
     ImmLocationTask,
+    MedDispLocationTask,
     ObsLocationTask,
     PractRoleLocationTask,
     ProcedureLocationTask,

@@ -50,6 +50,10 @@ class HydrateOrganizationTests(utils.TestCase):
             resources.LOCATION, [{"managingOrganization": {"reference": "Organization/loc1"}}]
         )
         self.write_res(
+            resources.MEDICATION_DISPENSE,
+            [{"performer": [{"actor": {"reference": "Organization/meddisp1"}}]}],
+        )
+        self.write_res(
             resources.MEDICATION_REQUEST,
             [
                 {
@@ -122,6 +126,7 @@ class HydrateOrganizationTests(utils.TestCase):
                 "Encounter.ndjson.gz": None,
                 "Immunization.ndjson.gz": None,
                 "Location.ndjson.gz": None,
+                "MedicationDispense.ndjson.gz": None,
                 "MedicationRequest.ndjson.gz": None,
                 "Observation.ndjson.gz": None,
                 "Patient.ndjson.gz": None,
@@ -150,6 +155,7 @@ class HydrateOrganizationTests(utils.TestCase):
                     {"resourceType": "Organization", "id": "imm2"},
                     {"resourceType": "Organization", "id": "imm3"},
                     {"resourceType": "Organization", "id": "loc1"},
+                    {"resourceType": "Organization", "id": "meddisp1"},
                     {"resourceType": "Organization", "id": "medreq1"},
                     {"resourceType": "Organization", "id": "medreq2"},
                     {"resourceType": "Organization", "id": "medreq3"},

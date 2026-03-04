@@ -488,6 +488,7 @@ class CrawlTests(utils.TestCase):
             resources.DOCUMENT_REFERENCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
             resources.ENCOUNTER: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.IMMUNIZATION: [httpx.QueryParams(patient="pat1")],  # no extra param
+            resources.MEDICATION_DISPENSE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.MEDICATION_REQUEST: [
                 httpx.QueryParams(patient="pat1", authoredon="gt2022-01-05")
             ],
@@ -644,6 +645,11 @@ class CrawlTests(utils.TestCase):
                     {"resourceType": resources.IMMUNIZATION, "id": "1", "recorded": "2003"}
                 ]
             },
+            resources.MEDICATION_DISPENSE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.MEDICATION_DISPENSE, "id": "1"}
+                ]
+            },
             resources.MEDICATION_REQUEST: {
                 httpx.QueryParams(patient="pat1"): [
                     {"resourceType": resources.MEDICATION_REQUEST, "id": "1", "authoredOn": "2004"}
@@ -690,7 +696,7 @@ class CrawlTests(utils.TestCase):
             extra_time = utils.FROZEN_DATETIME + datetime.timedelta(minutes=minutes)
             return extra_time.astimezone().isoformat()
 
-        final_timestamp = frozen_plus(11)
+        final_timestamp = frozen_plus(len(resources.PATIENT_TYPES) - 1)
 
         expected_log_transaction_time = "2001-01-01T00:00:00+14:00"
         self.assert_folder(
@@ -708,9 +714,10 @@ class CrawlTests(utils.TestCase):
                         resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+14:00",
                         resources.ENCOUNTER: frozen_plus(0),
                         resources.IMMUNIZATION: "2003-01-01T00:00:00+14:00",
+                        resources.MEDICATION_DISPENSE: frozen_plus(7),
                         resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+14:00",
                         resources.OBSERVATION: "2005-01-01T00:00:00+14:00",
-                        resources.PROCEDURE: frozen_plus(9),
+                        resources.PROCEDURE: frozen_plus(10),
                         resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
                     },
                     "filters": {
@@ -721,6 +728,7 @@ class CrawlTests(utils.TestCase):
                         resources.DOCUMENT_REFERENCE: [],
                         resources.ENCOUNTER: [],
                         resources.IMMUNIZATION: [],
+                        resources.MEDICATION_DISPENSE: [],
                         resources.MEDICATION_REQUEST: [],
                         resources.OBSERVATION: [f"category={utils.DEFAULT_OBS_CATEGORIES}"],
                         resources.PROCEDURE: [],
@@ -735,6 +743,7 @@ class CrawlTests(utils.TestCase):
                 f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": None,
                 f"{resources.ENCOUNTER}.ndjson.gz": None,
                 f"{resources.IMMUNIZATION}.ndjson.gz": None,
+                f"{resources.MEDICATION_DISPENSE}.ndjson.gz": None,
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
                 f"{resources.OBSERVATION}.ndjson.gz": None,
                 f"{resources.PATIENT}.ndjson.gz": None,
