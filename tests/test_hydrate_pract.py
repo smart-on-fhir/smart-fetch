@@ -72,6 +72,13 @@ class HydratePractitionerTests(utils.TestCase):
             ],
         )
         self.write_res(
+            resources.EPISODE_OF_CARE,
+            [
+                {"careManager": {"reference": "Practitioner/epofcare1"}},
+                {"careManager": {"reference": "PractitionerRole/epofcare1"}},
+            ],
+        )
+        self.write_res(
             resources.IMMUNIZATION,
             [
                 {
@@ -197,6 +204,7 @@ class HydratePractitionerTests(utils.TestCase):
                 "DiagnosticReport.ndjson.gz": None,
                 "DocumentReference.ndjson.gz": None,
                 "Encounter.ndjson.gz": None,
+                "EpisodeOfCare.ndjson.gz": None,
                 "Immunization.ndjson.gz": None,
                 "Observation.ndjson.gz": None,
                 "MedicationDispense.ndjson.gz": None,
@@ -222,6 +230,7 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "Practitioner", "id": "doc2"},
                     {"resourceType": "Practitioner", "id": "doc3"},
                     {"resourceType": "Practitioner", "id": "enc1"},
+                    {"resourceType": "Practitioner", "id": "epofcare1"},
                     {"resourceType": "Practitioner", "id": "imm1"},
                     {"resourceType": "Practitioner", "id": "meddisp1"},
                     {"resourceType": "Practitioner", "id": "meddisp2"},
@@ -250,6 +259,7 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "PractitionerRole", "id": "doc2"},
                     {"resourceType": "PractitionerRole", "id": "doc3"},
                     {"resourceType": "PractitionerRole", "id": "enc1"},
+                    {"resourceType": "PractitionerRole", "id": "epofcare1"},
                     {"resourceType": "PractitionerRole", "id": "imm1"},
                     {"resourceType": "PractitionerRole", "id": "meddisp1"},
                     {"resourceType": "PractitionerRole", "id": "meddisp2"},

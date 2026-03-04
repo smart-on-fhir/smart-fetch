@@ -487,6 +487,7 @@ class CrawlTests(utils.TestCase):
             resources.DIAGNOSTIC_REPORT: [httpx.QueryParams(patient="pat1", issued="gt2022-01-05")],
             resources.DOCUMENT_REFERENCE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
             resources.ENCOUNTER: [httpx.QueryParams(patient="pat1")],  # no extra param
+            resources.EPISODE_OF_CARE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.IMMUNIZATION: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.MEDICATION_DISPENSE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.MEDICATION_REQUEST: [
@@ -640,6 +641,11 @@ class CrawlTests(utils.TestCase):
                     {"resourceType": resources.ENCOUNTER, "id": "1"}
                 ]
             },
+            resources.EPISODE_OF_CARE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.EPISODE_OF_CARE, "id": "1"}
+                ]
+            },
             resources.IMMUNIZATION: {
                 httpx.QueryParams(patient="pat1"): [
                     {"resourceType": resources.IMMUNIZATION, "id": "1", "recorded": "2003"}
@@ -713,11 +719,12 @@ class CrawlTests(utils.TestCase):
                         resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+14:00",
                         resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+14:00",
                         resources.ENCOUNTER: frozen_plus(0),
+                        resources.EPISODE_OF_CARE: frozen_plus(6),
                         resources.IMMUNIZATION: "2003-01-01T00:00:00+14:00",
-                        resources.MEDICATION_DISPENSE: frozen_plus(7),
+                        resources.MEDICATION_DISPENSE: frozen_plus(8),
                         resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+14:00",
                         resources.OBSERVATION: "2005-01-01T00:00:00+14:00",
-                        resources.PROCEDURE: frozen_plus(10),
+                        resources.PROCEDURE: frozen_plus(11),
                         resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
                     },
                     "filters": {
@@ -727,6 +734,7 @@ class CrawlTests(utils.TestCase):
                         resources.DIAGNOSTIC_REPORT: [],
                         resources.DOCUMENT_REFERENCE: [],
                         resources.ENCOUNTER: [],
+                        resources.EPISODE_OF_CARE: [],
                         resources.IMMUNIZATION: [],
                         resources.MEDICATION_DISPENSE: [],
                         resources.MEDICATION_REQUEST: [],
@@ -742,6 +750,7 @@ class CrawlTests(utils.TestCase):
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": None,
                 f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": None,
                 f"{resources.ENCOUNTER}.ndjson.gz": None,
+                f"{resources.EPISODE_OF_CARE}.ndjson.gz": None,
                 f"{resources.IMMUNIZATION}.ndjson.gz": None,
                 f"{resources.MEDICATION_DISPENSE}.ndjson.gz": None,
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,

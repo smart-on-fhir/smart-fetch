@@ -490,11 +490,9 @@ class ExportTests(utils.TestCase):
         if export_mode == "crawl":
             suffix = "ndjson.gz"
             res_time = utils.FROZEN_TIMESTAMP
-            extra_files = {"Patient.001.ndjson.gz": "001.2021-09-14/Patient.001.ndjson.gz"}
         else:
             suffix = "001.ndjson.gz"
             res_time = utils.TRANSACTION_TIME
-            extra_files = {}
 
         # First interrupted run
         with self.assertRaises(RuntimeError):
@@ -525,7 +523,6 @@ class ExportTests(utils.TestCase):
                     f"{resources.DOCUMENT_REFERENCE}.{suffix}": [doc1],
                 },
                 ".metadata": None,
-                **extra_files,
             }
         )
 
@@ -1022,5 +1019,82 @@ class ExportTests(utils.TestCase):
                     "Patient.001.ndjson": [pat1],
                 },
                 ".metadata": None,
+            }
+        )
+
+    async def test_skip_epofcare_with_epic(self):
+        self.server.get("metadata").respond(
+            200, json=self.metadata | {"software": {"name": "Epic"}}
+        )
+
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.mock_bulk(output=[pat1])
+
+        await self.cli("export", self.folder, "--type=EpisodeOfCare,Patient")
+
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": {
+                    # Check metadata to confirm the EpOfCare timestamp is now()
+                    ".metadata": {
+                        "complete": True,
+                        "done": {
+                            "EpisodeOfCare": utils.FROZEN_TIMESTAMP,
+                            "Patient": utils.TRANSACTION_TIME,
+                        },
+                        "filters": {"EpisodeOfCare": [], "Patient": []},
+                        "kind": "output",
+                        "since": None,
+                        "timestamp": utils.FROZEN_TIMESTAMP,
+                        "version": utils.version,
+                    },
+                    "log.ndjson": None,
+                    "Patient.001.ndjson.gz": None,
+                },
+            }
+        )
+
+    async def test_epofcare_exported_and_hydrated(self):
+        """Confirm we don't duplicate EpOfCare results"""
+        self.mock_bulk(
+            output=[
+                {
+                    "resourceType": "Encounter",
+                    "id": "enc1",
+                    "episodeOfCare": [
+                        {"reference": "EpisodeOfCare/referenced"},
+                        {"reference": "EpisodeOfCare/searched"},
+                    ],
+                },
+                {"resourceType": "EpisodeOfCare", "id": "searched"},
+                {"resourceType": "Patient", "id": "pat1"},
+            ]
+        )
+
+        self.set_basic_resource_route()
+
+        await self.cli("export", self.folder, "--type=Encounter,EpisodeOfCare,Patient")
+
+        self.assert_folder(
+            {
+                ".metadata": None,
+                "Encounter.001.ndjson.gz": None,
+                "EpisodeOfCare.001.ndjson.gz": None,
+                "EpisodeOfCare.002.ndjson.gz": None,
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": {
+                    ".metadata": None,
+                    "log.ndjson": None,
+                    "Encounter.001.ndjson.gz": None,
+                    "EpisodeOfCare.001.ndjson.gz": [
+                        {"resourceType": "EpisodeOfCare", "id": "searched"},
+                    ],
+                    "EpisodeOfCare.referenced.ndjson.gz": [
+                        {"resourceType": "EpisodeOfCare", "id": "referenced"},
+                    ],
+                    "Patient.001.ndjson.gz": None,
+                },
             }
         )

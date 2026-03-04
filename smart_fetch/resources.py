@@ -6,6 +6,7 @@ DEVICE = "Device"
 DIAGNOSTIC_REPORT = "DiagnosticReport"
 DOCUMENT_REFERENCE = "DocumentReference"
 ENCOUNTER = "Encounter"
+EPISODE_OF_CARE = "EpisodeOfCare"
 IMMUNIZATION = "Immunization"
 LOCATION = "Location"
 MEDICATION = "Medication"
@@ -21,7 +22,8 @@ PROCEDURE = "Procedure"
 SERVICE_REQUEST = "ServiceRequest"
 
 # All resources that are linked to patients, in the order we usually like to process them.
-# Patient first, Encounter, then the rest.
+# Patient first, Encounter, then the rest. (Encounters so early is due to a Cumulus quirk,
+# where it likes to have Encounters exported before/at-same-time as other patient resources.)
 PATIENT_TYPES = [
     PATIENT,
     ENCOUNTER,
@@ -30,6 +32,7 @@ PATIENT_TYPES = [
     DEVICE,
     DIAGNOSTIC_REPORT,
     DOCUMENT_REFERENCE,
+    EPISODE_OF_CARE,
     IMMUNIZATION,
     MEDICATION_DISPENSE,
     MEDICATION_REQUEST,
@@ -70,6 +73,7 @@ CREATED_SEARCH_FIELDS = {
     DIAGNOSTIC_REPORT: "issued",
     DOCUMENT_REFERENCE: "date",
     # ENCOUNTER: has no admin date to search on (but does have clinical date of "date")
+    # EPISODE_OF_CARE has no admin date (but does have clinical date of "period")
     # IMMUNIZATION has `recorded` but you can't search it (but does have clinical date of "date")
     # MEDICATION_DISPENSE has no admin date to search on (but does have two clinical dates)
     MEDICATION_REQUEST: "authoredon",

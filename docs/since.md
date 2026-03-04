@@ -68,7 +68,9 @@ But it's something to be aware of.
 Resource types affected by this:
 - Device
 - Encounter
+- EpisodeOfCare
 - Immunization
+- MedicationDispense
 - Patient
 - Procedure
 

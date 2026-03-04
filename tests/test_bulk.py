@@ -225,6 +225,7 @@ class BulkTests(utils.TestCase):
                         "DiagnosticReport": utils.TRANSACTION_TIME,
                         "DocumentReference": utils.TRANSACTION_TIME,
                         "Encounter": utils.TRANSACTION_TIME,
+                        "EpisodeOfCare": utils.TRANSACTION_TIME,
                         "Immunization": utils.TRANSACTION_TIME,
                         "MedicationDispense": utils.TRANSACTION_TIME,
                         "MedicationRequest": utils.TRANSACTION_TIME,
@@ -240,6 +241,7 @@ class BulkTests(utils.TestCase):
                         "DiagnosticReport": [],
                         "DocumentReference": [],
                         "Encounter": [],
+                        "EpisodeOfCare": [],
                         "Immunization": [],
                         "MedicationDispense": [],
                         "MedicationRequest": [],
@@ -399,7 +401,7 @@ class BulkTests(utils.TestCase):
             await self.cli("bulk", self.folder, "--group=group1")
 
     async def test_delete_error_is_ignored(self):
-        self.mock_bulk("group1", delete_response=httpx.Response(404))
+        self.mock_bulk("group1", delete_response=httpx.Response(400))
         # No fatal error
         await self.cli("bulk", self.folder, "--group=group1")
 

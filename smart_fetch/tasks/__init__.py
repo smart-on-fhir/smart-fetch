@@ -1,3 +1,4 @@
+from .epofcare import EPISODE_OF_CARE_TASKS
 from .inline import INLINE_TASKS
 from .loc import LOCATION_TASKS
 from .meds import MEDICATION_TASKS
@@ -6,6 +7,7 @@ from .org import ORGANIZATION_TASKS
 from .pract import PRACTITIONER_TASKS
 
 all_tasks = {
+    "episodeofcare": EPISODE_OF_CARE_TASKS,
     "inline": INLINE_TASKS,
     "medication": MEDICATION_TASKS,
     "observation": OBSERVATION_TASKS,

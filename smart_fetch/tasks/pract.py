@@ -63,6 +63,18 @@ class EncPractitionerRoleTask(EncPractitionerTask):
     OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
 
 
+class EpOfCarePractitionerTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "epofcare-pract"
+    INPUT_RES_TYPE = resources.EPISODE_OF_CARE
+    OUTPUT_RES_TYPE = resources.PRACTITIONER
+    REFS = ("careManager",)
+
+
+class EpOfCarePractitionerRoleTask(EpOfCarePractitionerTask):
+    NAME = "epofcare-practrole"
+    OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
+
+
 class ImmPractitionerTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "imm-pract"
     INPUT_RES_TYPE = resources.IMMUNIZATION
@@ -232,6 +244,8 @@ PRACTITIONER_TASKS = [
     DocPractitionerRoleTask,
     EncPractitionerTask,
     EncPractitionerRoleTask,
+    EpOfCarePractitionerTask,
+    EpOfCarePractitionerRoleTask,
     ImmPractitionerTask,
     ImmPractitionerRoleTask,
     MedDispPractitionerTask,

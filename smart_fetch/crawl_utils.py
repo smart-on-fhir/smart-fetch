@@ -54,7 +54,6 @@ async def perform_crawl(
     id_file: str | None,
     id_list: str | None,
     id_system: str | None,
-    finish_callback: Callable[[str], Awaitable[None]] | None = None,
     managed_dir: str | None = None,
     compress: bool = False,
 ) -> None:
@@ -94,7 +93,6 @@ async def perform_crawl(
     processor_finish = partial(
         finish_wrapper,
         metadata,
-        finish_callback,
         transaction_times,
         workdir,
         managed_dir,
@@ -120,8 +118,6 @@ async def perform_crawl(
     if resources.PATIENT in filter_params:
         if metadata.is_done(resources.PATIENT):
             rich.print(f"Skipping {resources.PATIENT}, already done.")
-            if finish_callback:
-                await finish_callback(resources.PATIENT)
         else:
             download_patients = True
         del filter_params[resources.PATIENT]
@@ -164,8 +160,19 @@ async def perform_crawl(
     for res_type in filter_params:
         if metadata.is_done(res_type):
             rich.print(f"Skipping {res_type}, already done.")
-            if finish_callback:
-                await finish_callback(res_type)
+            continue
+
+        if res_type == resources.EPISODE_OF_CARE and rest_client.server_type == cfs.ServerType.EPIC:
+            # Epic requires both a patient= and a type= argument, and you can't get clever with the
+            # type arg to be like "type:not=nothing", it has to a specific system AND code.
+            # So until they change that, we will skip crawling EpisodeOfCare just so the user
+            # doesn't end up with a huge amount of error messages from Epic. Hydration will pick
+            # them up instead.
+            rich.print(
+                f"Skipping {res_type}, Epic does not support searching without a type, "
+                "so they will have to be hydrated instead."
+            )
+            metadata.mark_done(res_type, timing.now())
             continue
 
         processor.add_source(
@@ -255,7 +262,6 @@ async def gather_patients(
 
 async def finish_wrapper(
     metadata: lifecycle.OutputMetadata,
-    custom_finish: Callable[[str], Awaitable[None]] | None,
     transaction_times: dict[str, datetime.datetime],
     workdir: str,
     managed_dir: str,
@@ -283,8 +289,6 @@ async def finish_wrapper(
         transaction_times[res_type] = timestamp
 
     metadata.mark_done(res_type, transaction_times[res_type])
-    if custom_finish:
-        await custom_finish(res_type)
 
 
 async def resource_urls_with_new_patients(
