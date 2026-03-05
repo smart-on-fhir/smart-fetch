@@ -43,6 +43,13 @@ class LocOrgTask(hydrate_utils.ReferenceDownloadTask):
     REFS = ("managingOrganization",)
 
 
+class MedDispOrgTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "meddisp-org"
+    INPUT_RES_TYPE = resources.MEDICATION_DISPENSE
+    OUTPUT_RES_TYPE = resources.ORGANIZATION
+    REFS = ("performer*.actor",)
+
+
 class MedReqOrgTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "medreq-org"
     INPUT_RES_TYPE = resources.MEDICATION_REQUEST
@@ -106,6 +113,7 @@ ORGANIZATION_TASKS = [
     EncOrgTask,
     ImmOrgTask,
     LocOrgTask,
+    MedDispOrgTask,
     MedReqOrgTask,
     ObsOrgTask,
     PatOrgTask,

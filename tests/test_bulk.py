@@ -226,6 +226,7 @@ class BulkTests(utils.TestCase):
                         "DocumentReference": utils.TRANSACTION_TIME,
                         "Encounter": utils.TRANSACTION_TIME,
                         "Immunization": utils.TRANSACTION_TIME,
+                        "MedicationDispense": utils.TRANSACTION_TIME,
                         "MedicationRequest": utils.TRANSACTION_TIME,
                         "Observation": utils.TRANSACTION_TIME,
                         "Patient": utils.TRANSACTION_TIME,
@@ -240,6 +241,7 @@ class BulkTests(utils.TestCase):
                         "DocumentReference": [],
                         "Encounter": [],
                         "Immunization": [],
+                        "MedicationDispense": [],
                         "MedicationRequest": [],
                         "Observation": [
                             "category=social-history,vital-signs,imaging,laboratory,survey,exam,"

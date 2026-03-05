@@ -260,10 +260,8 @@ async def process(
     for res_file in cfs.list_multiline_json_in_dir(source_dir, input_type):
         if not append:
             output_file = res_file
-        elif file_slug:
-            output_file = ndjson.filename(f"{output_type}.{file_slug}.ndjson", compress=compress)
         else:
-            output_file = ndjson.filename(f"{output_type}.ndjson", compress=compress)
+            output_file = ndjson.filename(f"{output_type}.{file_slug}.ndjson", compress=compress)
         total_lines = ndjson.read_local_line_count(res_file)
         processor.add_source(
             output_type, _read(res_file), total=total_lines, output_file=output_file

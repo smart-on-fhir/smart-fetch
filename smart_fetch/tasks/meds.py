@@ -1,12 +1,18 @@
 from smart_fetch import hydrate_utils, resources
 
 
-class MedsTask(hydrate_utils.ReferenceDownloadTask):
-    NAME = "meds"
+class MedDispMedTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "meddisp-med"
+    INPUT_RES_TYPE = resources.MEDICATION_DISPENSE
+    OUTPUT_RES_TYPE = resources.MEDICATION
+    REFS = ("medicationReference",)
+
+
+class MedReqMedTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "medreq-med"
     INPUT_RES_TYPE = resources.MEDICATION_REQUEST
     OUTPUT_RES_TYPE = resources.MEDICATION
     REFS = ("medicationReference",)
-    FILE_SLUG = None  # only one Medication source, don't need to differentiate
 
 
-MEDICATION_TASKS = [MedsTask]
+MEDICATION_TASKS = [MedDispMedTask, MedReqMedTask]

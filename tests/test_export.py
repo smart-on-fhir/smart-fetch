@@ -241,13 +241,15 @@ class ExportTests(utils.TestCase):
 
         self.assert_folder(
             {
-                "Medication.001.ndjson.gz": "001.2021-09-14/Medication.ndjson.gz",
+                "Medication.001.ndjson.gz": "001.2021-09-14/Medication.referenced.ndjson.gz",
                 "MedicationRequest.001.ndjson.gz": "001.2021-09-14/MedicationRequest.001.ndjson.gz",
                 "Patient.001.ndjson.gz": "001.2021-09-14/Patient.001.ndjson.gz",
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
-                    "Medication.ndjson.gz": [{"resourceType": resources.MEDICATION, "id": "1"}],
+                    "Medication.referenced.ndjson.gz": [
+                        {"resourceType": resources.MEDICATION, "id": "1"}
+                    ],
                     "MedicationRequest.001.ndjson.gz": None,
                     "Patient.001.ndjson.gz": None,
                 },
@@ -974,12 +976,12 @@ class ExportTests(utils.TestCase):
         await self.cli("export", self.folder, "--type=MedicationRequest", "--no-compression")
         self.assert_folder(
             {
-                "Medication.001.ndjson": "001.2021-09-14/Medication.ndjson",
+                "Medication.001.ndjson": "001.2021-09-14/Medication.referenced.ndjson",
                 "MedicationRequest.001.ndjson": "001.2021-09-14/MedicationRequest.001.ndjson",
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
-                    "Medication.ndjson": [{"resourceType": "Medication", "id": "1"}],
+                    "Medication.referenced.ndjson": [{"resourceType": "Medication", "id": "1"}],
                     "MedicationRequest.001.ndjson": [medreq1],
                 },
                 ".metadata": None,
@@ -1009,13 +1011,13 @@ class ExportTests(utils.TestCase):
         self.assertEqual(missing, [])
         self.assert_folder(
             {
-                "Medication.001.ndjson": "001.2021-09-14/Medication.ndjson",
+                "Medication.001.ndjson": "001.2021-09-14/Medication.referenced.ndjson",
                 "MedicationRequest.001.ndjson": "001.2021-09-14/MedicationRequest.ndjson",
                 "Patient.001.ndjson": "001.2021-09-14/Patient.001.ndjson",
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
-                    "Medication.ndjson": [{"resourceType": "Medication", "id": "1"}],
+                    "Medication.referenced.ndjson": [{"resourceType": "Medication", "id": "1"}],
                     "MedicationRequest.ndjson": [medreq1],
                     "Patient.001.ndjson": [pat1],
                 },
