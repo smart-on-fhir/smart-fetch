@@ -65,6 +65,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                         {"type": resources.DIAGNOSTIC_REPORT, "searchParam": [{"name": "issued"}]},
                         {"type": resources.DOCUMENT_REFERENCE, "searchParam": [{"name": "date"}]},
                         {"type": resources.ENCOUNTER},
+                        {"type": resources.EPISODE_OF_CARE},
                         {"type": resources.IMMUNIZATION},
                         {"type": resources.MEDICATION_DISPENSE},
                         {

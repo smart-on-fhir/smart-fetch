@@ -29,6 +29,13 @@ class EncOrgTask(hydrate_utils.ReferenceDownloadTask):
     REFS = ("hospitalization.origin", "hospitalization.destination", "serviceProvider")
 
 
+class EpOfCareOrgTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "epofcare-org"
+    INPUT_RES_TYPE = resources.EPISODE_OF_CARE
+    OUTPUT_RES_TYPE = resources.ORGANIZATION
+    REFS = ("managingOrganization",)
+
+
 class ImmOrgTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "imm-org"
     INPUT_RES_TYPE = resources.IMMUNIZATION
@@ -111,6 +118,7 @@ ORGANIZATION_TASKS = [
     DxReportOrgTask,
     DocOrgTask,
     EncOrgTask,
+    EpOfCareOrgTask,
     ImmOrgTask,
     LocOrgTask,
     MedDispOrgTask,

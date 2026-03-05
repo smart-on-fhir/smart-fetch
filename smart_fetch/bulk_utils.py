@@ -517,7 +517,10 @@ class BulkExporter:
             return True
         except cfs.RequestError as err:
             # Don't bail on ETL as a whole, this isn't a show stopper error.
-            logging.warning(f"Failed to clean up export job on the server side: {err}")
+            # Also, totally ignore it if it's a 404 (which some servers like HAPI give back because
+            # they auto-delete the job for you)
+            if not isinstance(err, cfs.NetworkError) or err.response.status_code != 404:
+                logging.warning(f"Failed to clean up export job on the server side: {err}")
             return False
 
     async def _request_with_delay_status(self, *args, **kwargs) -> httpx.Response:

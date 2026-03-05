@@ -37,6 +37,10 @@ class HydrateOrganizationTests(utils.TestCase):
             ],
         )
         self.write_res(
+            resources.EPISODE_OF_CARE,
+            [{"managingOrganization": {"reference": "Organization/epofcare1"}}],
+        )
+        self.write_res(
             resources.IMMUNIZATION,
             [
                 {
@@ -124,6 +128,7 @@ class HydrateOrganizationTests(utils.TestCase):
                 "DiagnosticReport.ndjson.gz": None,
                 "DocumentReference.ndjson.gz": None,
                 "Encounter.ndjson.gz": None,
+                "EpisodeOfCare.ndjson.gz": None,
                 "Immunization.ndjson.gz": None,
                 "Location.ndjson.gz": None,
                 "MedicationDispense.ndjson.gz": None,
@@ -151,6 +156,7 @@ class HydrateOrganizationTests(utils.TestCase):
                     {"resourceType": "Organization", "id": "enc1"},
                     {"resourceType": "Organization", "id": "enc2"},
                     {"resourceType": "Organization", "id": "enc3"},
+                    {"resourceType": "Organization", "id": "epofcare1"},
                     {"resourceType": "Organization", "id": "imm1"},
                     {"resourceType": "Organization", "id": "imm2"},
                     {"resourceType": "Organization", "id": "imm3"},

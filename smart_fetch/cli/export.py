@@ -5,7 +5,6 @@ import datetime
 import enum
 import os
 import sys
-from functools import partial
 
 import cumulus_fhir_support as cfs
 import rich
@@ -112,16 +111,6 @@ async def export_main(args: argparse.Namespace) -> None:
                 managed_dir=source_dir,
                 compress=args.compress,
             )
-            await finish_resource(
-                rest_client,
-                workdir,
-                source_dir,
-                filters,
-                filters.resources(),
-                open_client=True,
-                hydration_tasks=hydration_tasks,
-                compress=args.compress,
-            )
         else:
             await crawl_utils.perform_crawl(
                 fhir_url=args.fhir_url,
@@ -137,16 +126,16 @@ async def export_main(args: argparse.Namespace) -> None:
                 id_list=args.id_list,
                 id_system=args.id_system,
                 compress=args.compress,
-                finish_callback=partial(
-                    finish_resource,
-                    rest_client,
-                    workdir,
-                    source_dir,
-                    filters,
-                    hydration_tasks=hydration_tasks,
-                    compress=args.compress,
-                ),
             )
+
+    await finish_resources(
+        rest_client,
+        workdir,
+        source_dir,
+        filters,
+        hydration_tasks=hydration_tasks,
+        compress=args.compress,
+    )
 
     lifecycle.OutputMetadata(workdir).mark_complete()
     cli_utils.print_done()
@@ -240,33 +229,24 @@ def find_workdir(
     return folder
 
 
-async def finish_resource(
+async def finish_resources(
     client: cfs.FhirClient,
     workdir: str,
     managed_dir: str,
     filters: filtering.Filters,
-    res_types: str | set[str],
     *,
-    open_client: bool = False,
     hydration_tasks: list[type[hydrate_utils.Task]],
-    compress: bool = False,
+    compress: bool,
 ):
-    if isinstance(res_types, str):
-        res_types = {res_types}
-
-    run_tasks = run_hydration_tasks(client, workdir, res_types, hydration_tasks, compress=compress)
-    if open_client:
-        async with client:
-            await run_tasks
-    else:
-        await run_tasks
+    async with client:
+        await run_hydration_tasks(
+            client, workdir, filters.resources(), hydration_tasks, compress=compress
+        )
 
     # Check for deleted resources if we are doing a full update (non-incremental / non-since).
     # (Regardless of bulk or crawl mode, even when we're in bulk which gives us deleted info for
     # since runs, because we still want the deleted info from the last full export.)
-    # Always re-run this, because hydration tasks always re-run, and they could have pulled
-    # something new.
-    for res_type in res_types:
+    for res_type in filters.resources():
         if res_type not in filters.since_resources():
             merges.note_deleted_resource(res_type, workdir, managed_dir, filters, compress=compress)
 
