@@ -73,6 +73,7 @@ Resource types affected by this:
 - MedicationDispense
 - Patient
 - Procedure
+- Specimen
 
 #### Updates to Existing Resources Are Never Noticed
 

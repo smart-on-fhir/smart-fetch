@@ -79,6 +79,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
                         {"type": resources.PATIENT, "searchParam": [{"name": "_lastUpdated"}]},
                         {"type": resources.PROCEDURE},
                         {"type": resources.SERVICE_REQUEST, "searchParam": [{"name": "authored"}]},
+                        {"type": resources.SPECIMEN},
                     ],
                 },
             ],
