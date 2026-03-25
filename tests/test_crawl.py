@@ -503,6 +503,7 @@ class CrawlTests(utils.TestCase):
             ],
             resources.PROCEDURE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.SERVICE_REQUEST: [httpx.QueryParams(patient="pat1", authored="gt2022-01-05")],
+            resources.SPECIMEN: [httpx.QueryParams(patient="pat1")],  # no extra param
         }
 
         missing = self.set_resource_search_queries(params)
@@ -676,6 +677,9 @@ class CrawlTests(utils.TestCase):
                     {"resourceType": resources.SERVICE_REQUEST, "id": "1", "authoredOn": "2012"},
                 ]
             },
+            resources.SPECIMEN: {
+                httpx.QueryParams(patient="pat1"): [{"resourceType": resources.SPECIMEN, "id": "1"}]
+            },
         }
 
         # In order to tease apart how times get parsed and handled, we want to differentiate the
@@ -726,6 +730,7 @@ class CrawlTests(utils.TestCase):
                         resources.OBSERVATION: "2005-01-01T00:00:00+14:00",
                         resources.PROCEDURE: frozen_plus(11),
                         resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
+                        resources.SPECIMEN: frozen_plus(13),
                     },
                     "filters": {
                         resources.ALLERGY_INTOLERANCE: [],
@@ -741,6 +746,7 @@ class CrawlTests(utils.TestCase):
                         resources.OBSERVATION: [f"category={utils.DEFAULT_OBS_CATEGORIES}"],
                         resources.PROCEDURE: [],
                         resources.SERVICE_REQUEST: [],
+                        resources.SPECIMEN: [],
                     },
                     "since": None,
                 },
@@ -758,6 +764,7 @@ class CrawlTests(utils.TestCase):
                 f"{resources.PATIENT}.ndjson.gz": None,
                 f"{resources.PROCEDURE}.ndjson.gz": None,
                 f"{resources.SERVICE_REQUEST}.ndjson.gz": None,
+                f"{resources.SPECIMEN}.ndjson.gz": None,
                 # Check the log to confirm that we use the earliest resource transaction time
                 # as the overall transactionTime.
                 "log.ndjson": [

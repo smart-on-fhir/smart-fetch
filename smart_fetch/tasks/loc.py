@@ -64,6 +64,13 @@ class ServReqLocationTask(hydrate_utils.ReferenceDownloadTask):
     REFS = ("subject", "locationReference*")
 
 
+class SpecLocationTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "spec-loc"
+    INPUT_RES_TYPE = resources.SPECIMEN
+    OUTPUT_RES_TYPE = resources.LOCATION
+    REFS = ("subject",)
+
+
 class LocLocationTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "loc-loc"
     INPUT_RES_TYPE = resources.LOCATION
@@ -81,5 +88,6 @@ LOCATION_TASKS = [
     PractRoleLocationTask,
     ProcedureLocationTask,
     ServReqLocationTask,
+    SpecLocationTask,
     LocLocationTask,
 ]

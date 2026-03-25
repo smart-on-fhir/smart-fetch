@@ -160,6 +160,18 @@ class ServReqPractitionerRoleTask(ServReqPractitionerTask):
     OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
 
 
+class SpecPractitionerTask(hydrate_utils.ReferenceDownloadTask):
+    NAME = "spec-pract"
+    INPUT_RES_TYPE = resources.SPECIMEN
+    OUTPUT_RES_TYPE = resources.PRACTITIONER
+    REFS = ("collection.collector",)
+
+
+class SpecPractitionerRoleTask(SpecPractitionerTask):
+    NAME = "spec-practrole"
+    OUTPUT_RES_TYPE = resources.PRACTITIONER_ROLE
+
+
 class PractitionerRolePractitionerTask(hydrate_utils.ReferenceDownloadTask):
     NAME = "practrole-pract"
     INPUT_RES_TYPE = resources.PRACTITIONER_ROLE
@@ -260,6 +272,8 @@ PRACTITIONER_TASKS = [
     ProcedurePractitionerRoleTask,
     ServReqPractitionerTask,
     ServReqPractitionerRoleTask,
+    SpecPractitionerTask,
+    SpecPractitionerRoleTask,
     PractitionerPractitionerRoleTask,
     PractitionerRolePractitionerTask,
 ]

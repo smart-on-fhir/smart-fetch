@@ -180,6 +180,13 @@ class HydratePractitionerTests(utils.TestCase):
                 },
             ],
         )
+        self.write_res(
+            resources.SPECIMEN,
+            [
+                {"collection": {"collector": {"reference": "Practitioner/spec1"}}},
+                {"collection": {"collector": {"reference": "PractitionerRole/spec1"}}},
+            ],
+        )
         self.set_basic_resource_route()
 
         # Handle searching for roles from practitioners
@@ -212,6 +219,7 @@ class HydratePractitionerTests(utils.TestCase):
                 "Patient.ndjson.gz": None,
                 "Procedure.ndjson.gz": None,
                 "ServiceRequest.ndjson.gz": None,
+                "Specimen.ndjson.gz": None,
                 "PractitionerRole.ndjson.gz": [
                     {
                         "resourceType": "PractitionerRole",
@@ -247,6 +255,7 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "Practitioner", "id": "proc3"},
                     {"resourceType": "Practitioner", "id": "servreq1"},
                     {"resourceType": "Practitioner", "id": "servreq2"},
+                    {"resourceType": "Practitioner", "id": "spec1"},
                 ],
                 "PractitionerRole.referenced.ndjson.gz": [
                     {"resourceType": "PractitionerRole", "id": "allergy1"},
@@ -274,6 +283,7 @@ class HydratePractitionerTests(utils.TestCase):
                     {"resourceType": "PractitionerRole", "id": "proc3"},
                     {"resourceType": "PractitionerRole", "id": "servreq1"},
                     {"resourceType": "PractitionerRole", "id": "servreq2"},
+                    {"resourceType": "PractitionerRole", "id": "spec1"},
                 ],
                 "PractitionerRole.searched.ndjson.gz": [
                     {"resourceType": "PractitionerRole", "id": "searched"},  # unique Role here

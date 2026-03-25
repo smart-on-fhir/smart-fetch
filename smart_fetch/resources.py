@@ -20,6 +20,7 @@ PRACTITIONER = "Practitioner"
 PRACTITIONER_ROLE = "PractitionerRole"
 PROCEDURE = "Procedure"
 SERVICE_REQUEST = "ServiceRequest"
+SPECIMEN = "Specimen"
 
 # All resources that are linked to patients, in the order we usually like to process them.
 # Patient first, Encounter, then the rest. (Encounters so early is due to a Cumulus quirk,
@@ -39,6 +40,7 @@ PATIENT_TYPES = [
     OBSERVATION,
     PROCEDURE,
     SERVICE_REQUEST,
+    SPECIMEN,
 ]
 
 SCOPE_TYPES = {
@@ -81,6 +83,7 @@ CREATED_SEARCH_FIELDS = {
     # PATIENT has no admin date to search on (which is sort of good - merges.py relies on it)
     # PROCEDURE: has no admin date to search on (but does have clinical date of "date")
     SERVICE_REQUEST: "authored",
+    # SPECIMEN has no admin date (but does have clinical date of "collected")
 }
 
 

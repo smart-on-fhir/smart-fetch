@@ -41,6 +41,7 @@ class HydrateLocationTests(utils.TestCase):
                 }
             ],
         )
+        self.write_res(resources.SPECIMEN, [{"subject": {"reference": "Location/spec1"}}])
         self.set_basic_resource_route()
 
         # Do the task!
@@ -57,6 +58,7 @@ class HydrateLocationTests(utils.TestCase):
                 "PractitionerRole.ndjson.gz": None,
                 "Procedure.ndjson.gz": None,
                 "ServiceRequest.ndjson.gz": None,
+                "Specimen.ndjson.gz": None,
                 "Location.ndjson.gz": [
                     {
                         "resourceType": "Location",
@@ -79,6 +81,7 @@ class HydrateLocationTests(utils.TestCase):
                     {"resourceType": "Location", "id": "proc1"},
                     {"resourceType": "Location", "id": "servreq1"},
                     {"resourceType": "Location", "id": "servreq2"},
+                    {"resourceType": "Location", "id": "spec1"},
                 ],
             }
         )

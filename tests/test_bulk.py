@@ -233,6 +233,7 @@ class BulkTests(utils.TestCase):
                         "Patient": utils.TRANSACTION_TIME,
                         "Procedure": utils.TRANSACTION_TIME,
                         "ServiceRequest": utils.TRANSACTION_TIME,
+                        "Specimen": utils.TRANSACTION_TIME,
                     },
                     "filters": {
                         "AllergyIntolerance": [],
@@ -252,6 +253,7 @@ class BulkTests(utils.TestCase):
                         "Patient": [],
                         "Procedure": [],
                         "ServiceRequest": [],
+                        "Specimen": [],
                     },
                     "kind": "output",
                     "since": "2022-01-05",

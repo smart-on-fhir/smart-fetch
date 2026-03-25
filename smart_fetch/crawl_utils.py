@@ -162,14 +162,19 @@ async def perform_crawl(
             rich.print(f"Skipping {res_type}, already done.")
             continue
 
-        if res_type == resources.EPISODE_OF_CARE and rest_client.server_type == cfs.ServerType.EPIC:
-            # Epic requires both a patient= and a type= argument, and you can't get clever with the
-            # type arg to be like "type:not=nothing", it has to a specific system AND code.
-            # So until they change that, we will skip crawling EpisodeOfCare just so the user
-            # doesn't end up with a huge amount of error messages from Epic. Hydration will pick
-            # them up instead.
+        is_epic = rest_client.server_type == cfs.ServerType.EPIC
+        if is_epic and res_type in {resources.EPISODE_OF_CARE, resources.SPECIMEN}:
+            # For EpisodeOfCare, Epic requires both a patient= and a type= argument, and you can't
+            # get clever with the type arg to be like "type:not=nothing" - it has to a specific
+            # system AND code.
+            #
+            # For Specimen, Epic only allows you to search by _id, which is no search at all.
+            #
+            # We'll skip these rather than attempting it anyway, just to avoid all the needless
+            # errors filling up the log. Hydration will pick these up instead (either automatically
+            # if the user is doing an "export" or manually if they're doing a "crawl").
             rich.print(
-                f"Skipping {res_type}, Epic does not support searching without a type, "
+                f"Skipping {res_type}, Epic does not support searching by patient, "
                 "so they will have to be hydrated instead."
             )
             metadata.mark_done(res_type, timing.now())

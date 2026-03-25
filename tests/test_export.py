@@ -1022,7 +1022,7 @@ class ExportTests(utils.TestCase):
             }
         )
 
-    async def test_skip_epofcare_with_epic(self):
+    async def test_skip_epic_unsearchable_resources(self):
         self.server.get("metadata").respond(
             200, json=self.metadata | {"software": {"name": "Epic"}}
         )
@@ -1030,7 +1030,7 @@ class ExportTests(utils.TestCase):
         pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
         self.mock_bulk(output=[pat1])
 
-        await self.cli("export", self.folder, "--type=EpisodeOfCare,Patient")
+        await self.cli("export", self.folder, "--type=EpisodeOfCare,Patient,Specimen")
 
         self.assert_folder(
             {
@@ -1043,8 +1043,9 @@ class ExportTests(utils.TestCase):
                         "done": {
                             "EpisodeOfCare": utils.FROZEN_TIMESTAMP,
                             "Patient": utils.TRANSACTION_TIME,
+                            "Specimen": utils.FROZEN_TIMESTAMP,
                         },
-                        "filters": {"EpisodeOfCare": [], "Patient": []},
+                        "filters": {"EpisodeOfCare": [], "Patient": [], "Specimen": []},
                         "kind": "output",
                         "since": None,
                         "timestamp": utils.FROZEN_TIMESTAMP,
@@ -1056,8 +1057,8 @@ class ExportTests(utils.TestCase):
             }
         )
 
-    async def test_epofcare_exported_and_hydrated(self):
-        """Confirm we don't duplicate EpOfCare results"""
+    async def test_epic_unsearchable_resources_both_exported_and_hydrated(self):
+        """Confirm we don't duplicate EpOfCare/Specimen results"""
         self.mock_bulk(
             output=[
                 {
@@ -1070,12 +1071,23 @@ class ExportTests(utils.TestCase):
                 },
                 {"resourceType": "EpisodeOfCare", "id": "searched"},
                 {"resourceType": "Patient", "id": "pat1"},
+                {
+                    "resourceType": "ServiceRequest",
+                    "id": "servreq1",
+                    "specimen": [
+                        {"reference": "Specimen/referenced"},
+                        {"reference": "Specimen/searched"},
+                    ],
+                },
+                {"resourceType": "Specimen", "id": "searched"},
             ]
         )
 
         self.set_basic_resource_route()
 
-        await self.cli("export", self.folder, "--type=Encounter,EpisodeOfCare,Patient")
+        await self.cli(
+            "export", self.folder, "--type=Encounter,EpisodeOfCare,Patient,ServiceRequest,Specimen"
+        )
 
         self.assert_folder(
             {
@@ -1084,6 +1096,9 @@ class ExportTests(utils.TestCase):
                 "EpisodeOfCare.001.ndjson.gz": None,
                 "EpisodeOfCare.002.ndjson.gz": None,
                 "Patient.001.ndjson.gz": None,
+                "ServiceRequest.001.ndjson.gz": None,
+                "Specimen.001.ndjson.gz": None,
+                "Specimen.002.ndjson.gz": None,
                 "001.2021-09-14": {
                     ".metadata": None,
                     "log.ndjson": None,
@@ -1095,6 +1110,13 @@ class ExportTests(utils.TestCase):
                         {"resourceType": "EpisodeOfCare", "id": "referenced"},
                     ],
                     "Patient.001.ndjson.gz": None,
+                    "ServiceRequest.001.ndjson.gz": None,
+                    "Specimen.001.ndjson.gz": [
+                        {"resourceType": "Specimen", "id": "searched"},
+                    ],
+                    "Specimen.referenced.ndjson.gz": [
+                        {"resourceType": "Specimen", "id": "referenced"},
+                    ],
                 },
             }
         )
