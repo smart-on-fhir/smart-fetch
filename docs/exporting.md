@@ -11,11 +11,45 @@ nav_order: 1
 By default, SMART Fetch will perform a [bulk export](https://hl7.org/fhir/uv/bulkdata/export.html)
 for a wide variety of FHIR resource types.
 
+For example, here's a command line you can run right now to perform a bulk export from our public
+demo FHIR server (which doesn't need authentication):
 ```shell
 smart-fetch export \
   --fhir-url https://bulk-data.smarthealthit.org/fhir \
   /tmp/export
 ```
+
+## Getting Started
+
+With your own EHR, things won't be as simple as just exporting everything from an open server.
+
+Here's a checklist for how to get ready to do your own export.
+For more detail on actually exporting, read the rest of the SMART Fetch documentation.
+
+1. You'll need to register a client app with your EHR. This process is EHR-specific, but usually
+   involves defining a secure authentication key and which FHIR resources you will have access to.
+1. You'll need to figure out which patients you will be exporting. Usually that means defining a
+   [FHIR Group cohort](#defining-the-cohort).
+   * Alternatively, you can define a cohort with a
+   [list of MRNs or other identifiers](#custom-cohorts)
+   (which would require doing a [crawl](#crawling), not a bulk export).
+1. For your own convenience, you'll want to define a SMART Fetch [config file](./config.md),
+   to hold the above information that doesn't change from run to run.
+   * This might look something like:
+     ```toml
+     fhir-url = 'https://example.com/api/FHIR/R4/'
+     smart-client-id = '...'
+     smart-key = '{ "kty": "EC", "crv": "P-384", ...}'
+     group = '...'
+     ```
+1. Now you can do your first export from your EHR.
+   Rather than doing an export of all supported resources,
+   you might want to test the waters with just a patient export.
+   That would look something like:
+   ```shell
+   smart-fetch -c config.toml export ./output --type Patient
+   ```
+   To learn more about exporting, read on.
 
 ## Defining the Cohort
 

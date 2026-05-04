@@ -14,9 +14,16 @@ There are situations where not all the data you might be clinically interested i
 and SMART Fetch will try to get it for you after the fact.
 
 SMART Fetch calls this kind of post-processing "hydration"
-and happens automatically for each export.
+and happens automatically for each `export` operation.
 
-Below is a fuller explanation of each hydration task.
+So normally, you don't need to worry about this.
+But if you have data from elsewhere, or did a manual `bulk` or `crawl` operation,
+you will need to hydrate manually.
+
+To see a full list of hydration tasks available,
+run `smart-fetch -c config.toml hydrate . --tasks help`.
+
+Below is a fuller explanation of the different types of hydration tasks.
 
 ## Inlining Clinical Notes
 
@@ -32,6 +39,11 @@ and stuff them back into your NDJSON as inline notes (using the `data` attachmen
 
 This way they can be processed with other FHIR tools that handle attachments.
 
+Example command line:
+```shell
+smart-fetch -c config.toml hydrate --tasks inline /path/to/ndjson
+```
+
 ## Downloading Missing Observations
 
 Vendors have a habit of treating certain Observations specially and not including them in
@@ -43,6 +55,11 @@ or `Observation.hasMember`.
 But since both kinds of Observations are clinically useful,
 SMART Fetch will download them all for you, if they weren't already included in the export.
 
+Example command line:
+```shell
+smart-fetch -c config.toml hydrate --tasks observation /path/to/ndjson
+```
+
 ## Downloading Useful-But-Not-Patient-Linked Resources
 
 Resources like Medications, Locations, Organizations, Practitioner, and PractitionerRole
@@ -51,3 +68,8 @@ Thus, they aren't bulk-exportable.
 
 But since they are useful,
 SMART Fetch will download them for you when it encounters a reference in the exported data.
+
+Example command line:
+```shell
+smart-fetch -c config.toml hydrate --tasks medication,practitioner /path/to/ndjson
+```
