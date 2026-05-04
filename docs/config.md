@@ -22,8 +22,8 @@ Every key is interpreted as a CLI argument, just without the `--` in front.
 For example, these two command lines are equivalent:
 
 ```shell
-smart-fetch export --fhir-url https://ehr.example/ --group Group1 ./output
-smart-fetch export -c config.toml ./output
+smart-fetch export ./output --fhir-url https://ehr.example/ --group Group1
+smart-fetch export ./output -c config.toml
 ```
 
 where `config.toml` contains:
