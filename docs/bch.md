@@ -1,5 +1,5 @@
 ---
-title: Case Study: BCH
+title: BCH Case Study
 parent: SMART Fetch
 nav_order: 40
 # audience: non-programmers already a little familiar with the project
