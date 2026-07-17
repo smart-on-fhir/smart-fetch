@@ -8,6 +8,11 @@ from smart_fetch import cli_utils, iter_utils
 
 
 class ProgressTests(unittest.TestCase):
+    @mock.patch("smart_fetch.cli_utils.Progress")
+    def test_make_progress_bar_returns_progress(self, mock_progress):
+        self.assertIs(cli_utils.make_progress_bar(), mock_progress.return_value)
+        mock_progress.assert_called_once_with()
+
     @mock.patch("smart_fetch.cli_utils._RefreshThread")
     @mock.patch("rich.get_console")
     def test_redirected_output_starts_refresh_thread(self, mock_get_console, mock_thread):
@@ -91,6 +96,25 @@ class ProgressTests(unittest.TestCase):
 
 
 class ResourceProcessorTests(unittest.IsolatedAsyncioTestCase):
+    @mock.patch("smart_fetch.iter_utils.peek_ahead_processor", new_callable=mock.AsyncMock)
+    @mock.patch("smart_fetch.iter_utils.ndjson.NdjsonWriter")
+    @mock.patch("smart_fetch.iter_utils.cli_utils.Progress")
+    async def test_run_uses_redirected_progress(
+        self, mock_progress_cls, mock_writer_cls, mock_peek_ahead
+    ):
+        progress = mock_progress_cls.return_value.__enter__.return_value
+        progress.add_task.return_value = 7
+        processor = iter_utils.ResourceProcessor(".", "Crawling", mock.AsyncMock())
+        processor.add_source("Patient", mock.Mock(), total=3, output_file="patients.ndjson")
+
+        await processor.run()
+
+        mock_progress_cls.assert_called_once_with()
+        progress.add_task.assert_called_once_with("Crawling Patients", total=3)
+        mock_writer_cls.assert_called_once()
+        mock_peek_ahead.assert_awaited_once()
+        self.assertEqual(processor.sources, {})
+
     async def test_processed_item_advances_progress(self):
         callback = mock.AsyncMock()
         processor = iter_utils.ResourceProcessor(".", "Crawling", callback)
