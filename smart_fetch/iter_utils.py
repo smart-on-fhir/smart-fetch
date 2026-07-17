@@ -123,9 +123,9 @@ class ResourceProcessor:
         for res_type, sources in self.sources.items():
             timestamp = timing.now()
 
-            with cli_utils.make_progress_bar() as progress:
+            with cli_utils.Progress() as progress:
                 res_total = sum(src.total for src in sources)
-                task = progress.add_task(f"{self._desc} {res_type}s…", total=res_total)
+                task = progress.add_task(f"{self._desc} {res_type}s", total=res_total)
 
                 for source in sources:
                     writer = ndjson.NdjsonWriter(source.output_file, append=self._append)
@@ -151,4 +151,4 @@ class ResourceProcessor:
         item: Item,
     ) -> None:
         await self._callback(res_type, writer, item)
-        progress.update(task, advance=1)
+        progress.advance(task)
