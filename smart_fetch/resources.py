@@ -1,15 +1,18 @@
 ALLERGY_INTOLERANCE = "AllergyIntolerance"
 BINARY = "Binary"
 BUNDLE = "Bundle"
+CARE_PLAN = "CarePlan"
 CONDITION = "Condition"
 DEVICE = "Device"
 DIAGNOSTIC_REPORT = "DiagnosticReport"
 DOCUMENT_REFERENCE = "DocumentReference"
 ENCOUNTER = "Encounter"
 EPISODE_OF_CARE = "EpisodeOfCare"
+FAMILY_MEMBER_HISTORY = "FamilyMemberHistory"
 IMMUNIZATION = "Immunization"
 LOCATION = "Location"
 MEDICATION = "Medication"
+MEDICATION_ADMINISTRATION = "MedicationAdministration"
 MEDICATION_DISPENSE = "MedicationDispense"
 MEDICATION_REQUEST = "MedicationRequest"
 OBSERVATION = "Observation"
@@ -19,6 +22,8 @@ PATIENT = "Patient"
 PRACTITIONER = "Practitioner"
 PRACTITIONER_ROLE = "PractitionerRole"
 PROCEDURE = "Procedure"
+QUESTIONNARE = "Questionnare"
+RESEARCH_SUBJECT = "ResearchSubject"
 SERVICE_REQUEST = "ServiceRequest"
 SPECIMEN = "Specimen"
 
@@ -29,16 +34,21 @@ PATIENT_TYPES = [
     PATIENT,
     ENCOUNTER,
     ALLERGY_INTOLERANCE,
+    CARE_PLAN,
     CONDITION,
     DEVICE,
     DIAGNOSTIC_REPORT,
     DOCUMENT_REFERENCE,
     EPISODE_OF_CARE,
+    FAMILY_MEMBER_HISTORY,
     IMMUNIZATION,
+    MEDICATION_ADMINISTRATION,
     MEDICATION_DISPENSE,
     MEDICATION_REQUEST,
     OBSERVATION,
     PROCEDURE,
+    QUESTIONNARE,
+    RESEARCH_SUBJECT,
     SERVICE_REQUEST,
     SPECIMEN,
 ]
@@ -70,18 +80,23 @@ SCOPE_TYPES = {
 # If you update this, update the get_created_date call below too.
 CREATED_SEARCH_FIELDS = {
     ALLERGY_INTOLERANCE: "date",
+    # CARE_PLAN: The field should be "created", but in practice, this doesn't exist
     CONDITION: "recorded-date",
     # DEVICE has no admin date to search on
     DIAGNOSTIC_REPORT: "issued",
     DOCUMENT_REFERENCE: "date",
     # ENCOUNTER: has no admin date to search on (but does have clinical date of "date")
     # EPISODE_OF_CARE has no admin date (but does have clinical date of "period")
+    FAMILY_MEMBER_HISTORY: "date",
     # IMMUNIZATION has `recorded` but you can't search it (but does have clinical date of "date")
+    # MEDICATION_ADMINISTRATION: no field in the spec
     # MEDICATION_DISPENSE has no admin date to search on (but does have two clinical dates)
     MEDICATION_REQUEST: "authoredon",
     OBSERVATION: "issued",  # not searchable per spec, but some servers allow it (notably, Epic)
     # PATIENT has no admin date to search on (which is sort of good - merges.py relies on it)
     # PROCEDURE: has no admin date to search on (but does have clinical date of "date")
+    QUESTIONNARE: "date",
+    # RESEARCH_SUBJECT: no field in spec
     SERVICE_REQUEST: "authored",
     # SPECIMEN has no admin date (but does have clinical date of "collected")
 }
@@ -100,12 +115,16 @@ def get_created_date(resource: dict) -> str | None:
         return resource.get("issued")
     elif res_type == DOCUMENT_REFERENCE:
         return resource.get("date")
+    elif res_type == FAMILY_MEMBER_HISTORY:
+        return resource.get("date")
     elif res_type == IMMUNIZATION:
         return resource.get("recorded")  # not searchable yet, but grab it for the future
     elif res_type == MEDICATION_REQUEST:
         return resource.get("authoredOn")
     elif res_type == OBSERVATION:
         return resource.get("issued")
+    elif res_type == QUESTIONNARE:
+        return resource.get("date")
     elif res_type == SERVICE_REQUEST:
         return resource.get("authoredOn")
 

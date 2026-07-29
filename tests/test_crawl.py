@@ -504,6 +504,13 @@ class CrawlTests(utils.TestCase):
             resources.PROCEDURE: [httpx.QueryParams(patient="pat1")],  # no extra param
             resources.SERVICE_REQUEST: [httpx.QueryParams(patient="pat1", authored="gt2022-01-05")],
             resources.SPECIMEN: [httpx.QueryParams(patient="pat1")],  # no extra param
+            resources.CARE_PLAN: [httpx.QueryParams(patient="pat1")],
+            resources.FAMILY_MEMBER_HISTORY: [
+                httpx.QueryParams(patient="pat1", date="gt2022-01-05")
+            ],
+            resources.MEDICATION_ADMINISTRATION: [httpx.QueryParams(patient="pat1")],
+            resources.QUESTIONNARE: [httpx.QueryParams(patient="pat1", date="gt2022-01-05")],
+            resources.RESEARCH_SUBJECT: [httpx.QueryParams(patient="pat1")],
         }
 
         missing = self.set_resource_search_queries(params)
@@ -584,7 +591,7 @@ class CrawlTests(utils.TestCase):
         ({"recordedDate": "2020-01"}, "2020-01-01T00:00:00+14:00"),
         ({"recordedDate": "2020-01-01"}, "2020-01-01T00:00:00+14:00"),
         # No date gets us the fallback time
-        ({}, (utils.FROZEN_DATETIME + datetime.timedelta(minutes=2)).astimezone().isoformat()),
+        ({}, (utils.FROZEN_DATETIME + datetime.timedelta(minutes=3)).astimezone().isoformat()),
         # Confirm that while we throw away newer dates (like 2022), we still track other older
         # dates in the source data.
         (
@@ -597,10 +604,10 @@ class CrawlTests(utils.TestCase):
             {
                 "meta": {"lastUpdated": "2019-10-01T00:00:00Z"},
                 "recordedDate": (
-                    utils.FROZEN_DATETIME + datetime.timedelta(minutes=2, seconds=1)
+                    utils.FROZEN_DATETIME + datetime.timedelta(minutes=3, seconds=1)
                 ).isoformat(),
             },
-            (utils.FROZEN_DATETIME + datetime.timedelta(minutes=2)).astimezone().isoformat(),
+            (utils.FROZEN_DATETIME + datetime.timedelta(minutes=3)).astimezone().isoformat(),
         ),
     )
     @ddt.unpack
@@ -617,6 +624,11 @@ class CrawlTests(utils.TestCase):
                         "id": "1",
                         "recordedDate": "bogus",
                     }
+                ]
+            },
+            resources.CARE_PLAN: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.CARE_PLAN, "id": "1"}
                 ]
             },
             resources.CONDITION: {
@@ -647,9 +659,19 @@ class CrawlTests(utils.TestCase):
                     {"resourceType": resources.EPISODE_OF_CARE, "id": "1"}
                 ]
             },
+            resources.FAMILY_MEMBER_HISTORY: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.FAMILY_MEMBER_HISTORY, "id": "1", "date": "2002"}
+                ]
+            },
             resources.IMMUNIZATION: {
                 httpx.QueryParams(patient="pat1"): [
                     {"resourceType": resources.IMMUNIZATION, "id": "1", "recorded": "2003"}
+                ]
+            },
+            resources.MEDICATION_ADMINISTRATION: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.MEDICATION_ADMINISTRATION, "id": "1"}
                 ]
             },
             resources.MEDICATION_DISPENSE: {
@@ -670,6 +692,16 @@ class CrawlTests(utils.TestCase):
             resources.PROCEDURE: {
                 httpx.QueryParams(patient="pat1"): [
                     {"resourceType": resources.PROCEDURE, "id": "1"},
+                ]
+            },
+            resources.QUESTIONNARE: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.QUESTIONNARE, "id": "1", "date": "2002"}
+                ]
+            },
+            resources.RESEARCH_SUBJECT: {
+                httpx.QueryParams(patient="pat1"): [
+                    {"resourceType": resources.RESEARCH_SUBJECT, "id": "1"}
                 ]
             },
             resources.SERVICE_REQUEST: {
@@ -719,21 +751,27 @@ class CrawlTests(utils.TestCase):
                     "done": {
                         resources.ALLERGY_INTOLERANCE: frozen_plus(1),
                         resources.CONDITION: expected_time,
-                        resources.DEVICE: frozen_plus(3),
+                        resources.CARE_PLAN: frozen_plus(2),
+                        resources.DEVICE: frozen_plus(4),
                         resources.DIAGNOSTIC_REPORT: "2001-01-01T00:00:00+14:00",
                         resources.DOCUMENT_REFERENCE: "2002-01-01T00:00:00+14:00",
                         resources.ENCOUNTER: frozen_plus(0),
-                        resources.EPISODE_OF_CARE: frozen_plus(6),
+                        resources.EPISODE_OF_CARE: frozen_plus(7),
+                        resources.FAMILY_MEMBER_HISTORY: "2002-01-01T00:00:00+14:00",
                         resources.IMMUNIZATION: "2003-01-01T00:00:00+14:00",
-                        resources.MEDICATION_DISPENSE: frozen_plus(8),
+                        resources.MEDICATION_ADMINISTRATION: frozen_plus(10),
+                        resources.MEDICATION_DISPENSE: frozen_plus(11),
                         resources.MEDICATION_REQUEST: "2004-01-01T00:00:00+14:00",
                         resources.OBSERVATION: "2005-01-01T00:00:00+14:00",
-                        resources.PROCEDURE: frozen_plus(11),
+                        resources.PROCEDURE: frozen_plus(14),
+                        resources.QUESTIONNARE: "2002-01-01T00:00:00+14:00",
+                        resources.RESEARCH_SUBJECT: frozen_plus(16),
                         resources.SERVICE_REQUEST: "2012-01-01T00:00:00+14:00",
-                        resources.SPECIMEN: frozen_plus(13),
+                        resources.SPECIMEN: frozen_plus(18),
                     },
                     "filters": {
                         resources.ALLERGY_INTOLERANCE: [],
+                        resources.CARE_PLAN: [],
                         resources.CONDITION: [],
                         resources.DEVICE: [],
                         resources.DIAGNOSTIC_REPORT: [],
@@ -741,28 +779,37 @@ class CrawlTests(utils.TestCase):
                         resources.ENCOUNTER: [],
                         resources.EPISODE_OF_CARE: [],
                         resources.IMMUNIZATION: [],
+                        resources.MEDICATION_ADMINISTRATION: [],
                         resources.MEDICATION_DISPENSE: [],
                         resources.MEDICATION_REQUEST: [],
                         resources.OBSERVATION: [f"category={utils.DEFAULT_OBS_CATEGORIES}"],
                         resources.PROCEDURE: [],
+                        resources.QUESTIONNARE: [],
+                        resources.RESEARCH_SUBJECT: [],
                         resources.SERVICE_REQUEST: [],
                         resources.SPECIMEN: [],
+                        resources.FAMILY_MEMBER_HISTORY: [],
                     },
                     "since": None,
                 },
                 f"{resources.ALLERGY_INTOLERANCE}.ndjson.gz": None,
+                f"{resources.CARE_PLAN}.ndjson.gz": None,
                 f"{resources.CONDITION}.ndjson.gz": None,
                 f"{resources.DEVICE}.ndjson.gz": None,
                 f"{resources.DIAGNOSTIC_REPORT}.ndjson.gz": None,
                 f"{resources.DOCUMENT_REFERENCE}.ndjson.gz": None,
                 f"{resources.ENCOUNTER}.ndjson.gz": None,
                 f"{resources.EPISODE_OF_CARE}.ndjson.gz": None,
+                f"{resources.FAMILY_MEMBER_HISTORY}.ndjson.gz": None,
                 f"{resources.IMMUNIZATION}.ndjson.gz": None,
+                f"{resources.MEDICATION_ADMINISTRATION}.ndjson.gz": None,
                 f"{resources.MEDICATION_DISPENSE}.ndjson.gz": None,
                 f"{resources.MEDICATION_REQUEST}.ndjson.gz": None,
                 f"{resources.OBSERVATION}.ndjson.gz": None,
                 f"{resources.PATIENT}.ndjson.gz": None,
                 f"{resources.PROCEDURE}.ndjson.gz": None,
+                f"{resources.QUESTIONNARE}.ndjson.gz": None,
+                f"{resources.RESEARCH_SUBJECT}.ndjson.gz": None,
                 f"{resources.SERVICE_REQUEST}.ndjson.gz": None,
                 f"{resources.SPECIMEN}.ndjson.gz": None,
                 # Check the log to confirm that we use the earliest resource transaction time

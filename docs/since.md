@@ -68,13 +68,17 @@ Thankfully, these resource types are not often huge.
 But it's something to be aware of.
 
 Resource types affected by this:
+
+- CarePlan
 - Device
 - Encounter
 - EpisodeOfCare
 - Immunization
+- MedicationAdministration
 - MedicationDispense
 - Patient
 - Procedure
+- ResearchSubject
 - Specimen
 
 #### Updates to Existing Resources Are Never Noticed
