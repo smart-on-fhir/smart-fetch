@@ -167,6 +167,10 @@ but SMART Fetch has to do them manually for a crawl.
 If your bulk export (or crawl) gets interrupted, just run the SMART Fetch command again with the
 same arguments, and it will be resumed.
 
+For bulk exports, resuming is file-granular: the in-progress export is picked back up on the
+server side, and files that were already fully downloaded are skipped rather than fetched again.
+So re-running after a network hiccup is cheap, even for multi-gigabyte exports.
+
 ## New Exports
 
 Every new export you do with different `--type`, `--type-filter`, or `--since` parameters will
