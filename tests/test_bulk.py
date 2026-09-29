@@ -1,5 +1,7 @@
 import contextlib
+import gzip
 import io
+import json
 from collections.abc import AsyncIterator
 from unittest import mock
 
@@ -427,6 +429,75 @@ class BulkTests(utils.TestCase):
         metadata.set_bulk_status_url(f"{self.dlserver}/exports/1")
         # No complaint about missing kickoff, we just go straight to status checking
         await self.cli("bulk", self.folder)
+
+    def _requested_downloads(self) -> list[str]:
+        """Returns the file URLs that were actually requested from the server."""
+        with open(self.folder / "log.ndjson", encoding="utf8") as f:
+            events = [json.loads(line) for line in f if line.strip()]
+        return [
+            event["eventDetail"]["fileUrl"]
+            for event in events
+            if event["eventId"] == "download_request"
+        ]
+
+    async def test_resume_skips_completed_downloads(self):
+        """Resuming an interrupted export skips files that were already downloaded."""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        pat2 = {"resourceType": resources.PATIENT, "id": "pat2"}
+        self.mock_bulk("group1", output=[pat1, pat2], skip_kickoff=True)
+
+        # Simulate an interrupted export: the first file was fully downloaded
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.set_bulk_status_url(f"{self.dlserver}/exports/1")
+        first_file = self.folder / f"{resources.PATIENT}.001.ndjson.gz"
+        with gzip.open(first_file, "wt", encoding="utf8") as f:
+            f.write('{"sentinel": true}\n')
+        metadata.note_download_complete(
+            f"{self.dlserver}/output/1.0", f"{resources.PATIENT}.001.ndjson.gz"
+        )
+
+        await self.cli("bulk", self.folder, "--group=group1", "--type", resources.PATIENT)
+
+        # Only the second file should have been requested from the server
+        self.assertEqual(self._requested_downloads(), [f"{self.dlserver}/output/1.1"])
+        # The previously downloaded file should be untouched
+        with gzip.open(first_file, "rt", encoding="utf8") as f:
+            self.assertEqual(json.loads(f.read()), {"sentinel": True})
+        # And the new file should be there too
+        with gzip.open(
+            self.folder / f"{resources.PATIENT}.002.ndjson.gz", "rt", encoding="utf8"
+        ) as f:
+            self.assertEqual(json.loads(f.read()), pat2)
+
+    async def test_resume_redownloads_incomplete_files(self):
+        """Files recorded as downloaded but missing (or empty) on disk are fetched again."""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.mock_bulk("group1", output=[pat1], skip_kickoff=True)
+
+        metadata = lifecycle.OutputMetadata(self.folder)
+        metadata.set_bulk_status_url(f"{self.dlserver}/exports/1")
+        # Recorded as complete, but the file itself is gone (e.g. manually deleted)
+        metadata.note_download_complete(
+            f"{self.dlserver}/output/1.0", f"{resources.PATIENT}.001.ndjson.gz"
+        )
+
+        await self.cli("bulk", self.folder, "--group=group1", "--type", resources.PATIENT)
+
+        self.assertEqual(self._requested_downloads(), [f"{self.dlserver}/output/1.0"])
+
+    async def test_completed_export_clears_download_record(self):
+        """A finished export does not leave a stale download record behind."""
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.mock_bulk(
+            "group1",
+            output=[pat1],
+            params={"_type": resources.PATIENT},
+        )
+        await self.cli("bulk", self.folder, "--group=group1", "--type", resources.PATIENT)
+
+        metadata = lifecycle.OutputMetadata(self.folder)
+        self.assertEqual(metadata.get_downloaded_files(), {})
+        self.assertIsNone(metadata.get_bulk_status_url())
 
     async def test_cancel(self):
         self.mock_bulk("group1", skip_kickoff=True, skip_status=True)

@@ -431,6 +431,7 @@ class BulkExporter:
         else:
             poll_location = await self._kick_off()
             self._metadata.set_bulk_status_url(poll_location)
+            self._metadata.clear_downloads()
             rich.print("Starting bulk FHIR export…")
 
         # Request status report, until export is done
@@ -463,6 +464,7 @@ class BulkExporter:
         # files up there, so the user could try to manually recover.
         await self._delete_export(poll_location)
         self._metadata.set_bulk_status_url(None)
+        self._metadata.clear_downloads()
 
         # Were there any server-side errors during the export?
         error_texts, warning_texts = self._gather_all_messages()
@@ -662,21 +664,45 @@ class BulkExporter:
         # Use the same (sensible) download folder layout as bulk-data-client:
         subfolder = "" if item_type == "output" else item_type
 
+        # Files that a previous (interrupted) run already downloaded can be skipped.
+        downloaded = self._metadata.get_downloaded_files()
+
         resource_counts = {}  # how many of each resource we've seen
         coroutines = []
         for file in files:
             count = resource_counts.get(file["type"], 0) + 1
             resource_counts[file["type"]] = count
             filename = ndjson.filename(f"{file['type']}.{count:03}.ndjson", compress=self._compress)
+            dest = os.path.join(self._destination, subfolder, filename)
+            rel_filename = os.path.relpath(dest, self._destination)
+
+            if self._is_download_complete(file["url"], dest, rel_filename, downloaded):
+                rich.print(f"  Skipping {rel_filename} (already downloaded)")
+                continue
+
             coroutines.append(
                 self._download_ndjson_file(
                     file["url"],
                     file["type"],
-                    os.path.join(self._destination, subfolder, filename),
+                    dest,
                     item_type,
                 ),
             )
         await asyncio.gather(*coroutines)
+
+    @staticmethod
+    def _is_download_complete(
+        file_url: str, dest: str, rel_filename: str, downloaded: dict[str, str]
+    ) -> bool:
+        """
+        Checks if a file was fully downloaded by a previous run.
+
+        A recorded download only counts if the file is still on disk and non-empty --
+        a partial file left behind by a killed run must be downloaded again from scratch.
+        """
+        if downloaded.get(str(file_url)) != rel_filename:
+            return False
+        return os.path.isfile(dest) and os.path.getsize(dest) > 0
 
     async def _download_ndjson_file(
         self, url: str, resource_type: str, filename: str, item_type: str
@@ -715,6 +741,7 @@ class BulkExporter:
         rel_filename = os.path.relpath(filename, self._destination)
         human_size = cli_utils.human_file_size(response.num_bytes_downloaded)
         rich.print(f"  Downloaded {rel_filename} ({human_size})")
+        self._metadata.note_download_complete(str(url), rel_filename)
 
 
 async def perform_bulk(
