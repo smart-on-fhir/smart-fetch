@@ -511,17 +511,18 @@ class BulkExporter:
     async def _kick_off(self) -> str:
         """Initiate bulk export"""
         try:
-            content = (
-                self._format_bulk_body()
-                if self._client.server_type == cfs.ServerType.ORACLE
-                else None
-            )
+            request_kwargs = {}
+            if self._client.server_type == cfs.ServerType.ORACLE:
+                request_body = self._format_bulk_body()
+                if request_body:
+                    request_kwargs["json"] = request_body
+
             response = await self._request_with_delay_status(
                 self.export_url,
                 headers={"Prefer": "respond-async"},
-                method="POST" if content else "GET",
-                content=content if content else None,
+                method="POST" if request_kwargs else "GET",
                 target_status_code=202,
+                **request_kwargs,
             )
         except Exception as exc:
             self._log.kickoff(self.export_url, self._client.capabilities, exc)
@@ -576,25 +577,26 @@ class BulkExporter:
         path: str,
         *,
         headers: dict | None = None,
-        content: dict | None = None,
         target_status_code: int = 200,
         method: str = "GET",
         log_request: Callable[[], None] | None = None,
         log_error: Callable[[Exception], None] | None = None,
         stream: bool = False,
         rich_text: rich.text.Text | None = None,
+        **kwargs,
     ) -> httpx.Response:
         """
         Requests a file, while respecting any requests to wait longer and telling the user.
 
         :param path: path to request
         :param headers: headers for request
-        :param content: body for request
         :param target_status_code: retries until this status code is returned
         :param method: HTTP method to request
         :param log_request: method to call to report every request attempt
         :param log_error: method to call to report request failures
         :param stream: whether to stream the response
+        :param rich_text: a rich text object to update with progress messages
+        :param kwargs: additional arguments to pass to the request
         :returns: the HTTP response
         """
 
@@ -623,7 +625,6 @@ class BulkExporter:
                 method,
                 path,
                 headers=headers,
-                content=content,
                 stream=stream,
                 # These retry times are extremely generous - partly because we can afford to be
                 # as a long-running async task and partly because EHR servers seem prone to
@@ -632,6 +633,7 @@ class BulkExporter:
                 request_callback=log_request,
                 error_callback=log_error,
                 retry_callback=_add_new_delay,
+                **kwargs,
             )
 
             if response.status_code == target_status_code:
