@@ -366,7 +366,7 @@ class BulkExporter:
 
         :returns: a dictionary to be sent as the body of the kickoff request, or None
         """
-        if self._specified_ids:
+        if self._client.server_type == cfs.ServerType.ORACLE and self._specified_ids:
             return {
                 "resourceType": "Parameters",
                 "parameter": [
@@ -512,15 +512,14 @@ class BulkExporter:
         """Initiate bulk export"""
         try:
             request_kwargs = {}
-            if self._client.server_type == cfs.ServerType.ORACLE:
-                request_body = self._format_bulk_body()
-                if request_body:
-                    request_kwargs["json"] = request_body
+            request_body = self._format_bulk_body()
+            if request_body:
+                request_kwargs["json"] = request_body
 
             response = await self._request_with_delay_status(
                 self.export_url,
                 headers={"Prefer": "respond-async"},
-                method="POST" if request_kwargs else "GET",
+                method="POST" if len(request_kwargs) > 0 else "GET",
                 target_status_code=202,
                 **request_kwargs,
             )
@@ -787,7 +786,7 @@ async def perform_bulk(
             export_url(
                 fhir_url,
                 group,
-                bulk_client.server_type == cfs.ServerType.ORACLE and bool(specified_ids) > 0,
+                bulk_client.server_type == cfs.ServerType.ORACLE and bool(specified_ids),
             ),
             workdir,
             specified_ids=specified_ids,

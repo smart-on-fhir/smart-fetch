@@ -2,7 +2,7 @@
 name = "smart-fetch"
 requires-python = ">= 3.11"
 dependencies = [
-    "cumulus-fhir-support >= 1.10",
+    "cumulus-fhir-support >=1.12.3",
     "rich",
 ]
 authors = [
@@ -72,3 +72,6 @@ select = [
 [tool.ruff.lint.per-file-ignores]
 "**/__init__.py" = ["F401"]  # init files hold API, so not using imports is intentional
 "tests/**" = ["S"]  # tests do suspicious stuff that's fine, actually
+
+[tool.uv.sources]
+cumulus-fhir-support = { path = "../cumulus-fhir-support", editable = true }
