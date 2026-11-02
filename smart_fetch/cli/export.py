@@ -107,6 +107,9 @@ async def export_main(args: argparse.Namespace) -> None:
                 bulk_client=bulk_client,
                 filters=filters,
                 group=args.group,
+                specified_ids=crawl_utils.load_specified_ids(
+                    id_list=args.id_list, id_file=args.id_file
+                ),
                 workdir=workdir,
                 managed_dir=source_dir,
                 compress=args.compress,
