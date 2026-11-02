@@ -357,7 +357,7 @@ class BulkExporter:
             for single_filter in sorted(filters[res_type])
         ]
 
-    def _format_bulk_body(self) -> dict | None:
+    def _generate_oracle_bulk_body(self) -> dict:
         """
         Format the body of a bulk export kickoff request.
         This is only required when exporting from Oracle clients AND IDs have
@@ -368,13 +368,18 @@ class BulkExporter:
         """
         if self._client.server_type == cfs.ServerType.ORACLE and self._specified_ids:
             return {
-                "resourceType": "Parameters",
-                "parameter": [
-                    {"name": "patient", "valueReference": {"reference": f"Patient/{specified_id}"}}
-                    for specified_id in self._specified_ids
-                ],
+                "json": {
+                    "resourceType": "Parameters",
+                    "parameter": [
+                        {
+                            "name": "patient",
+                            "valueReference": {"reference": f"Patient/{specified_id}"},
+                        }
+                        for specified_id in self._specified_ids
+                    ],
+                }
             }
-        return None
+        return {}
 
     @staticmethod
     def _format_kickoff_url(
@@ -511,10 +516,7 @@ class BulkExporter:
     async def _kick_off(self) -> str:
         """Initiate bulk export"""
         try:
-            request_kwargs = {}
-            request_body = self._format_bulk_body()
-            if request_body:
-                request_kwargs["json"] = request_body
+            request_kwargs = self._generate_oracle_bulk_body()
 
             response = await self._request_with_delay_status(
                 self.export_url,
