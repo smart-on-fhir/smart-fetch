@@ -1120,3 +1120,38 @@ class ExportTests(utils.TestCase):
                 },
             }
         )
+
+    async def test_oracle_bulk_export_with_ids(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.server.get("metadata").respond(200, json={"publisher": "Oracle Health"})
+        self.mock_bulk(output=[pat1], skip_kickoff=True)
+
+        def kickoff(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(202, headers={"Content-Location": f"{self.dlserver}/exports/1"})
+
+        self.server.post(f"{self.url}/Patient/$export").mock(side_effect=kickoff)
+
+        await self.cli("export", self.folder, "--type=Patient", "--id-list=pat1,pat2")
+
+        self.assert_folder(
+            {
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": None,
+                ".metadata": None,
+            }
+        )
+
+    async def test_oracle_bulk_export_without_ids(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.server.get("metadata").respond(200, json={"publisher": "Oracle Health"})
+        self.mock_bulk(output=[pat1], params={"_type": "Patient"})
+
+        await self.cli("export", self.folder, "--type=Patient")
+
+        self.assert_folder(
+            {
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": None,
+                ".metadata": None,
+            }
+        )

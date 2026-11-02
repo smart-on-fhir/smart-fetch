@@ -22,9 +22,11 @@ import smart_fetch
 from smart_fetch import cli_utils, filtering, lifecycle, merges, ndjson, resources, timing
 
 
-def export_url(fhir_url: str, group: str) -> str:
+def export_url(fhir_url: str, group: str, is_oracle_bulk_with_ids: bool = False) -> str:
     if group:
         return os.path.join(fhir_url, "Group", group)
+    elif is_oracle_bulk_with_ids:
+        return os.path.join(fhir_url, "Patient/")
     else:
         return fhir_url
 
@@ -264,6 +266,7 @@ class BulkExporter:
         url: str,
         destination: str,
         *,
+        specified_ids: set[str] | None = None,
         since: str | None = None,
         type_filter: filtering.TypeFilters | None = None,
         metadata: lifecycle.OutputMetadata,
@@ -276,6 +279,7 @@ class BulkExporter:
         :param client: a client ready to make requests
         :param resources: a list of resource names to export
         :param url: a target export URL (like https://example.com/Group/1234)
+        :param specified_ids: a set of specific patients to export, only used in ORACLE bulk.
         :param destination: a local folder to store all the files
         :param since: start date for export
         :param type_filter: search filter for export (_typeFilter)
@@ -284,6 +288,7 @@ class BulkExporter:
         """
         super().__init__()
         self._client = client
+        self._specified_ids = specified_ids
         self._destination = destination
         self._total_wait_time = 0  # in seconds, across all our requests
         self._log: BulkExportLogWriter | None = None
@@ -351,6 +356,30 @@ class BulkExporter:
             for res_type in sorted(resources)
             for single_filter in sorted(filters[res_type])
         ]
+
+    def _generate_oracle_bulk_body(self) -> dict:
+        """
+        Format the body of a bulk export kickoff request.
+        This is only required when exporting from Oracle clients AND IDs have
+        been specified through the list of an id file or id list. Otherwise,
+        the body is None because other systems expect a GET request, not a POST.
+
+        :returns: a dictionary to be sent as the body of the kickoff request, or None
+        """
+        if self._client.server_type == cfs.ServerType.ORACLE and self._specified_ids:
+            return {
+                "json": {
+                    "resourceType": "Parameters",
+                    "parameter": [
+                        {
+                            "name": "patient",
+                            "valueReference": {"reference": f"Patient/{specified_id}"},
+                        }
+                        for specified_id in self._specified_ids
+                    ],
+                }
+            }
+        return {}
 
     @staticmethod
     def _format_kickoff_url(
@@ -484,13 +513,17 @@ class BulkExporter:
     #
     ##############################################################################################
 
-    async def _kick_off(self):
+    async def _kick_off(self) -> str:
         """Initiate bulk export"""
         try:
+            request_kwargs = self._generate_oracle_bulk_body()
+
             response = await self._request_with_delay_status(
                 self.export_url,
                 headers={"Prefer": "respond-async"},
+                method="POST" if len(request_kwargs) > 0 else "GET",
                 target_status_code=202,
+                **request_kwargs,
             )
         except Exception as exc:
             self._log.kickoff(self.export_url, self._client.capabilities, exc)
@@ -551,6 +584,7 @@ class BulkExporter:
         log_error: Callable[[Exception], None] | None = None,
         stream: bool = False,
         rich_text: rich.text.Text | None = None,
+        **kwargs,
     ) -> httpx.Response:
         """
         Requests a file, while respecting any requests to wait longer and telling the user.
@@ -562,6 +596,8 @@ class BulkExporter:
         :param log_request: method to call to report every request attempt
         :param log_error: method to call to report request failures
         :param stream: whether to stream the response
+        :param rich_text: a rich text object to update with progress messages
+        :param kwargs: additional arguments to pass to the request
         :returns: the HTTP response
         """
 
@@ -598,6 +634,7 @@ class BulkExporter:
                 request_callback=log_request,
                 error_callback=log_error,
                 retry_callback=_add_new_delay,
+                **kwargs,
             )
 
             if response.status_code == target_status_code:
@@ -723,6 +760,7 @@ async def perform_bulk(
     bulk_client: cfs.FhirClient,
     filters: filtering.Filters,
     group: str,
+    specified_ids: set[str] | None = None,
     workdir: str,
     managed_dir: str | None = None,
     compress: bool = False,
@@ -747,8 +785,13 @@ async def perform_bulk(
         exporter = BulkExporter(
             bulk_client,
             res_types,
-            export_url(fhir_url, group),
+            export_url(
+                fhir_url,
+                group,
+                bulk_client.server_type == cfs.ServerType.ORACLE and bool(specified_ids),
+            ),
             workdir,
+            specified_ids=specified_ids,
             since=filters.get_bulk_since(),
             type_filter=type_filters,
             metadata=metadata,
