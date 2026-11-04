@@ -100,6 +100,12 @@ because Epic's current bulk export implementation has limitations
 (in terms of both recommended cohort size and performance).
 You can override this with `--export-mode=bulk`.
 
+{: .note }
+Some servers may have differing support between crawling and
+exporting. For Oracle servers, some resources such as `FamilyMemberHistory`
+and `MedicationAdministration` are supported in crawling whereas
+they are not supported in exporting via bulk FHIR APIs.
+
 ### Custom Cohorts
 
 By default, a crawl will use an initial bulk export to get the list of Patients
