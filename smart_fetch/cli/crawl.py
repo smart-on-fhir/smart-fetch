@@ -49,7 +49,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
     res_types = cli_utils.parse_resource_selection(args.type)
 
     async with rest_client:
-        res_types = cli_utils.limit_to_server_resources(rest_client, res_types)
+        res_types = cli_utils.limit_to_server_resources(rest_client, res_types, False)
         filters = filtering.Filters(
             res_types,
             client=rest_client,

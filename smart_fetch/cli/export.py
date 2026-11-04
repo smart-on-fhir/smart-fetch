@@ -79,8 +79,10 @@ async def export_main(args: argparse.Namespace) -> None:
     hydration_tasks = cli_utils.parse_hydration_tasks(args.hydration_tasks)
 
     async with bulk_client:
-        res_types = cli_utils.limit_to_server_resources(bulk_client, res_types)
         export_mode = calculate_export_mode(args.export_mode, bulk_client.server_type)
+        res_types = cli_utils.limit_to_server_resources(
+            bulk_client, res_types, export_mode == ExportMode.BULK
+        )
         client = bulk_client if export_mode == ExportMode.BULK else rest_client
 
     async with client:

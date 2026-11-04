@@ -1155,3 +1155,22 @@ class ExportTests(utils.TestCase):
                 ".metadata": None,
             }
         )
+
+    async def test_oracle_bulk_prunes_invalid_resources(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.server.get("metadata").respond(
+            200, json=self.metadata | {"publisher": "Oracle Health"}
+        )
+        self.mock_bulk(output=[pat1], params={"_type": "Patient"})
+
+        await self.cli(
+            "export", self.folder, "--type=Patient,FamilyMemberHistory,MedicationAdministration"
+        )
+
+        self.assert_folder(
+            {
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": None,
+                ".metadata": None,
+            }
+        )

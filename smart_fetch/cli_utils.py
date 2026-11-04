@@ -47,7 +47,27 @@ def add_type_selection(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> list[str]:
+def prune_resource_types(
+    res_types: set[str], server_type: cfs.ServerType, is_bulk_request: bool
+) -> set[str]:
+    """
+    Returns a subset of `res_types` based on what the server supports.
+
+    For example, Oracle/Cerner capability endpoints report that they
+    support FamilyMemberHistory and MedicationAdministration, but they are not
+    supported in bulk export, they can only be supported in the crawl API.
+    https://docs.oracle.com/en/industries/health/millennium-platform-apis/mfbda/api-bulk-export.html
+    """
+    if server_type == cfs.ServerType.ORACLE and is_bulk_request:
+        res_types.discard(resources.FAMILY_MEMBER_HISTORY)
+        res_types.discard(resources.MEDICATION_ADMINISTRATION)
+
+    return res_types
+
+
+def limit_to_server_resources(
+    client: cfs.FhirClient, res_types: list[str], is_bulk_request: bool
+) -> list[str]:
     """
     Returns a subset of `res_types` based on what the server supports.
 
@@ -60,6 +80,9 @@ def limit_to_server_resources(client: cfs.FhirClient, res_types: list[str]) -> l
         return res_types
 
     server_types = {res["type"] for res in rest["resource"] if "type" in res}
+    server_types = prune_resource_types(
+        server_types, client.server_type, is_bulk_request=is_bulk_request
+    )
     for res_type in sorted(res_types):
         if res_type not in server_types:
             rich.print(f"Skipping {res_type} because the server does not support it.")
