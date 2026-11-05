@@ -3,9 +3,9 @@ import datetime
 import json
 import os
 import sys
+import types
 from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
-import types
 from typing import Any
 
 import cumulus_fhir_support as cfs
@@ -211,12 +211,12 @@ def create_processor_finish_func(
     generally used when running the gather_patients function also in this file.
 
     Args:
-        filters:
-        workdir: The directory the processor performs work in, usually the output_dir / temp directory.
-        managed_dir: The directory the processor should store final files in, usually the source_dir.
+        filters: A dict of the filters to apply to resources while crawling.
+        workdir: The directory the processor performs work in, a temp directory.
+        managed_dir: The directory the processor should store final files in.
         compress: True if the files should be compressed.
-        metadata: Lifecycle metadata for the processor process.
-        transaction_times:
+        metadata: Lifecycle metadata for the processor.
+        transaction_times: A dict for tracking API transaction times.
 
     Returns:
         A coroutine the processor can consume.
@@ -232,7 +232,28 @@ def create_processor_finish_func(
     )
 
 
-def create_processor(workdir, rest_client, compress, id_pool, transaction_times, processor_finish):
+def create_processor(
+    workdir: str,
+    rest_client,
+    compress: bool,
+    id_pool: dict[str, set],
+    transaction_times,
+    processor_finish,
+) -> iter_utils.ResourceProcessor:
+    """
+    Creates the processor used for crawling.
+
+    Args:
+        workdir: The work directory
+        rest_client: The client which will perform the API requests,
+        compress: True if the files should be compressed.
+        id_pool: A dict to track resources to prevent duplicate processing.
+        transaction_times: A dict for tracking API transaction times.
+        processor_finish: the coroutine to run when the processor has finished.
+
+    Returns:
+        A ResourceProcessor object.
+    """
     return iter_utils.ResourceProcessor(
         workdir,
         "Crawling",

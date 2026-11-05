@@ -1174,3 +1174,23 @@ class ExportTests(utils.TestCase):
                 ".metadata": None,
             }
         )
+
+    async def test_oracle_bulk_with_mrns(self):
+        pat1 = {"resourceType": resources.PATIENT, "id": "pat1"}
+        self.server.get("metadata").respond(
+            200, json=self.metadata | {"publisher": "Oracle Health"}
+        )
+        self.mock_bulk(output=[pat1], params={"_type": "Patient"})
+        self.server.get(f"{self.url}/Patient", params={"identifier": "foo|1234"}).respond(
+            200, json=self.make_bundle([pat1])
+        )
+
+        await self.cli("export", self.folder, "--id-system=foo", "--id-list=1234", "--type=Patient")
+
+        self.assert_folder(
+            {
+                "Patient.001.ndjson.gz": None,
+                "001.2021-09-14": None,
+                ".metadata": None,
+            }
+        )
