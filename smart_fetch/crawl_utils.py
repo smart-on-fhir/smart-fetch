@@ -5,6 +5,8 @@ import os
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
+import types
+from typing import Any
 
 import cumulus_fhir_support as cfs
 import httpx
@@ -73,14 +75,7 @@ async def perform_crawl(
     filter_params = filters.params()
     filters.print_since()
 
-    # The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
-    # avoid writing out duplicates, in the situations where we have multiple search streams
-    # per resource (which can happen when we have multiple type filters OR'd together).
-    # A pool is only defined if multiple filters exist for it, to save memory.
-    id_pool = {}
-    for res_type in filter_params:
-        if len(filter_params[res_type]) > 1:
-            id_pool[res_type] = set()
+    id_pool = create_id_pool(filter_params)
 
     # `transaction_times` holds the date we will send to mark_done() when done with each resource,
     # to mark the equivalent of Bulk Export's transactionTime - the last moment that the export
@@ -90,25 +85,12 @@ async def perform_crawl(
     # transaction time for the exported data set.
     transaction_times: dict[str, datetime.datetime] = {}
 
-    processor_finish = partial(
-        finish_wrapper,
-        metadata,
-        transaction_times,
-        workdir,
-        managed_dir,
-        filters,
-        compress=compress,
+    processor_finish = create_processor_finish_func(
+        filters, workdir, managed_dir, compress, metadata, transaction_times
     )
 
-    processor = iter_utils.ResourceProcessor(
-        workdir,
-        "Crawling",
-        callback=partial(
-            process_resource, rest_client, id_pool, workdir, transaction_times, compress=compress
-        ),
-        finish_callback=processor_finish,
-        append=False,
-        compress=compress,
+    processor = create_processor(
+        workdir, rest_client, compress, id_pool, transaction_times, processor_finish
     )
 
     # Before crawling, we have to decide if we need to do anything special with patients,
@@ -192,6 +174,75 @@ async def perform_crawl(
 
     if log_time := metadata.get_earliest_done_date():
         create_fake_log(workdir, fhir_url, group_name, log_time)
+
+
+def create_id_pool(filter_params: dict[str, str]) -> dict[str, set]:
+    """
+    Create an ID pool which can be used to track IDs by resource.
+
+    The ID pool is meant to keep track of IDs that we've seen per resource, so that we can
+    avoid writing out duplicates, in the situations where we have multiple search streams
+    per resource (which can happen when we have multiple type filters OR'd together).
+    A pool is only defined if multiple filters exist for it, to save memory.
+
+    Args:
+        filter_params: a dict of resource types : filters.
+
+    Returns:
+        A dict of resource types : empty set()
+    """
+    id_pool = {}
+    for res_type in filter_params:
+        if len(filter_params[res_type]) > 1:
+            id_pool[res_type] = set()
+    return id_pool
+
+
+def create_processor_finish_func(
+    filters: dict[str, str],
+    workdir: str,
+    managed_dir: str,
+    compress: bool,
+    metadata: lifecycle.OutputMetadata,
+    transaction_times: dict[str, datetime.datetime],
+) -> types.CoroutineType[Any, Any, None]:
+    """
+    Create the coroutine used on completion of an unspecified processor. This coroutine is
+    generally used when running the gather_patients function also in this file.
+
+    Args:
+        filters:
+        workdir: The directory the processor performs work in, usually the output_dir / temp directory.
+        managed_dir: The directory the processor should store final files in, usually the source_dir.
+        compress: True if the files should be compressed.
+        metadata: Lifecycle metadata for the processor process.
+        transaction_times:
+
+    Returns:
+        A coroutine the processor can consume.
+    """
+    return partial(
+        finish_wrapper,
+        metadata,
+        transaction_times,
+        workdir,
+        managed_dir,
+        filters,
+        compress=compress,
+    )
+
+
+def create_processor(workdir, rest_client, compress, id_pool, transaction_times, processor_finish):
+    return iter_utils.ResourceProcessor(
+        workdir,
+        "Crawling",
+        callback=partial(
+            process_resource, rest_client, id_pool, workdir, transaction_times, compress=compress
+        ),
+        finish_callback=processor_finish,
+        append=False,
+        compress=compress,
+    )
 
 
 def load_specified_ids(*, id_list: str | None, id_file: str | None) -> set[str]:
