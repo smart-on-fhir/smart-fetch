@@ -3,10 +3,8 @@ import datetime
 import json
 import os
 import sys
-import types
 from collections.abc import AsyncIterable, Awaitable, Callable
 from functools import partial
-from typing import Any
 
 import cumulus_fhir_support as cfs
 import httpx
@@ -205,7 +203,7 @@ def create_processor_finish_func(
     compress: bool,
     metadata: lifecycle.OutputMetadata,
     transaction_times: dict[str, datetime.datetime],
-) -> types.CoroutineType[Any, Any, None]:
+):
     """
     Create the coroutine used on completion of an unspecified processor. This coroutine is
     generally used when running the gather_patients function also in this file.
