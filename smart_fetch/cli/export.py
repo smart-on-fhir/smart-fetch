@@ -18,6 +18,7 @@ from smart_fetch import (
     hydrate_utils,
     lifecycle,
     merges,
+    resources,
     symlinks,
     timing,
 )
@@ -104,14 +105,56 @@ async def export_main(args: argparse.Namespace) -> None:
         metadata.note_context(fhir_url=args.fhir_url, group=args.group)
 
         if export_mode == ExportMode.BULK:
+            # When exporting in Oracle / Cerner databases, bulk export only supports IDs, not MRNs
+            # hence, if an ID system was passed as an input arg and the server detected is Oracle,
+            # we will crawl to retrieve Patient data first, use the information to get the IDs
+            # for the Patients and bulk export the rest of the resource types.
+            if (
+                bulk_client.server_type == cfs.ServerType.ORACLE
+                and args.id_system
+                and (args.id_file or args.id_list)
+            ):
+                os.makedirs(workdir, exist_ok=True)
+                workdir_metadata = lifecycle.OutputMetadata(workdir)
+                workdir_metadata.note_context(filters=filters)
+                transaction_times = {}
+                processor_finish = crawl_utils.create_processor_finish_func(
+                    filters, workdir, source_dir, args.compress, workdir_metadata, transaction_times
+                )
+                processor = crawl_utils.create_processor(
+                    workdir,
+                    bulk_client,
+                    args.compress,
+                    crawl_utils.create_id_pool(filters.params()),
+                    transaction_times,
+                    processor_finish,
+                )
+                await crawl_utils.gather_patients(
+                    bulk_client=bulk_client,
+                    processor=processor,
+                    filters=filters,
+                    workdir=workdir,
+                    id_file=args.id_file,
+                    id_list=args.id_list,
+                    id_system=args.id_system,
+                    fhir_url=args.fhir_url,
+                    group=args.group,
+                    metadata=workdir_metadata,
+                    compress=args.compress,
+                    finish_callback=processor_finish,
+                )
+                specified_ids = merges.read_resource_ids(resources.PATIENT, workdir)
+            else:
+                specified_ids = crawl_utils.load_specified_ids(
+                    id_list=args.id_list, id_file=args.id_file
+                )
+
             await bulk_utils.perform_bulk(
                 fhir_url=args.fhir_url,
                 bulk_client=bulk_client,
                 filters=filters,
                 group=args.group,
-                specified_ids=crawl_utils.load_specified_ids(
-                    id_list=args.id_list, id_file=args.id_file
-                ),
+                specified_ids=specified_ids,
                 workdir=workdir,
                 managed_dir=source_dir,
                 compress=args.compress,

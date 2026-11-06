@@ -107,6 +107,14 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
             200, request=request, json={"resourceType": res_type, "id": res_id, **kwargs}
         )
 
+    @staticmethod
+    def make_bundle(entries: list[dict], link: str | None = None) -> dict:
+        return {
+            "resourceType": resources.BUNDLE,
+            "entry": [{"resource": entry} for entry in entries],
+            "link": [{"relation": "next", "url": link}],
+        }
+
     def set_basic_resource_route(self):
         self.set_resource_route(self.basic_resource)
 

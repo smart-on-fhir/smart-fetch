@@ -11,14 +11,6 @@ from tests import utils
 
 @ddt.ddt
 class CrawlTests(utils.TestCase):
-    @staticmethod
-    def make_bundle(entries: list[dict], link: str | None = None) -> dict:
-        return {
-            "resourceType": resources.BUNDLE,
-            "entry": [{"resource": entry} for entry in entries],
-            "link": [{"relation": "next", "url": link}],
-        }
-
     @ddt.data(
         ["--group-nickname", "blarg"],
         ["--group", "blarg"],
