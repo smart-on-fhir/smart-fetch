@@ -109,7 +109,11 @@ async def export_main(args: argparse.Namespace) -> None:
             # hence, if an ID system was passed as an input arg and the server detected is Oracle,
             # we will crawl to retrieve Patient data first, use the information to get the IDs
             # for the Patients and bulk export the rest of the resource types.
-            if bulk_client.server_type == cfs.ServerType.ORACLE and args.id_system:
+            if (
+                bulk_client.server_type == cfs.ServerType.ORACLE
+                and args.id_system
+                and (args.id_file or args.id_list)
+            ):
                 os.makedirs(workdir, exist_ok=True)
                 workdir_metadata = lifecycle.OutputMetadata(workdir)
                 workdir_metadata.note_context(filters=filters)
