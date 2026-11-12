@@ -250,6 +250,27 @@ class OutputMetadata(Metadata):
     def get_bulk_status_url(self) -> str | None:
         return self._contents.get("bulk-status")
 
+    def note_download_complete(self, file_url: str, rel_filename: str) -> None:
+        """
+        Records that a bulk-export file finished downloading.
+
+        This lets an interrupted export skip already-downloaded files when it is resumed,
+        instead of downloading everything from scratch.
+        """
+        downloads = self._contents.setdefault("downloads", {})
+        downloads[file_url] = rel_filename
+        self._write()
+
+    def get_downloaded_files(self) -> dict[str, str]:
+        """Returns a mapping of file URL -> relative filename for completed downloads."""
+        return dict(self._contents.get("downloads", {}))
+
+    def clear_downloads(self) -> None:
+        """Forgets the download record (on a fresh export, or once an export completes)."""
+        if "downloads" in self._contents:
+            del self._contents["downloads"]
+            self._write()
+
 
 class ManagedMetadata(Metadata):
     def __init__(self, folder: str):
