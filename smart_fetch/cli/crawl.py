@@ -2,6 +2,7 @@
 
 import argparse
 
+import cumulus_fhir_support as cfs
 import rich
 
 from smart_fetch import cli_utils, crawl_utils, filtering, lifecycle, ndjson
@@ -34,6 +35,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     )
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=crawl_main)
 
@@ -42,7 +44,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rich.get_console().rule()
 
-    cli_utils.validate_output_folder(args.folder)
     cli_utils.validate_input_folder(args.source_dir)
 
     rest_client, bulk_client = cli_utils.prepare(args)
@@ -58,7 +59,8 @@ async def crawl_main(args: argparse.Namespace) -> None:
             since_mode=args.since_mode,
             use_default_filters=args.default_filters,
         )
-        workdir = args.folder
+        output_dir = cfs.FsPath(args.folder)
+        workdir = cli_utils.create_local_dir(output_dir)
         source_dir = args.source_dir or workdir
 
         await crawl_utils.perform_crawl(
@@ -80,4 +82,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+    if not output_dir.is_local:
+        cfs.FsPath(workdir).copy(output_dir)
     cli_utils.print_done()

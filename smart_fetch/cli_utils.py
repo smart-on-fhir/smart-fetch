@@ -1,6 +1,6 @@
 import argparse
 import itertools
-import os.path
+import os
 import sys
 import tomllib
 import urllib.parse
@@ -10,6 +10,7 @@ import rich.progress
 
 import smart_fetch
 from smart_fetch import hydrate_utils, resources, tasks
+from smart_fetch import lifecycle
 
 # RESOURCE SELECTION
 
@@ -202,6 +203,23 @@ def add_auth(parser: argparse.ArgumentParser):
     )
 
 
+def add_s3_auth(parser: argparse.ArgumentParser):
+    group = parser.add_argument_group("s3-authentication")
+    group.add_argument(
+        "--kms-key",
+        metavar="KMS_KEY",
+        help="KMS Key for an S3 bucket, only needed if uploading results to S3.",
+    )
+    group.add_argument(
+        "--s3-region",
+        metavar="S3_AWS_REGION",
+        help=(
+            "The region the S3 bucket is in, only needed if "
+            "uploading results to S3 using a non-default region."
+        ),
+    )
+
+
 # HYDRATION
 
 
@@ -270,16 +288,19 @@ def text_from_operation_outcome(resource: dict) -> str | None:
 
 
 def validate_output_folder(path: str | None) -> None:
-    scheme = path and urllib.parse.urlparse(path).scheme
-    if scheme:
-        sys.exit(f"Expected a local folder, but '{path}' looks like a URL.")
+    if path:
+        path_cfs = cfs.FsPath(path)
+        if not path_cfs.is_local and urllib.parse.urlparse(path).scheme != "s3":
+            sys.exit(f"Expected a local folder or S3, but '{path}' looks like an unsupported URL.")
 
 
 def validate_input_folder(path: str | None) -> None:
-    validate_output_folder(path)
-
-    if path and not os.path.exists(path):
-        sys.exit(f"Local folder '{path}' does not exist.")
+    if path:
+        path_cfs = cfs.FsPath(path)
+        if not path_cfs.is_local:
+            sys.exit(f"Expected a local folder, but '{path}' looks like a URL.")
+        if not path_cfs.exists():
+            sys.exit(f"Local folder '{path}' does not exist.")
 
 
 # GENERAL
@@ -324,6 +345,23 @@ def load_config(args) -> None:
             setattr(args, prop, data[key])
 
 
+def create_local_dir(folder: cfs.FsPath) -> str:
+    """
+    If the provided folder is an S3 location,
+    return a local path with a similar name
+    for performing work in.
+
+    Args:
+        folder: The folder to validate.
+
+    Returns:
+        a string folder path to use in the fetch process.
+    """
+    if folder.is_local:
+        return str(folder)
+    return f"./{str(folder).split('://', 1)[-1]}"
+
+
 def create_client_for_cli(
     args, smart_client_id: str | None, smart_key: str | None
 ) -> cfs.FhirClient:
@@ -342,6 +380,9 @@ def create_client_for_cli(
 def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     """Returns (REST client, bulk client), which may be same client"""
     load_config(args)
+
+    if getattr(args, "folder", None) and not cfs.FsPath(args.folder).is_local:
+        cfs.FsPath.register_options(kms_key=args.kms_key, region=args.s3_region)
 
     if not args.fhir_url:
         sys.exit("--fhir-url is required")
@@ -363,6 +404,56 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     bulk_client = create_client_for_cli(args, smart_client_id=bulk_id, smart_key=bulk_key)
 
     return rest_client, bulk_client
+
+
+# S3 DOWNLOAD / UPLOAD
+
+
+def download_from_s3(args):
+    folder = cfs.FsPath(args.folder)
+    source_dir = create_local_dir(folder)
+    source_dir_cfs = cfs.FsPath(os.path.abspath(source_dir))
+    if not folder.is_local and folder.exists():
+        if not source_dir_cfs.exists() or not source_dir_cfs.ls():
+            for folder_path in folder.ls():
+                if folder_path.is_dir() or folder_path.name == ".metadata":
+                    folder_path.copy(source_dir_cfs.joinpath(folder_path.name))
+    return folder, source_dir, source_dir_cfs
+
+
+def upload_results_to_s3(
+    folder: cfs.FsPath, source_dir: str, source_dir_cfs: cfs.FsPath, subdir: str
+) -> None:
+    if not folder.is_local and source_dir_cfs.exists():
+        is_workdir_complete = True
+        work_dirs = lifecycle.list_workdirs(source_dir)
+        for work_dir in work_dirs:
+            s3_work_dir = folder.joinpath(work_dir)
+
+            # skip upload if the workdir already exists in s3.
+            # does not apply if the work_dir is the same as the current
+            # subdir, AKA we are overwriting a previous run.
+            if work_dir != subdir and s3_work_dir.joinpath(".metadata").read_json(default={}).get(
+                "complete"
+            ):
+                continue
+
+            # only copy the directory when it is completed.
+            if source_dir_cfs.joinpath(work_dir, ".metadata").read_json(default={}).get("complete"):
+                source_dir_cfs.joinpath(work_dir).copy(s3_work_dir)
+            else:
+                is_workdir_complete = False
+
+        # clean the top-level folder before adding the symlinks.
+        for folder_path in folder.ls(include_dirs=False):
+            folder_path.rm()
+
+        for source_path in os.scandir(source_dir):
+            if source_path.is_file():
+                cfs.FsPath(source_path.path).copy(folder.joinpath(source_path.name))
+
+        if is_workdir_complete:
+            source_dir_cfs.rm()
 
 
 def make_progress_bar() -> rich.progress.Progress:

@@ -31,6 +31,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=export_main)
 
@@ -39,11 +40,9 @@ async def export_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rich.get_console().rule()
 
-    cli_utils.validate_output_folder(args.folder)
-
     _rest_client, bulk_client = cli_utils.prepare(args)
-    workdir = args.folder
-
+    output_dir = cfs.FsPath(args.folder)
+    workdir = cli_utils.create_local_dir(output_dir)
     if args.cancel:
         await cancel_bulk(bulk_client, workdir)
         return
@@ -74,6 +73,8 @@ async def export_main(args: argparse.Namespace) -> None:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+    if not output_dir.is_local:
+        cfs.FsPath(workdir).copy(output_dir)
     cli_utils.print_done()
 
 

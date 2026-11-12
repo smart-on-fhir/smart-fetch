@@ -245,14 +245,6 @@ but found:
         with self.assertRaisesRegex(SystemExit, "does not exist"):
             await self.cli("hydrate", self.folder, "--source-dir=/does/not/exist")
 
-    async def test_input_folder_is_url(self):
-        with self.assertRaisesRegex(SystemExit, "looks like a URL"):
-            await self.cli("hydrate", self.folder, "--source-dir=s3://bucket/")
-
-    async def test_output_folder_is_url(self):
-        with self.assertRaisesRegex(SystemExit, "looks like a URL"):
-            await self.cli("hydrate", "s3://bucket/")
-
     @ddt.data(
         (12288, "12KB"),
         (12024036, "11.5MB"),

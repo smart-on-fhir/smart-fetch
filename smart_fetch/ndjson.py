@@ -31,7 +31,7 @@ class NdjsonWriter:
 
     def __init__(self, path: str, append: bool = False):
         self._path = path
-        self._write_path = path + ".tmp"
+        self._write_path = f"{path}.tmp"
         self._append = append
         self._file = None
 

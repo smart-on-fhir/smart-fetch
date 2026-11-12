@@ -63,6 +63,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     cli_utils.add_compression(parser)
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_cohort_selection(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=export_main)
@@ -75,9 +76,11 @@ async def export_main(args: argparse.Namespace) -> None:
     cli_utils.validate_output_folder(args.folder)
 
     rest_client, bulk_client = cli_utils.prepare(args)
+
+    folder, source_dir, source_dir_cfs = cli_utils.download_from_s3(args)
+
     res_types = cli_utils.parse_resource_selection(args.type)
     hydration_tasks = cli_utils.parse_hydration_tasks(args.hydration_tasks)
-
     async with bulk_client:
         export_mode = calculate_export_mode(args.export_mode, bulk_client.server_type)
         res_types = cli_utils.limit_to_server_resources(
@@ -86,7 +89,6 @@ async def export_main(args: argparse.Namespace) -> None:
         client = bulk_client if export_mode == ExportMode.BULK else rest_client
 
     async with client:
-        source_dir = args.folder
         filters = filtering.Filters(
             res_types,
             client=client,
@@ -143,6 +145,8 @@ async def export_main(args: argparse.Namespace) -> None:
     )
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+
+    cli_utils.upload_results_to_s3(folder, source_dir, source_dir_cfs, subdir)
     cli_utils.print_done()
 
 
