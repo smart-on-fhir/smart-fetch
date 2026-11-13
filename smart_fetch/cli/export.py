@@ -77,7 +77,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
     rest_client, bulk_client = cli_utils.prepare(args)
 
-    folder, source_dir, source_dir_cfs = cli_utils.download_from_s3(args)
+    folder, source_dir, source_dir_cfs = download_from_s3(args)
 
     res_types = cli_utils.parse_resource_selection(args.type)
     hydration_tasks = cli_utils.parse_hydration_tasks(args.hydration_tasks)
@@ -146,7 +146,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
     lifecycle.OutputMetadata(workdir).mark_complete()
 
-    cli_utils.upload_results_to_s3(folder, source_dir, source_dir_cfs, subdir)
+    upload_results_to_s3(folder, source_dir, source_dir_cfs, subdir)
     cli_utils.print_done()
 
 
@@ -295,3 +295,50 @@ async def run_hydration_tasks(
                 next_loop_types.add(task.OUTPUT_RES_TYPE)
 
         loop_types = next_loop_types
+
+
+def download_from_s3(args):
+    folder = cfs.FsPath(args.folder)
+    source_dir = cli_utils.create_local_dir(folder)
+    source_dir_cfs = cfs.FsPath(os.path.abspath(source_dir))
+    if not folder.is_local and folder.exists():
+        if not source_dir_cfs.exists() or not source_dir_cfs.ls():
+            for folder_path in folder.ls():
+                if folder_path.is_dir() or folder_path.name == ".metadata":
+                    folder_path.copy(source_dir_cfs.joinpath(folder_path.name))
+    return folder, source_dir, source_dir_cfs
+
+
+def upload_results_to_s3(
+    folder: cfs.FsPath, source_dir: str, source_dir_cfs: cfs.FsPath, subdir: str
+) -> None:
+    if not folder.is_local and source_dir_cfs.exists():
+        is_workdir_complete = True
+        work_dirs = lifecycle.list_workdirs(source_dir)
+        for work_dir in work_dirs:
+            s3_work_dir = folder.joinpath(work_dir)
+
+            # skip upload if the workdir already exists in s3.
+            # does not apply if the work_dir is the same as the current
+            # subdir, AKA we are overwriting a previous run.
+            if work_dir != subdir and s3_work_dir.joinpath(".metadata").read_json(default={}).get(
+                "complete"
+            ):
+                continue
+
+            # only copy the directory when it is completed.
+            if source_dir_cfs.joinpath(work_dir, ".metadata").read_json(default={}).get("complete"):
+                source_dir_cfs.joinpath(work_dir).copy(s3_work_dir)
+            else:
+                is_workdir_complete = False
+
+        # clean the top-level folder before adding the symlinks.
+        for folder_path in folder.ls(include_dirs=False):
+            folder_path.rm()
+
+        for source_path in os.scandir(source_dir):
+            if source_path.is_file():
+                cfs.FsPath(source_path.path).copy(folder.joinpath(source_path.name))
+
+        if is_workdir_complete:
+            source_dir_cfs.rm()

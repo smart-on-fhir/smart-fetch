@@ -9,7 +9,7 @@ import cumulus_fhir_support as cfs
 import rich.progress
 
 import smart_fetch
-from smart_fetch import hydrate_utils, lifecycle, resources, tasks
+from smart_fetch import hydrate_utils, resources, tasks
 
 # RESOURCE SELECTION
 
@@ -410,49 +410,21 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
 
 def download_from_s3(args):
     folder = cfs.FsPath(args.folder)
-    source_dir = create_local_dir(folder)
-    source_dir_cfs = cfs.FsPath(os.path.abspath(source_dir))
+    workdir = create_local_dir(folder)
+    workdir_cfs = cfs.FsPath(os.path.abspath(workdir))
+
     if not folder.is_local and folder.exists():
-        if not source_dir_cfs.exists() or not source_dir_cfs.ls():
-            for folder_path in folder.ls():
-                if folder_path.is_dir() or folder_path.name == ".metadata":
-                    folder_path.copy(source_dir_cfs.joinpath(folder_path.name))
-    return folder, source_dir, source_dir_cfs
+        if not workdir_cfs.exists() or not workdir_cfs.ls():
+            folder.copy(workdir_cfs)
+    return folder, workdir, workdir_cfs
 
 
-def upload_results_to_s3(
-    folder: cfs.FsPath, source_dir: str, source_dir_cfs: cfs.FsPath, subdir: str
-) -> None:
-    if not folder.is_local and source_dir_cfs.exists():
-        is_workdir_complete = True
-        work_dirs = lifecycle.list_workdirs(source_dir)
-        for work_dir in work_dirs:
-            s3_work_dir = folder.joinpath(work_dir)
-
-            # skip upload if the workdir already exists in s3.
-            # does not apply if the work_dir is the same as the current
-            # subdir, AKA we are overwriting a previous run.
-            if work_dir != subdir and s3_work_dir.joinpath(".metadata").read_json(default={}).get(
-                "complete"
-            ):
-                continue
-
-            # only copy the directory when it is completed.
-            if source_dir_cfs.joinpath(work_dir, ".metadata").read_json(default={}).get("complete"):
-                source_dir_cfs.joinpath(work_dir).copy(s3_work_dir)
-            else:
-                is_workdir_complete = False
-
-        # clean the top-level folder before adding the symlinks.
-        for folder_path in folder.ls(include_dirs=False):
-            folder_path.rm()
-
-        for source_path in os.scandir(source_dir):
-            if source_path.is_file():
-                cfs.FsPath(source_path.path).copy(folder.joinpath(source_path.name))
-
-        if is_workdir_complete:
-            source_dir_cfs.rm()
+def upload_to_s3(folder: cfs.FsPath, workdir_cfs: cfs.FsPath) -> None:
+    if not folder.is_local:
+        if folder.exists():
+            folder.rm()
+        workdir_cfs.copy(folder)
+        workdir_cfs.rm()
 
 
 def make_progress_bar() -> rich.progress.Progress:
