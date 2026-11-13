@@ -1,6 +1,7 @@
 """Do a REST crawl from an EHR"""
 
 import argparse
+import os
 
 import cumulus_fhir_support as cfs
 import rich
@@ -44,11 +45,21 @@ async def crawl_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
     rich.get_console().rule()
 
+    cli_utils.validate_output_folder(args.folder)
     cli_utils.validate_input_folder(args.source_dir)
 
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 
+    folder = cfs.FsPath(args.folder)
+    workdir = cli_utils.create_local_dir(folder)
+    workdir_cfs = cfs.FsPath(os.path.abspath(workdir))
+
+    if not folder.is_local and folder.exists():
+        if not workdir_cfs.exists() or not workdir_cfs.ls():
+            folder.copy(workdir_cfs)
+
+    source_dir = args.source_dir or workdir
     async with rest_client:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types, False)
         filters = filtering.Filters(
@@ -59,9 +70,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
             since_mode=args.since_mode,
             use_default_filters=args.default_filters,
         )
-        output_dir = cfs.FsPath(args.folder)
-        workdir = cli_utils.create_local_dir(output_dir)
-        source_dir = args.source_dir or workdir
 
         await crawl_utils.perform_crawl(
             fhir_url=args.fhir_url,
@@ -82,6 +90,11 @@ async def crawl_main(args: argparse.Namespace) -> None:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     lifecycle.OutputMetadata(workdir).mark_complete()
-    if not output_dir.is_local:
-        cfs.FsPath(workdir).copy(output_dir)
+
+    if not folder.is_local:
+        if folder.exists():
+            folder.rm()
+        workdir_cfs.copy(folder)
+        workdir_cfs.rm()
+
     cli_utils.print_done()

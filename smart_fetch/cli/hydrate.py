@@ -1,6 +1,7 @@
 """Modify extracted data in various ways"""
 
 import argparse
+import os
 
 import cumulus_fhir_support as cfs
 import rich
@@ -36,12 +37,18 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def hydrate_main(args: argparse.Namespace) -> None:
     """Hydrate some data."""
+    cli_utils.validate_output_folder(args.folder)
     cli_utils.validate_input_folder(args.source_dir)
     client, _bulk_client = cli_utils.prepare(args)
     task_classes = cli_utils.parse_hydration_tasks(args.tasks)
 
     folder = cfs.FsPath(args.folder)
     workdir = cli_utils.create_local_dir(folder)
+    workdir_cfs = cfs.FsPath(os.path.abspath(workdir))
+
+    if not folder.is_local and folder.exists():
+        if not workdir_cfs.exists() or not workdir_cfs.ls():
+            folder.copy(workdir_cfs)
 
     source_dir = args.source_dir or workdir
     async with client:
@@ -51,6 +58,7 @@ async def hydrate_main(args: argparse.Namespace) -> None:
             await task.run(workdir, source_dir=source_dir, mimetypes=args.mimetypes)
 
     if not folder.is_local:
-        cfs.FsPath(workdir).copy(folder)
+        workdir_cfs.copy(folder)
+        workdir_cfs.rm()
 
     cli_utils.print_done()

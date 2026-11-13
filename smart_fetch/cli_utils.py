@@ -1,6 +1,6 @@
 import argparse
 import itertools
-import os
+import os.path
 import sys
 import tomllib
 import urllib.parse
@@ -9,8 +9,7 @@ import cumulus_fhir_support as cfs
 import rich.progress
 
 import smart_fetch
-from smart_fetch import hydrate_utils, resources, tasks
-from smart_fetch import lifecycle
+from smart_fetch import hydrate_utils, lifecycle, resources, tasks
 
 # RESOURCE SELECTION
 
