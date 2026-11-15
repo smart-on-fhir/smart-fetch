@@ -298,12 +298,13 @@ def validate_output_folder(path: str | None) -> None:
 
             path_segments = [
                 path_segment
-                for path_segment in [parsed_url, *parsed_url.path.split("/")]
+                for path_segment in [parsed_url.netloc, *parsed_url.path.split("/")]
                 if path_segment
             ]
             if len(path_segments) < 2:
                 sys.exit(
-                    f"Expected a subfolder within an S3 bucket, but '{path}' looks like a top-level bucket."
+                    "Expected a subfolder within an S3 bucket, "
+                    f"but '{path}' looks like a top-level bucket."
                 )
 
 
