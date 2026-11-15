@@ -49,6 +49,6 @@ async def hydrate_main(args: argparse.Namespace) -> None:
             task = task_class(client, compress=args.compress)
             await task.run(workdir, source_dir=source_dir, mimetypes=args.mimetypes)
 
-    cli_utils.upload_to_s3(folder, workdir_cfs)
+    cli_utils.upload_to_s3(folder, workdir_cfs, False)
 
     cli_utils.print_done()

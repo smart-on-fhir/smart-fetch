@@ -289,8 +289,22 @@ def text_from_operation_outcome(resource: dict) -> str | None:
 def validate_output_folder(path: str | None) -> None:
     if path:
         path_cfs = cfs.FsPath(path)
-        if not path_cfs.is_local and urllib.parse.urlparse(path).scheme != "s3":
-            sys.exit(f"Expected a local folder or S3, but '{path}' looks like an unsupported URL.")
+        if not path_cfs.is_local:
+            parsed_url = urllib.parse.urlparse(path)
+            if parsed_url.scheme != "s3":
+                sys.exit(
+                    f"Expected a local folder or S3, but '{path}' looks like an unsupported URL."
+                )
+
+            path_segments = [
+                path_segment
+                for path_segment in [parsed_url, *parsed_url.path.split("/")]
+                if path_segment
+            ]
+            if len(path_segments) < 2:
+                sys.exit(
+                    f"Expected a subfolder within an S3 bucket, but '{path}' looks like a top-level bucket."
+                )
 
 
 def validate_input_folder(path: str | None) -> None:
@@ -419,9 +433,11 @@ def download_from_s3(args):
     return folder, workdir, workdir_cfs
 
 
-def upload_to_s3(folder: cfs.FsPath, workdir_cfs: cfs.FsPath) -> None:
+def upload_to_s3(folder: cfs.FsPath, workdir_cfs: cfs.FsPath, should_replace_files: bool) -> None:
+    if not workdir_cfs.exists():
+        return
     if not folder.is_local:
-        if folder.exists():
+        if folder.exists() and should_replace_files:
             folder.rm()
         workdir_cfs.copy(folder)
         workdir_cfs.rm()

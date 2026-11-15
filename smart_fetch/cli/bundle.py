@@ -26,10 +26,9 @@ async def bundle_main(args: argparse.Namespace) -> None:
 
     folder, workdir, workdir_cfs = cli_utils.download_from_s3(args)
     if not workdir_cfs.exists():
-        # remove the temp directory
-        if not folder.is_local:
-            workdir_cfs.rm()
-        sys.exit(f"Local folder '{workdir}' does not exist.")
+        if folder.is_local:
+            sys.exit(f"Local folder '{workdir}' does not exist.")
+        sys.exit(f"S3 folder '{args.folder}' does not exist.")
 
     output_path = ndjson.bundle_folder(workdir, compress=args.compress)
     if not output_path:
@@ -37,5 +36,5 @@ async def bundle_main(args: argparse.Namespace) -> None:
             workdir_cfs.rm()
         sys.exit(f"No FHIR files found in '{args.folder}'.")
 
-    cli_utils.upload_to_s3(folder, workdir_cfs)
-    rich.print(f"Bundle file '{output_path}' created.")
+    cli_utils.upload_to_s3(folder, workdir_cfs, True)
+    rich.print(f"Bundle file '{folder.joinpath(cfs.FsPath(output_path).name)}' created.")

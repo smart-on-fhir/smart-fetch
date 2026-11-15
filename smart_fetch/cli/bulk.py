@@ -48,6 +48,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
     if args.cancel:
         await cancel_bulk(bulk_client, workdir)
+        cli_utils.upload_to_s3(folder, workdir_cfs, False)
         return
 
     res_types = cli_utils.parse_resource_selection(args.type)
@@ -77,7 +78,7 @@ async def export_main(args: argparse.Namespace) -> None:
 
     lifecycle.OutputMetadata(workdir).mark_complete()
 
-    cli_utils.upload_to_s3(folder, workdir_cfs)
+    cli_utils.upload_to_s3(folder, workdir_cfs, args.bundle)
 
     cli_utils.print_done()
 

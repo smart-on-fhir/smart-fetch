@@ -83,6 +83,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
 
     lifecycle.OutputMetadata(workdir).mark_complete()
 
-    cli_utils.upload_to_s3(folder, workdir_cfs)
+    cli_utils.upload_to_s3(folder, workdir_cfs, args.bundle)
 
     cli_utils.print_done()
