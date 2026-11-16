@@ -42,6 +42,7 @@ class TestCase(unittest.IsolatedAsyncioTestCase):
         tempdir = tempfile.TemporaryDirectory()
         self.addCleanup(tempdir.cleanup)
         self.folder = pathlib.Path(tempdir.name)
+        self.s3_folder = f"s3://{self.folder.relative_to(self.folder.anchor)}"
 
         traveller = time_machine.travel(FROZEN_DATETIME, tick=False)
         self.addCleanup(traveller.stop)

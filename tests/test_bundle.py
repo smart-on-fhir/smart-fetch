@@ -1,9 +1,13 @@
+import contextlib
 import gzip
 import json
+import os
+from unittest import mock
 
 import httpx
 
 from tests import utils
+import cumulus_fhir_support as cfs
 
 
 class BundleTests(utils.TestCase):
@@ -19,6 +23,15 @@ class BundleTests(utils.TestCase):
         ):
             await self.local_cli("bundle", f"{self.folder}/nope")
 
+    async def test_not_s3_dir(self):
+        with (
+            mock.patch.object(cfs.FsPath, "exists", return_value=False),
+            self.assertRaisesRegex(
+                SystemExit, f"S3 folder '{self.s3_folder}/nope' does not exist."
+            ),
+        ):
+            await self.local_cli("bundle", f"{self.s3_folder}/nope")
+
     async def test_bundle_exists(self):
         with open(self.bundle_file, "w", encoding="utf8"):
             pass  # just create it
@@ -31,6 +44,26 @@ class BundleTests(utils.TestCase):
     async def test_no_input_files(self):
         with self.assertRaisesRegex(SystemExit, f"No FHIR files found in '{self.folder}'."):
             await self.local_cli("bundle", self.folder)
+
+    async def test_no_s3_input_files(self):
+        exists_mock = cfs.FsPath.exists
+
+        with (
+            mock.patch(
+                "smart_fetch.cli_utils.create_local_dir", return_value=str(f"{self.folder}/test")
+            ),
+            mock.patch.object(
+                cfs.FsPath,
+                "exists",
+                autospec=True,
+                side_effect=lambda path: exists_mock(path) if path.is_local else False,
+            ),
+            self.assertRaisesRegex(SystemExit, f"No FHIR files found in '{self.s3_folder}/test'."),
+        ):
+            os.makedirs(f"{self.folder}/test")
+            await self.local_cli("bundle", f"{self.s3_folder}/test")
+
+        self.assertFalse((self.folder / "test").exists())
 
     async def test_bundle_happy_path(self):
         # Just make a couple dead-simple resources
