@@ -1,10 +1,11 @@
 import os
 from unittest import mock
 
+import cumulus_fhir_support as cfs
 import ddt
 import httpx
 
-from smart_fetch import lifecycle, resources
+from smart_fetch import cli, lifecycle, resources
 from tests import utils
 
 
@@ -1174,3 +1175,65 @@ class ExportTests(utils.TestCase):
                 ".metadata": None,
             }
         )
+
+    async def test_download_managed_dir_from_s3(self):
+        s3_folder_cfs = cfs.FsPath(f"{self.s3_folder}/test")
+        args = ["export", f"{self.s3_folder}/test"]
+        with (
+            mock.patch.object(cfs.FsPath, "exists", return_value=True),
+            mock.patch.object(
+                cfs.FsPath,
+                "ls",
+                side_effect=[
+                    set(),
+                    {
+                        s3_folder_cfs.joinpath(".metadata"),
+                        s3_folder_cfs.joinpath("Patient.001.ndjson"),
+                    },
+                ],
+            ),
+            mock.patch.object(cfs.FsPath, "is_dir", return_value=False),
+            mock.patch.object(cfs.FsPath, "copy") as mock_copy,
+            mock.patch("smart_fetch.symlinks.reset_all_links") as mock_symlink_reset,
+        ):
+            cli.export.download_managed_dir_from_s3(cli.main.define_parser().parse_args(args))
+
+        mock_copy.assert_called_once()
+        mock_symlink_reset.assert_called_once()
+
+    @ddt.data(({"old": True}, 3), (None, 4))
+    @ddt.unpack
+    async def test_upload_to_s3(self, old_metadata, expected_copy_count):
+        s3_folder_cfs = cfs.FsPath(f"{self.s3_folder}/test")
+
+        # mock some data in the temp folder
+        (self.folder / ".metadata").write_text("{}")
+        (self.folder / "Patient.001.ndjson").write_text("{}\n")
+
+        with (
+            mock.patch(
+                "smart_fetch.lifecycle.list_workdirs",
+                return_value={"002.current": (2, "current"), "001.old": (1, "old")},
+            ),
+            mock.patch.object(
+                cfs.FsPath,
+                "read_json",
+                side_effect=[{"current": True}, None, {"old": True}, old_metadata],
+            ),
+            mock.patch.object(
+                cfs.FsPath,
+                "ls",
+                return_value={
+                    s3_folder_cfs.joinpath(".metadata"),
+                    s3_folder_cfs.joinpath("Patient.008.ndjson"),
+                },
+            ),
+            mock.patch.object(cfs.FsPath, "rm") as mock_remove,
+            mock.patch.object(cfs.FsPath, "copy") as mock_copy,
+        ):
+            cli.export.upload_results_to_s3(
+                s3_folder_cfs, str(self.folder), cfs.FsPath(self.folder), "002.current"
+            )
+
+        self.assertEqual(mock_copy.call_count, expected_copy_count)
+        self.assertEqual(mock_remove.call_count, 2)
