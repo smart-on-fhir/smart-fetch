@@ -321,6 +321,8 @@ but found:
         with (
             mock.patch.object(cfs.FsPath, "register_options") as mock_register,
             self.assertRaisesRegex(SystemExit, "Could not write to S3 folder"),
+            mock.patch.object(cfs.FsPath, "rm"),
+            mock.patch.object(cfs.FsPath, "write_text", side_effect=PermissionError("Forbidden")),
         ):
             await self.local_cli(
                 subcommand, f"{self.s3_folder}/test", "--kms-key=foo", "--s3-region=bar"
