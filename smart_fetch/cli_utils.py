@@ -423,7 +423,14 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
 # S3 DOWNLOAD / UPLOAD
 
 
-def download_from_s3(args):
+def download_from_s3(args) -> None:
+    """
+    If the user specified an output folder in S3, download files from
+    S3 in the scenario where the input and output folder are the same.
+
+    Args:
+        args: args collection provided by the user when calling the CLI
+    """
     folder = cfs.FsPath(args.folder)
     workdir = create_local_dir(folder)
     workdir_cfs = cfs.FsPath(os.path.abspath(workdir))
@@ -435,6 +442,16 @@ def download_from_s3(args):
 
 
 def upload_to_s3(folder: cfs.FsPath, workdir_cfs: cfs.FsPath, should_replace_files: bool) -> None:
+    """
+    At the end of the command, if an S3 folder was specified and the local
+    work directory exists, upload the contents of the work directory to S3.
+    First, empty the remote folder (if specified) before uploading new content.
+
+    Args:
+        folder: the output directory
+        workdir_cfs: the working directory
+        should_replace_files: true, if the 'folder' in S3 should be cleaned before upload.
+    """
     if not workdir_cfs.exists():
         return
     if not folder.is_local:

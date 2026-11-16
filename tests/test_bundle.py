@@ -1,13 +1,12 @@
-import contextlib
 import gzip
 import json
 import os
 from unittest import mock
 
+import cumulus_fhir_support as cfs
 import httpx
 
 from tests import utils
-import cumulus_fhir_support as cfs
 
 
 class BundleTests(utils.TestCase):

@@ -2,6 +2,7 @@ import io
 import os
 from unittest import mock
 
+import cumulus_fhir_support as cfs
 import ddt
 
 import smart_fetch
@@ -301,3 +302,57 @@ but found:
         self.assertEqual(cm.exception.code, 0)
         self.assertEqual(stdout.getvalue(), f"smart-fetch {smart_fetch.__version__}\n")
         self.assertEqual(stderr.getvalue(), "")
+
+    @ddt.data("bulk", "crawl", "export", "hydrate")
+    async def test_prepare_register_s3_options(self, subcommand):
+        with (
+            mock.patch.object(cfs.FsPath, "register_options") as mock_register,
+            self.assertRaisesRegex(SystemExit, "--fhir-url is required"),
+        ):
+            await self.local_cli(
+                subcommand, f"{self.s3_folder}/test", "--kms-key=foo", "--s3-region=bar"
+            )
+        mock_register.assert_called_once()
+
+    @ddt.data("bulk", "crawl", "export", "hydrate")
+    def test_download_calls_copy(self, subcommand):
+        args = [subcommand, f"{self.s3_folder}/test"]
+        with (
+            mock.patch.object(cfs.FsPath, "exists", return_value=True),
+            mock.patch.object(cfs.FsPath, "copy") as mock_copy,
+        ):
+            folder, _, _ = cli_utils.download_from_s3(main.define_parser().parse_args(args))
+
+        self.assertEqual(folder, cfs.FsPath(f"{self.s3_folder}/test"))
+        mock_copy.assert_called_once()
+
+    def test_upload_returns_early_when_missing_workdir(self):
+        with (
+            mock.patch.object(cfs.FsPath, "exists", return_value=False),
+            mock.patch.object(cfs.FsPath, "copy") as mock_copy,
+        ):
+            cli_utils.upload_to_s3(
+                f"{self.s3_folder}/test", cfs.FsPath(f"{self.folder}/nope"), False
+            )
+
+        mock_copy.assert_not_called()
+
+    @ddt.data(True, False)
+    def test_upload_calls_copy_when_workdir_exists(self, should_replace_files):
+        with (
+            mock.patch.object(cfs.FsPath, "exists", return_value=True),
+            mock.patch.object(cfs.FsPath, "copy") as mock_copy,
+            mock.patch.object(cfs.FsPath, "rm") as mock_remove,
+        ):
+            cli_utils.upload_to_s3(
+                cfs.FsPath(f"{self.s3_folder}/test"),
+                cfs.FsPath(f"{self.folder}/nope"),
+                should_replace_files,
+            )
+
+        if should_replace_files:
+            self.assertEqual(mock_remove.call_count, 2)
+        else:
+            mock_remove.assert_called_once()
+
+        mock_copy.assert_called_once_with(cfs.FsPath(f"{self.s3_folder}/test"))
