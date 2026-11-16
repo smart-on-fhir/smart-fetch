@@ -207,7 +207,8 @@ def add_s3_auth(parser: argparse.ArgumentParser):
     group.add_argument(
         "--kms-key",
         metavar="KMS_KEY",
-        help="KMS Key for an S3 bucket, only needed if uploading results to S3.",
+        help="KMS Key for an S3 bucket, only needed if "
+        "uploading results to S3 with a non-default KMS key.",
     )
     group.add_argument(
         "--s3-region",
@@ -397,6 +398,7 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
 
     if getattr(args, "folder", None) and not cfs.FsPath(args.folder).is_local:
         cfs.FsPath.register_options(kms_key=args.kms_key, region=args.s3_region)
+        validate_s3_connection(args.folder)
 
     if not args.fhir_url:
         sys.exit("--fhir-url is required")
@@ -421,6 +423,30 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
 
 
 # S3 DOWNLOAD / UPLOAD
+
+
+def validate_s3_connection(folder: str) -> None:
+    """
+    If the folder provided by the user is in S3, validate that we
+    can successfully connect and write to the folder.
+
+    Args:
+        folder: the output folder
+    """
+    folder_cfs = cfs.FsPath(folder)
+    if not folder_cfs.is_local:
+        try:
+            access_check_path = folder_cfs.joinpath(".access-check")
+            access_check_path.write_text("connected to s3.")
+            access_check_path.rm()
+        except OSError as exc:
+            rich.print(exc)
+            sys.exit(
+                f"Could not write to S3 folder '{folder}'.\n"
+                "Ensure AWS credentials are available on the machine,"
+                "and that --kms-key and --region are correct, if provided."
+            )
+    return
 
 
 def download_from_s3(args) -> None:

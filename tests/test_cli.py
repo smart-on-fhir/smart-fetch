@@ -307,7 +307,20 @@ but found:
     async def test_prepare_register_s3_options(self, subcommand):
         with (
             mock.patch.object(cfs.FsPath, "register_options") as mock_register,
+            mock.patch.object(cfs.FsPath, "rm"),
+            mock.patch.object(cfs.FsPath, "write_text"),
             self.assertRaisesRegex(SystemExit, "--fhir-url is required"),
+        ):
+            await self.local_cli(
+                subcommand, f"{self.s3_folder}/test", "--kms-key=foo", "--s3-region=bar"
+            )
+        mock_register.assert_called_once()
+
+    @ddt.data("bulk", "crawl", "export", "hydrate")
+    async def test_prepare_validate_s3_connection(self, subcommand):
+        with (
+            mock.patch.object(cfs.FsPath, "register_options") as mock_register,
+            self.assertRaisesRegex(SystemExit, "Could not write to S3 folder"),
         ):
             await self.local_cli(
                 subcommand, f"{self.s3_folder}/test", "--kms-key=foo", "--s3-region=bar"
