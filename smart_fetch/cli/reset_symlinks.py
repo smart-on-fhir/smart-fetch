@@ -14,6 +14,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
 
 async def reset_symlinks_main(args: argparse.Namespace) -> None:
     """Exports data from an EHR to a folder."""
+    cli_utils.validate_input_folder(args.folder)
     if lifecycle.ManagedMetadata(args.folder).is_empty():
         sys.exit(f"Folder '{args.folder}' does not look like a SMART Fetch managed export folder.")
 

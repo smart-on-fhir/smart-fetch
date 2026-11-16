@@ -51,3 +51,19 @@ smart-key = '{"keys": [{ "kty": "EC", "crv": "P-384", "d": "aaa", "x": "bbb", "y
 
 The latter inline approach might be more convenient,
 since you'll have a single file with everything you need.
+
+
+## S3 Output 
+
+You may specify a path in S3 as the location where you would like the results to
+reside. In order to successfully connect to S3, you must be authenticated to AWS,
+with the appropriate permissions for reading and writing objects in the bucket you
+are referencing. 
+
+To authenticate with AWS, you may use [conventional methods](https://docs.aws.amazon.com/cli/v1/userguide/cli-chap-authentication.html) such as the AWS CLI.
+You may override the default KMS key and/or default AWS region by using the `--kms-key` and `--region` parameters, however in most situations this override
+is unnecessary in most situations. 
+
+This functionality is supported for the `bulk`, `bundle`, `crawl`, `export` and `hydrate` commands. 
+
+In order to minimize the number of requests made to S3, smart-fetch performs the processing on the local machine, and performs a bulk upload at the end. As such, even if you are outputting to S3, you will need appropriate space on the local machine to perform the command. After upload, smart-fetch will clean the local directory which was used for processing.

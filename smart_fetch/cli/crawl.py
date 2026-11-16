@@ -34,6 +34,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     )
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=crawl_main)
 
@@ -48,6 +49,9 @@ async def crawl_main(args: argparse.Namespace) -> None:
     rest_client, bulk_client = cli_utils.prepare(args)
     res_types = cli_utils.parse_resource_selection(args.type)
 
+    folder, workdir, workdir_cfs = cli_utils.download_from_s3(args)
+
+    source_dir = args.source_dir or workdir
     async with rest_client:
         res_types = cli_utils.limit_to_server_resources(rest_client, res_types, False)
         filters = filtering.Filters(
@@ -58,8 +62,6 @@ async def crawl_main(args: argparse.Namespace) -> None:
             since_mode=args.since_mode,
             use_default_filters=args.default_filters,
         )
-        workdir = args.folder
-        source_dir = args.source_dir or workdir
 
         await crawl_utils.perform_crawl(
             fhir_url=args.fhir_url,
@@ -80,4 +82,7 @@ async def crawl_main(args: argparse.Namespace) -> None:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+
+    cli_utils.upload_to_s3(folder, workdir_cfs, args.bundle)
+
     cli_utils.print_done()

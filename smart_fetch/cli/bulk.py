@@ -31,6 +31,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--cancel", action="store_true", help="cancel an interrupted export")
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=export_main)
 
@@ -42,10 +43,12 @@ async def export_main(args: argparse.Namespace) -> None:
     cli_utils.validate_output_folder(args.folder)
 
     _rest_client, bulk_client = cli_utils.prepare(args)
-    workdir = args.folder
+
+    folder, workdir, workdir_cfs = cli_utils.download_from_s3(args)
 
     if args.cancel:
         await cancel_bulk(bulk_client, workdir)
+        cli_utils.upload_to_s3(folder, workdir_cfs, False)
         return
 
     res_types = cli_utils.parse_resource_selection(args.type)
@@ -74,6 +77,9 @@ async def export_main(args: argparse.Namespace) -> None:
         ndjson.bundle_folder(workdir, compress=args.compress, exist_ok=True)
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+
+    cli_utils.upload_to_s3(folder, workdir_cfs, args.bundle)
+
     cli_utils.print_done()
 
 

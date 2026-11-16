@@ -18,6 +18,7 @@ from smart_fetch import (
     hydrate_utils,
     lifecycle,
     merges,
+    resources,
     symlinks,
     timing,
 )
@@ -63,6 +64,7 @@ def make_subparser(parser: argparse.ArgumentParser) -> None:
     cli_utils.add_compression(parser)
 
     cli_utils.add_auth(parser)
+    cli_utils.add_s3_auth(parser)
     cli_utils.add_cohort_selection(parser)
     cli_utils.add_type_selection(parser)
     parser.set_defaults(func=export_main)
@@ -75,9 +77,11 @@ async def export_main(args: argparse.Namespace) -> None:
     cli_utils.validate_output_folder(args.folder)
 
     rest_client, bulk_client = cli_utils.prepare(args)
+
+    folder, source_dir, source_dir_cfs = download_managed_dir_from_s3(args)
+
     res_types = cli_utils.parse_resource_selection(args.type)
     hydration_tasks = cli_utils.parse_hydration_tasks(args.hydration_tasks)
-
     async with bulk_client:
         export_mode = calculate_export_mode(args.export_mode, bulk_client.server_type)
         res_types = cli_utils.limit_to_server_resources(
@@ -86,7 +90,6 @@ async def export_main(args: argparse.Namespace) -> None:
         client = bulk_client if export_mode == ExportMode.BULK else rest_client
 
     async with client:
-        source_dir = args.folder
         filters = filtering.Filters(
             res_types,
             client=client,
@@ -143,6 +146,8 @@ async def export_main(args: argparse.Namespace) -> None:
     )
 
     lifecycle.OutputMetadata(workdir).mark_complete()
+
+    upload_results_to_s3(folder, source_dir, source_dir_cfs, subdir)
     cli_utils.print_done()
 
 
@@ -291,3 +296,79 @@ async def run_hydration_tasks(
                 next_loop_types.add(task.OUTPUT_RES_TYPE)
 
         loop_types = next_loop_types
+
+
+def download_managed_dir_from_s3(args) -> tuple[cfs.FsPath, str, cfs.FsPath]:
+    """
+    Downloads a managed directory from s3, if it exists.
+    Uses the args passed in by the user when they called the CLI,
+    primarily the output folder. If content is downloaded from S3,
+    also reconfigure symlinks afterwards as symlinks are duplicated
+    files in S3.
+
+    Args:
+        args: the args array input by the user.
+
+    Returns:
+        tuple:
+            folder: cfs.FsPath object to the output directory
+            workdir: str of the local working directory
+            workdir_cfs: cfs.FsPath object of the local working directory
+    """
+    folder = cfs.FsPath(args.folder)
+    source_dir = cli_utils.create_local_dir(folder)
+    source_dir_cfs = cfs.FsPath(os.path.abspath(source_dir))
+    if not folder.is_local:
+        if folder.exists():
+            if not source_dir_cfs.exists() or not source_dir_cfs.ls():
+                for folder_path in folder.ls():
+                    if folder_path.is_dir() or folder_path.name == ".metadata":
+                        folder_path.copy(source_dir_cfs.joinpath(folder_path.name))
+
+        if source_dir_cfs.exists():
+            symlinks.reset_all_links(source_dir)
+
+    return folder, source_dir, source_dir_cfs
+
+
+def upload_results_to_s3(
+    folder: cfs.FsPath, source_dir: str, source_dir_cfs: cfs.FsPath, subdir: str
+) -> None:
+    """
+    Uploads results to S3 if the output folder is in S3, otherwise no-op.
+    For symlinks, uploads the file the link references.
+    Ensure if there are previous runs that are marked incomplete in S3
+    But complete on local, the completed run is uploaded.
+    Remove the working directory at the end of a successful upload.
+
+    Args:
+        folder: cfs.FsPath object to the output directory
+        source_dir: str of the local working directory
+        source_dir_cfs: cfs.FsPath object of the local working directory
+        subdir: the subfolder for the current export.
+    """
+    if not folder.is_local and source_dir_cfs.exists():
+        work_dirs = lifecycle.list_workdirs(source_dir)
+        for work_dir in work_dirs:
+            local_work_dir = source_dir_cfs.joinpath(work_dir)
+            s3_work_dir = folder.joinpath(work_dir)
+
+            local_metadata = local_work_dir.joinpath(".metadata").read_json(default=None)
+            s3_metadata = s3_work_dir.joinpath(".metadata").read_json(default=None)
+
+            # skip upload if the workdir already exists in s3 AND the metadata is the same.
+            if work_dir != subdir and local_metadata == s3_metadata:
+                continue
+
+            local_work_dir.copy(s3_work_dir)
+
+        # clean the top-level folder before adding the symlinks.
+        for folder_path in folder.ls(include_dirs=False):
+            if folder_path.name.split(".", 1)[0] in resources.SCOPE_TYPES:
+                folder_path.rm()
+
+        for source_path in os.scandir(source_dir):
+            if source_path.is_file():
+                cfs.FsPath(source_path.path).copy(folder.joinpath(source_path.name))
+
+        source_dir_cfs.rm()

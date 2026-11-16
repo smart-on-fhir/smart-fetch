@@ -202,6 +202,24 @@ def add_auth(parser: argparse.ArgumentParser):
     )
 
 
+def add_s3_auth(parser: argparse.ArgumentParser):
+    group = parser.add_argument_group("s3-authentication")
+    group.add_argument(
+        "--kms-key",
+        metavar="KMS_KEY",
+        help="KMS Key for an S3 bucket, only needed if "
+        "uploading results to S3 with a non-default KMS key.",
+    )
+    group.add_argument(
+        "--s3-region",
+        metavar="S3_AWS_REGION",
+        help=(
+            "The region the S3 bucket is in, only needed if "
+            "uploading results to S3 using a non-default region."
+        ),
+    )
+
+
 # HYDRATION
 
 
@@ -270,16 +288,34 @@ def text_from_operation_outcome(resource: dict) -> str | None:
 
 
 def validate_output_folder(path: str | None) -> None:
-    scheme = path and urllib.parse.urlparse(path).scheme
-    if scheme:
-        sys.exit(f"Expected a local folder, but '{path}' looks like a URL.")
+    if path:
+        path_cfs = cfs.FsPath(path)
+        if not path_cfs.is_local:
+            parsed_url = urllib.parse.urlparse(path)
+            if parsed_url.scheme != "s3":
+                sys.exit(
+                    f"Expected a local folder or S3, but '{path}' looks like an unsupported URL."
+                )
+
+            path_segments = [
+                path_segment
+                for path_segment in [parsed_url.netloc, *parsed_url.path.split("/")]
+                if path_segment
+            ]
+            if len(path_segments) < 2:
+                sys.exit(
+                    "Expected a subfolder within an S3 bucket, "
+                    f"but '{path}' looks like a top-level bucket."
+                )
 
 
 def validate_input_folder(path: str | None) -> None:
-    validate_output_folder(path)
-
-    if path and not os.path.exists(path):
-        sys.exit(f"Local folder '{path}' does not exist.")
+    if path:
+        path_cfs = cfs.FsPath(path)
+        if not path_cfs.is_local:
+            sys.exit(f"Expected a local folder, but '{path}' looks like a URL.")
+        if not path_cfs.exists():
+            sys.exit(f"Local folder '{path}' does not exist.")
 
 
 # GENERAL
@@ -324,6 +360,23 @@ def load_config(args) -> None:
             setattr(args, prop, data[key])
 
 
+def create_local_dir(folder: cfs.FsPath) -> str:
+    """
+    If the provided folder is an S3 location,
+    return a local path with a similar name
+    for performing work in.
+
+    Args:
+        folder: The folder to validate.
+
+    Returns:
+        a string folder path to use in the fetch process.
+    """
+    if folder.is_local:
+        return str(folder)
+    return f"./{str(folder).split('://', 1)[-1]}"
+
+
 def create_client_for_cli(
     args, smart_client_id: str | None, smart_key: str | None
 ) -> cfs.FhirClient:
@@ -342,6 +395,10 @@ def create_client_for_cli(
 def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     """Returns (REST client, bulk client), which may be same client"""
     load_config(args)
+
+    if getattr(args, "folder", None) and not cfs.FsPath(args.folder).is_local:
+        cfs.FsPath.register_options(kms_key=args.kms_key, region=args.s3_region)
+        validate_s3_connection(args.folder)
 
     if not args.fhir_url:
         sys.exit("--fhir-url is required")
@@ -363,6 +420,71 @@ def prepare(args) -> tuple[cfs.FhirClient, cfs.FhirClient]:
     bulk_client = create_client_for_cli(args, smart_client_id=bulk_id, smart_key=bulk_key)
 
     return rest_client, bulk_client
+
+
+# S3 DOWNLOAD / UPLOAD
+
+
+def validate_s3_connection(folder: str) -> None:
+    """
+    If the folder provided by the user is in S3, validate that we
+    can successfully connect and write to the folder.
+
+    Args:
+        folder: the output folder
+    """
+    folder_cfs = cfs.FsPath(folder)
+    if not folder_cfs.is_local:
+        try:
+            access_check_path = folder_cfs.joinpath(".access-check")
+            access_check_path.write_text("connected to s3.")
+            access_check_path.rm()
+        except OSError as exc:
+            rich.print(exc)
+            sys.exit(
+                f"Could not write to S3 folder '{folder}'.\n"
+                "Ensure AWS credentials are available on the machine,"
+                "and that --kms-key and --region are correct, if provided."
+            )
+    return
+
+
+def download_from_s3(args) -> None:
+    """
+    If the user specified an output folder in S3, download files from
+    S3 in the scenario where the input and output folder are the same.
+
+    Args:
+        args: args collection provided by the user when calling the CLI
+    """
+    folder = cfs.FsPath(args.folder)
+    workdir = create_local_dir(folder)
+    workdir_cfs = cfs.FsPath(os.path.abspath(workdir))
+
+    if not folder.is_local and folder.exists():
+        if not workdir_cfs.exists() or not workdir_cfs.ls():
+            folder.copy(workdir_cfs)
+    return folder, workdir, workdir_cfs
+
+
+def upload_to_s3(folder: cfs.FsPath, workdir_cfs: cfs.FsPath, should_replace_files: bool) -> None:
+    """
+    At the end of the command, if an S3 folder was specified and the local
+    work directory exists, upload the contents of the work directory to S3.
+    First, empty the remote folder (if specified) before uploading new content.
+
+    Args:
+        folder: the output directory
+        workdir_cfs: the working directory
+        should_replace_files: true, if the 'folder' in S3 should be cleaned before upload.
+    """
+    if not workdir_cfs.exists():
+        return
+    if not folder.is_local:
+        if folder.exists() and should_replace_files:
+            folder.rm()
+        workdir_cfs.copy(folder)
+        workdir_cfs.rm()
 
 
 def make_progress_bar() -> rich.progress.Progress:

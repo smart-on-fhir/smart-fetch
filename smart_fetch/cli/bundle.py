@@ -3,25 +3,38 @@
 import argparse
 import sys
 
+import cumulus_fhir_support as cfs
 import rich
 
 from smart_fetch import cli_utils, ndjson
 
 
 def make_subparser(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument("input_folder", metavar="DIR", help="input folder of FHIR data")
+    parser.add_argument("folder", metavar="DIR", help="input folder of FHIR data")
     cli_utils.add_general(parser)
     cli_utils.add_compression(parser)
+    cli_utils.add_s3_auth(parser)
     parser.set_defaults(func=bundle_main)
 
 
 async def bundle_main(args: argparse.Namespace) -> None:
     rich.get_console().rule()
 
-    cli_utils.validate_input_folder(args.input_folder)
+    cli_utils.load_config(args)
+    cli_utils.validate_output_folder(args.folder)
+    cfs.FsPath.register_options(kms_key=args.kms_key, region=args.s3_region)
 
-    output_path = ndjson.bundle_folder(args.input_folder, compress=args.compress)
+    folder, workdir, workdir_cfs = cli_utils.download_from_s3(args)
+    if not workdir_cfs.exists():
+        if folder.is_local:
+            sys.exit(f"Local folder '{workdir}' does not exist.")
+        sys.exit(f"S3 folder '{args.folder}' does not exist.")
+
+    output_path = ndjson.bundle_folder(workdir, compress=args.compress)
     if not output_path:
-        sys.exit(f"No FHIR files found in '{args.input_folder}'.")
+        if not folder.is_local:
+            workdir_cfs.rm()
+        sys.exit(f"No FHIR files found in '{args.folder}'.")
 
-    rich.print(f"Bundle file '{output_path}' created.")
+    cli_utils.upload_to_s3(folder, workdir_cfs, True)
+    rich.print(f"Bundle file '{folder.joinpath(cfs.FsPath(output_path).name)}' created.")
